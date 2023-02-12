@@ -1,9 +1,9 @@
 ---
-title: Damus (iOS)
-description: How to get started using Nostr on iOS with Damus
+title: Gossip (Desktop)
+description: How to get started using Nostr on Desktop with Gossip
 ---
 
-A step-by-step guide to getting started with Nostr with the Damus iOS client.
+A step-by-step guide to getting started with Nostr with the Gossip desktop client.
 
 ---
 

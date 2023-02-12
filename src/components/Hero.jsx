@@ -10,16 +10,13 @@ import blurIndigoImage from '@/images/blur-indigo.webp'
 
 const codeLanguage = 'json'
 const code = `{
-  "id": "4376c65d2f232afbe9b882a35baa4f6fe8667c4e684749af565f981833ed6a65",
-  "pubkey": "6e468422dfb74a5738702a8823b9b28168abab8655faacb6853cd0ee15deee93",
-  "created_at": 1673347337,
+  "id": "b9fead6eef87d8400cbc1a5621600b360438affb9760a6a043cc0bddea21dab6",
   "kind": 1,
-  "tags": [
-    ["e","3da979448d9ba263864c4d6f14984c423a3838364ec255f03c7904b1ae77f206"],
-    ["p","bf2376e17ba4ec269d10fcc996a4746b451152be9031fa48e74553dde5526bce"]
-  ],
-  "content": "Walled gardens became prisons, and nostr is the first step towards tearing down the prison walls.",
-  "sig": "908a15e46fb4d8675bab026fc230a0e3542bfade63da02d542fb78b2a8513fcd0092619a2c8c1221e581946e0191f2af505dfdf8657a414dbca329186f009262"
+  "pubkey": "82341f882b6eabcd2ba7f1ef90aad961cf074af15b9ef44a09f9d2a8fbfbe6a2",
+  "created_at": 1676161639,
+  "content": "this is going to work",
+  "tags": []
+  "sig": "76d19889a803236165a290fa8f3cf5365af8977ee1e002afcfd37063d1355fc755d0293d27ba0ec1c2468acfaf95b7e950e57df275bb32d7a4a3136f8862d2b7",
 }`
 
 const tabs = [{name: 'event.json', isActive: true}]
@@ -51,7 +48,7 @@ export function Hero() {
             />
             <div className="relative">
               <p className="inline bg-gradient-to-r from-indigo-200 via-sky-400 to-indigo-200 bg-clip-text font-display text-5xl tracking-tight text-transparent">
-                A social network for the decentralized era
+                A decentralized social network with a chance of working
               </p>
               <p className="mt-3 text-2xl tracking-tight text-slate-400">
                 Learn about Nostr: A simple, open protocol that enables a truly

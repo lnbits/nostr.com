@@ -15,7 +15,7 @@ The world of relays is changing fast so expect many changes here in the future. 
 
 ## Where can I find a list of relays?
 
-The best resource we've found for browsing and assessing the speed of known relays is the [Nostr.watch site](https://nostr.watch/relays/find).
+The best resource we've found for browsing and assessing the speed of known relays is the [nostr.watch site](https://nostr.watch/relays/find).
 
 ## What happens if all the relays I use stop working?
 
