@@ -7,6 +7,8 @@ A step-by-step guide to getting started with Nostr with the Damus iOS client.
 
 ---
 
+## Installing Damus
+
 1. Install [the Damus app on the iOS App Store](https://apps.apple.com/app/damus/id1628663131).
 1. When you open the app you'll have the option to create a new account or to log in with a private key you've already generated.
 1. If you have already created a private key via the Alby extension or another client, you can click "Login". Otherwise, click "Create account".
