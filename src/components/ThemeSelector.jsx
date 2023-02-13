@@ -2,12 +2,7 @@ import {useEffect, useState} from 'react'
 
 export function ThemeSelector(props) {
   let defaultTheme =
-    typeof window !== 'undefined'
-      ? window.localStorage.theme ||
-        (window.matchMedia('(prefers-color-scheme: dark)').matches
-          ? 'dark'
-          : 'light')
-      : 'light'
+    (typeof window !== 'undefined' && window.localStorage.theme) || 'dark'
   let [selectedTheme, setSelectedTheme] = useState(defaultTheme)
 
   useEffect(() => {
