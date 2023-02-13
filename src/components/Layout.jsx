@@ -43,11 +43,6 @@ const navigation = [
       {
         title: 'List of relay implementations',
         href: '/relays/implementations'
-      },
-      {
-        title: 'Nostr Watch ↗️',
-        href: 'https://nostr.watch/relays/find',
-        target: '_blank'
       }
     ]
   },

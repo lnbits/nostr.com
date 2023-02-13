@@ -24,3 +24,15 @@ If _all_ the relays that you have used in the past go offline, all your posts wi
 ## Should I run my own relay?
 
 For most people, no, it's not worth the hassle. That said, if you're technical and want to ensure that your speech is absolutely uncensorable, then you can and should run your own relay. This ensures that you always have a copy of all your Nostr posts and interactions for all time. We're working on a guide to this but in the meantime, [here is a guide](https://andreneves.xyz/p/set-up-a-nostr-relay-server-in-under) from Andre Neves.
+
+## How can someone find me in a personal or obscure relay?
+
+You should be able to hint where you are publishing to to people that may be interested by using the [NIP-19](https://nips.be/19) `nprofile` code or the [NIP-05](https://nips.be/5) `"relays"` field.
+
+If you manage to (and your client helps) you can publish a [list of the relays you use](https://nips.be/65) to multiple other relays that you _don't_, so others can find that list and start following you were you are.
+
+Finally, clients from others should include relay hints in events that mention or reply to you, the hints should point to where your notes can be found, so that can give clients a clue.
+
+## What public relays exist?
+
+The [nostr.watch](https://nostr.watch) website keeps a very complete list that has a bunch of information about each relay, not only their address.
