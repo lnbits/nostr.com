@@ -52,7 +52,7 @@ export function Hero() {
               </p>
               <p className="mt-3 text-2xl tracking-tight text-slate-400">
                 Learn about Nostr: A simple, open protocol that enables a truly
-                censorship-resistant & global social network.
+                censorship-resistant and global social network.
               </p>
               <div className="mt-8 flex gap-4 md:justify-center lg:justify-start">
                 <Button href="/get-started">Get started</Button>
@@ -147,7 +147,7 @@ export function Hero() {
                         <pre
                           className={clsx(
                             className,
-                            'flex overflow-x-auto pb-6'
+                            'flex overflow-x-hidden pb-6'
                           )}
                           style={style}
                         >
