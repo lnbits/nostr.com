@@ -7,6 +7,8 @@ A step-by-step guide to getting started with Nostr with the Gossip desktop clien
 
 ---
 
+## Initial set-up
+
 1. Download a Gossip Linux binary or Windows installable from the [releases section](https://github.com/mikedilger/gossip/releases). ![](/images/gossip-install.png)
 1. When you open the app, go to "You" and generate a keypaur (or import your private key if you already have one). ![](/images/gossip-create.png)
 1. Now your keys are set, but you're not following anyone, so your "Feed" section will be empty
