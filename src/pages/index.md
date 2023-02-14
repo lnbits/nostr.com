@@ -49,3 +49,7 @@ Social media has developed into a key way information flows around the world. Un
 1. Is overrun with spam and bots
 
 See also the [comparisons with other alternative social media protocols](/comparisons).
+
+## This website
+
+This website is a shameless copy of [nostr.how](https://nostr.how/) with modified content. We're thankful to [@erskingardner](https://github.com/erskingardner) for allowing that.
