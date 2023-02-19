@@ -29,7 +29,7 @@ Other resources from around the web about Nostr
 
 - [Awesome Nostr](https://nostr.net) is a repository of links to Nostr clients, relay implementations, and more.
 - [Nostr Resources](https://nostr-resources.com) covers Nostr basics and links to many other resources.
-- [Nostr.how](https://nostrhow) is an excellent documentation page for beginners.
+- [Nostr.how](https://nostr.how) is an excellent documentation page for beginners.
 - [usenostr.org](https://usenostr.org/) is another good and quick to read website explaining Nostr.
 
 ## Articles
