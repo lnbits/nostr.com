@@ -1,6 +1,6 @@
 ---
 title: What is Nostr?
-pageTitle: A complete guide to Nostr
+pageTitle: Nostr, a simple protocol for decentralizing social media that has a chance of working
 description: A guide to the simplest decentralized protocol that isn't peer-to-peer, therefore works.
 ---
 
