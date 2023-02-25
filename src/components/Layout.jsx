@@ -15,7 +15,7 @@ const navigation = [
     links: [
       {title: 'What is Nostr?', href: '/'},
       {title: 'Get started', href: '/get-started'},
-      {title: 'Verify your identity', href: '/verify-your-identity'}
+      {title: 'Get a human-readable name', href: '/human-readable'}
     ]
   },
   {
