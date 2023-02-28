@@ -1,15 +1,4 @@
 {
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "style:all": "yarn run style:lint && yarn run style:prettier",
-    "style:lint": "eslint 'src/**/*.{js,jsx,ts,tsx}'",
-    "style:prettier": "prettier --check 'src/**/*.{js,jsx,ts,tsx}'",
-    "make-prettier": "prettier --write 'src/**/*.{js,jsx,ts,tsx}'",
-    "lint": "next lint"
-  },
-  "browserslist": "defaults, not ie <= 11",
   "dependencies": {
     "@headlessui/react": "^1.7.9",
     "@markdoc/markdoc": "0.2.2",
