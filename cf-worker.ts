@@ -13,24 +13,43 @@ export default {
     if (
       path.startsWith('/e/') ||
       path.startsWith('/p/') ||
-      path.startsWith('npub1') ||
-      path.startsWith('nprofile1') ||
-      path.startsWith('nevent1') ||
-      path.startsWith('naddr') ||
-      path.startsWith('note1')
+      path.startsWith('/npub1') ||
+      path.startsWith('/nprofile1') ||
+      path.startsWith('/nevent1') ||
+      path.startsWith('/naddr') ||
+      path.startsWith('/note1')
     ) {
       let cacheKey = new Request(request.url.toString(), request)
       let cached = await caches.default.match(cacheKey)
       if (cached) return cached
-      return fetch(`https://gateway.nostr.com/${path}${query}`)
+      return fetch(`https://nostr-gateway.vercel.app${path}${query}`)
         .then(cacheIfOk(ctx, cacheKey, 48))
         .then(cacheOnBrowser(72))
     }
 
-    return fetch(
-      `https://www.nostr.com/${path}${query}`,
-      cacheOnFetch(24)
-    ).then(cacheOnBrowser(36))
+    try {
+      let refererPath = new URL(request.headers.get('referer')).pathname
+      if (
+        refererPath.startsWith('/e/') ||
+        refererPath.startsWith('/p/') ||
+        refererPath.startsWith('/npub1') ||
+        refererPath.startsWith('/nprofile1') ||
+        refererPath.startsWith('/nevent1') ||
+        refererPath.startsWith('/naddr') ||
+        refererPath.startsWith('/note1')
+      ) {
+        return fetch(
+          `https://nostr-gateway.vercel.app${path}${query}`,
+          cacheOnFetch(96)
+        ).then(cacheOnBrowser(112))
+      }
+    } catch (err) {
+      /***/
+    }
+
+    return fetch(`https://www.nostr.com${path}${query}`, cacheOnFetch(24)).then(
+      cacheOnBrowser(36)
+    )
   }
 }
 
