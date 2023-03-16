@@ -28,20 +28,23 @@ export default {
     }
 
     try {
-      let refererPath = new URL(request.headers.get('referer')).pathname
-      if (
-        refererPath.startsWith('/e/') ||
-        refererPath.startsWith('/p/') ||
-        refererPath.startsWith('/npub1') ||
-        refererPath.startsWith('/nprofile1') ||
-        refererPath.startsWith('/nevent1') ||
-        refererPath.startsWith('/naddr') ||
-        refererPath.startsWith('/note1')
-      ) {
-        return fetch(
-          `https://nostr-gateway.vercel.app${path}${query}`,
-          cacheOnFetch(96)
-        ).then(cacheOnBrowser(112))
+      let referer = request.headers.get('referer')
+      if (referer) {
+        let refererPath = new URL(referer).pathname
+        if (
+          refererPath.startsWith('/e/') ||
+          refererPath.startsWith('/p/') ||
+          refererPath.startsWith('/npub1') ||
+          refererPath.startsWith('/nprofile1') ||
+          refererPath.startsWith('/nevent1') ||
+          refererPath.startsWith('/naddr') ||
+          refererPath.startsWith('/note1')
+        ) {
+          return fetch(
+            `https://nostr-gateway.vercel.app${path}${query}`,
+            cacheOnFetch(96)
+          ).then(cacheOnBrowser(112))
+        }
       }
     } catch (err) {
       /***/
