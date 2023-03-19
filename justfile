@@ -5,3 +5,6 @@ dev:
 
 build:
   next build && next export
+
+wrangler:
+  wrangler pages dev out/
