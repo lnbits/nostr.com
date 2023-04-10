@@ -49,3 +49,21 @@ Social media has developed into a key way information flows around the world. Un
 1. Is overrun with spam and bots
 
 See also the [comparisons with other alternative social media protocols](/comparisons).
+
+## Recommended external content for learning about Nostr
+
+- [Nostr, an Introduction](https://wiki.wellorder.net/post/nostr-intro/), by scsibug
+- [Why I’m Betting Big on Nostr](https://hivemind.vc/nostr/), by Max Webster
+- [Why Nostr Matters](https://blog.lopp.net/why-nostr-matters/), by Jameson Lopp
+- [A vision for content discovery and relay usage](https://fiatjaf.com/3f106d31.html), by fiatjaf
+- [Thoughts on relay browsing](https://blog.coracle.social/posts/2f375ecdcefa65f5d7d9ae5b74f3d276a6e2b2c9a4aafad50c48cc6be66407b2), by Jon Staab
+- The [Nostrovia podcast](https://nostrovia.org) is airing interesting Nostr-related interviews every week.
+
+## Micro tools to help you navigate and use Nostr
+
+- [nostr.band](https://nostr.band) is indexing the entirety of Nostr it can find and making it searchable.
+- [nostr.watch](https://nostr.watch) has an index and connection stats of all public relays on the internet.
+- [nostr.guru](https://nostr.guru), [gateway.nostr.com](https://gateway.nostr.com) and [nostr-gw.sethforprivacy.com](https://nostr-gw.sethforprivacy.com/) generate link previews for profiles and events and renders them.
+- [Nostr Profile Manager](https://metadata.nostr.com/) lets you edit, backup and restore profile metadata, contacts and relay lists.
+- [nostr army knife](https://nak.nostr.com/) and [NostrStuff](https://nostrstuff.com/) let you inspect Nostr identifiers, events and relays and convert between formats.
+- [zaplife.lol](https://zaplife.lol/) shows a stream of zaps and zapped notes.

@@ -15,7 +15,6 @@ const navigation = [
     links: [
       {title: 'What is Nostr?', href: '/'},
       {title: 'Get started', href: '/get-started'},
-      {title: 'Get a human-readable name', href: '/human-readable'}
     ]
   },
   {
@@ -45,10 +44,6 @@ const navigation = [
         href: '/relays/implementations'
       }
     ]
-  },
-  {
-    title: 'Resources',
-    links: [{title: 'Other resources', href: '/resources'}]
   },
   {
     title: 'Contributing',
