@@ -27,8 +27,9 @@ Remember, your private key is your identity in Nostr, so if it is compromised yo
 
 ### Web
 
-- [Coracle](https://coracle.social), an experimental client that uses custom heuristics for relay selection. [Check out our guide here](/clients/coracle).
-- [Snort](https://snort.social), an easy-to-use client with simple onboarding.
+- [Iris](https://iris.to), a client that throws you in instantly.
+- [Snort](https://snort.social), an easy-to-use client with great onboarding.
+- [Coracle](https://coracle.social), an experimental client that is advancing the UX and internals of social media. [Check out our guide here](/clients/coracle).
 
 ### Desktop
 
