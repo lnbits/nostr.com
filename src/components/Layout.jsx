@@ -14,7 +14,7 @@ const navigation = [
     title: 'The Basics',
     links: [
       {title: 'What is Nostr?', href: '/'},
-      {title: 'Get started', href: '/get-started'},
+      {title: 'Get started', href: '/get-started'}
     ]
   },
   {
@@ -240,6 +240,16 @@ export function Layout({children, title, tableOfContents}) {
                 </ol>
               </>
             )}
+            <h2 className="font-display text-sm font-medium text-slate-900 dark:text-white mt-5">
+              Announcements
+            </h2>
+            <ol className="mt-4 space-y-3 text-sm">
+              <li>
+                <a href="https://shop.lnbits.com/product-category/nostr" target="_blank">
+                  <img src="/images/ad-lnbits-shop.png" />
+                </a>
+              </li>
+            </ol>
           </nav>
         </div>
       </div>
