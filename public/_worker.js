@@ -19,18 +19,7 @@ export default {
       path.startsWith('/naddr') ||
       path.startsWith('/note1')
     ) {
-      let accept = request.headers.get('accept')
-      console.log('accept', accept)
-      if (accept.includes('text/html')) {
-        return new Response(null, {
-          status: 302,
-          headers: {
-            Location: 'https://gateway.nostr.com' + path
-          }
-        })
-      } else {
-        return fetch(`https://nostr-gateway.vercel.app${path}${query}`)
-      }
+      return fetch(`https://njump.nostr.com/${path}${query}`)
     }
 
     return new Response('not found', {status: 404})
