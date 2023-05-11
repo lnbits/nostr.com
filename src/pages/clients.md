@@ -27,20 +27,31 @@ Remember, your private key is your identity in Nostr, so if it is compromised yo
 
 ### Web
 
-- [Iris](https://iris.to), a client that throws you in instantly.
 - [Snort](https://snort.social), an easy-to-use client with great onboarding.
 - [Coracle](https://coracle.social), an experimental client that is advancing the UX and internals of social media. [Check out our guide here](/clients/coracle).
-
-### Desktop
-
-- [Gossip](https://github.com/mikedilger/gossip), a native client that tries to efficiently follow people in wherever relay they happen to be. [Check out our guide here](/clients/gossip).
+- [Iris](https://iris.to), a client that throws you in instantly.
+- [Yosup](https://yosup.app), a minimalistic client.
+- [Primal](https://primal.net), a very fast client that relies on server-side caching.
 
 ### iOS
 
+- [Nos](https://nos.social), a beautiful and safe client for non-bitcoiners.
 - [Damus](https://apps.apple.com/app/damus/id1628663131), the first client for Nostr to be banned in China. [Check out our guide here](/clients/damus).
+
+### iOS and Android
+
+- [Plebstr](https://plebstr.com), a closed-source client that is beautiful, fast and smooth.
+- [Current](https://app.getcurrent.io/), a client that comes with a built-in Bitcoin wallet.
 
 ### Android
 
 - [Nostros](https://github.com/KoalaSat/nostros/releases), a feature-complete client with experimental relay tricks. [Check out our guide here](/clients/nostros).
-- [Amethyst](https://play.google.com/store/apps/details?id=com.vitorpamplona.amethyst), a feature-complete client.
-- [Nozzle](https://github.com/kaiwolfram/Nozzle/releases), a relay-first fast and efficient client, work-in-progress.
+- [Amethyst](https://play.google.com/store/apps/details?id=com.vitorpamplona.amethyst), a client that has all the features you might imagine.
+- [Camelus](https://camelus.app), a very lean client with good fundamentals, but still a work-in-progress.
+- [Nozzle](https://github.com/kaiwolfram/Nozzle/releases), a very lean client, but still a work-in-progress.
+
+### Desktop
+
+- [Gossip](https://github.com/mikedilger/gossip), a native client that tries to efficiently follow people in wherever relay they happen to be, made in Rust with egui. [Check out our guide here](/clients/gossip).
+- [more-speech](https://github.com/unclebob/more-speech), a client that gives you a powerful global view and way of interacting with custom filtering based on web-of-trust and relay selection, made in Clojure. [Check out a guide here](https://www.youtube.com/watch?v=q3gQ42aUhls).
+- [Lume](https://uselume.xyz), an ambitious client running with Tauri.

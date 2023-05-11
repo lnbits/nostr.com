@@ -28,7 +28,7 @@ const navigation = [
   {
     title: 'Clients',
     links: [
-      {title: 'How do clients work?', href: '/clients'},
+      {title: 'Clients and how they work', href: '/clients'},
       {title: 'Guide: Coracle (Web)', href: '/clients/coracle'},
       {title: 'Guide: Damus (iOS)', href: '/clients/damus'},
       {title: 'Guide: Gossip (Desktop)', href: '/clients/gossip'},
@@ -240,12 +240,15 @@ export function Layout({children, title, tableOfContents}) {
                 </ol>
               </>
             )}
-            <h2 className="font-display text-sm font-medium text-slate-900 dark:text-white mt-5">
+            <h2 className="mt-5 font-display text-sm font-medium text-slate-900 dark:text-white">
               Announcements
             </h2>
             <ol className="mt-4 space-y-3 text-sm">
               <li>
-                <a href="https://shop.lnbits.com/product-category/nostr" target="_blank">
+                <a
+                  href="https://shop.lnbits.com/product-category/nostr"
+                  target="_blank"
+                >
                   <img src="/images/ad-lnbits-shop.png" />
                 </a>
               </li>
