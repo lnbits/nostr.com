@@ -17,7 +17,9 @@ export default {
       path.startsWith('/nprofile1') ||
       path.startsWith('/nevent1') ||
       path.startsWith('/naddr') ||
-      path.startsWith('/note1')
+      path.startsWith('/note1') ||
+      path.startsWith('/proxy/') ||
+      path.startsWith('/image/')
     ) {
       return fetch(`https://njump.nostr.com/${path}${query}`)
     }

@@ -8,7 +8,9 @@
     "/nprofile1*",
     "/naddr1*",
     "/nevent1*",
-    "/note1*"
+    "/note1*",
+    "/proxy/*",
+    "/image/*"
   ],
   "exclude": []
 }
