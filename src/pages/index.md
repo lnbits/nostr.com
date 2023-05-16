@@ -22,7 +22,7 @@ Nostr is a simple, open protocol that enables global, decentralized, and censors
 
 ## What is Nostr?
 
-{%youtube id="Ouw9jN25AIs" /%}
+{%youtube id="Ouw9jN25AIs" width=642 height=362 /%}
 
 Nostr is a protocol, designed for simplicity, that aims to create a censorship-resistant global social network. Let's unpack that a little:
 
