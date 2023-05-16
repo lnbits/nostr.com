@@ -62,6 +62,34 @@ const tags = {
       </div>
     )
   },
+  youtube: {
+    selfClosing: true,
+    attributes: {
+      id: {type: String, required: true},
+      width: {type: Number},
+      height: {type: Number}
+    },
+    render: ({id, width = 560, height = 315}) => (
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          margin: '20px auto'
+        }}
+      >
+        <iframe
+          width={width}
+          height={height}
+          src={`https://www.youtube.com/embed/${id}`}
+          title="YouTube video player"
+          frameBorder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowFullScreen
+        ></iframe>
+      </div>
+    )
+  },
   'quick-links': {
     render: QuickLinks
   },
