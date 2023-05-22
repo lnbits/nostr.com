@@ -65,6 +65,7 @@ export default function App({Component, pageProps}) {
   return (
     <>
       <Head>
+        <meta charset="utf-8" />
         <title>{pageTitle}</title>
         {description && <meta name="description" content={description} />}
         <link rel="icon" type="image/jpg" href="/images/ostrich.jpeg" />
