@@ -10,7 +10,8 @@
     "/nevent1*",
     "/note1*",
     "/proxy/*",
-    "/image/*"
+    "/image/*",
+    "/njump/*"
   ],
   "exclude": []
 }
