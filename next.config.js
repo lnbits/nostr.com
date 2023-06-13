@@ -6,7 +6,7 @@ module.exports = withMarkdoc({
   reactStrictMode: true,
   pageExtensions: ['js', 'jsx', 'md'],
   experimental: {
-    scrollRestoration: true
+    scrollRestoration: false
   },
   images: {
     unoptimized: true
