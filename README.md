@@ -1,25 +1,21 @@
 # nostr.com
-### Instructions for Ben
-* Clone
-* Install `just` https://github.com/casey/just#packages
-* `cd /nostr.com`
-* `just dev`
-
-First make sure `nvm` and `npm` are installed
-
 ### Instructions to Contribute
+- make sure `node` and `npm` are installed
+
+-  `node` version must be `18` or higher
+```sh
+$ node --version
+$ v20.3.0
+```
+
 
 - clone this repo
 ```sh
 $ cd /Users/user/my-projects
 $ git clone https://github.com/lnbits/nostr.com.git
+$ cd nostr.com
 ```
 
-- make sure the `node` version is `18` or higher
-```sh
-$ node --version
-$ v20.3.0
-```
 
 - install dependencies
 ```sh
