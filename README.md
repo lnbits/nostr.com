@@ -37,3 +37,6 @@ ready - started server on 0.0.0.0:3000, url: http://localhost:3000
 $ npm run build
 ```
 
+### Using `just` (optional)
+- install `just` (see instructions [here](https://github.com/casey/just))
+- see commands in the `just` file
