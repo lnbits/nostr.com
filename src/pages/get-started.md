@@ -40,11 +40,11 @@ Here are guides to a few different clients we recommend.
 
 ## Find friends to follow
 
-- If you are a Twitter user, you can use [nostr.directory](https://nostr.directory) to find Twitter people that you follow that have linked their Twitter accounts to Nostr public keys. [Snort](https://nostr.social) also does a seamless import of followers on your behalf.
+- If you are a Twitter user, you can use [nostr.directory](https://nostr.directory) to find Twitter people that you follow that have linked their Twitter accounts to Nostr public keys. [Snort](https://snort.social) also does a seamless import of followers on your behalf.
 - Otherwise, you can just start following a dozen of prominent Nostr keys, for example, by checking [nostr.band](https://nostr.band) and looking at their interactions, replies and so on.
 
 ## Can I use other clients?
 
 Yes! Now that you have created your public/private key pair, you can use this pair on any Nostr client to access your account. Remember, the client is just an interface to see messages broadcast on the Nostr protocol.
 
-Since it's so early in Nostr's development, not all clients support all protocol features in the same way. It's worth checking out our [client comparison](/clients/comparison) to find the best client for you.
+Since it's so early in Nostr's development, not all clients support all protocol features in the same way. It's worth checking out our [clients page](/clients) to find the best client for you, or jump into the chaos of all the other available clients at [nostr.net](https://nostr.net).
