@@ -18,6 +18,7 @@ export default {
       path.startsWith('/nevent1') ||
       path.startsWith('/naddr') ||
       path.startsWith('/note1') ||
+      path.match(/^(\w+@)?(\w+\.)+\w+$/) ||
       path.startsWith('/proxy/') ||
       path.startsWith('/image/') ||
       path.startsWith('/njump/')
