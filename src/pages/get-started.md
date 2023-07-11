@@ -31,12 +31,7 @@ For web apps it is not recommended to paste the private key, we instead recommen
 
 ## Let's do this!
 
-Here are guides to a few different clients we recommend.
-
-- [Coracle](/clients/coracle) (Web)
-- [Damus](/clients/damus) (iOS)
-- [Gossip](/clients/gossip) (Desktop)
-- [Nostros](/clients/nostros) (Android)
+Here are [some clients](/clients) we recommend.
 
 ## Find friends to follow
 

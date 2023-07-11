@@ -28,30 +28,33 @@ Remember, your private key is your identity in Nostr, so if it is compromised yo
 ### Web
 
 - [Snort](https://snort.social), an easy-to-use client with great onboarding.
-- [Coracle](https://coracle.social), an experimental client that is advancing the UX and internals of social media. [Check out our guide here](/clients/coracle).
+- [Coracle](https://coracle.social), an experimental client that is advancing the UX and internals of social media.
 - [Iris](https://iris.to), a client that throws you in instantly.
 - [Yosup](https://yosup.app), a minimalistic client.
-- [Primal](https://primal.net), a very fast client that relies on server-side caching.
+- [Satellite](https://satellite.earth), a client with excellent views for threaded conversations.
 
 ### iOS
 
+- [Damus](https://damus.io), the first Nostr client to be banned in China.
 - [Nos](https://nos.social), a beautiful and safe client for non-bitcoiners.
-- [Damus](https://apps.apple.com/app/damus/id1628663131), the first client for Nostr to be banned in China. [Check out our guide here](/clients/damus).
+- [Nostur](https://nostur.com), a feature-complete client.
+- [Primal](https://primal.net/downloads), a very fast client that relies on server-side caching.
 
 ### iOS and Android
 
 - [Plebstr](https://plebstr.com), a closed-source client that is beautiful, fast and smooth.
 - [Current](https://app.getcurrent.io/), a client that comes with a built-in Bitcoin wallet.
+- [ZBD](https://zbd.gg), a custodial, hosted client for ZBD users.
 
 ### Android
 
-- [Nostros](https://github.com/KoalaSat/nostros/releases), a feature-complete client with experimental relay tricks. [Check out our guide here](/clients/nostros).
 - [Amethyst](https://play.google.com/store/apps/details?id=com.vitorpamplona.amethyst), a client that has all the features you might imagine.
-- [Camelus](https://camelus.app), a very lean client with good fundamentals, but still a work-in-progress.
 - [Nozzle](https://github.com/kaiwolfram/Nozzle/releases), a very lean client, but still a work-in-progress.
+- [Nostros](https://github.com/KoalaSat/nostros/releases), a feature-complete client with experimental relay tricks.
+- [Camelus](https://camelus.app), a very lean client with good fundamentals, but still a work-in-progress.
 
 ### Desktop
 
-- [Gossip](https://github.com/mikedilger/gossip), a native client that tries to efficiently follow people in wherever relay they happen to be, made in Rust with egui. [Check out our guide here](/clients/gossip).
+- [Gossip](https://github.com/mikedilger/gossip), a native client that tries to efficiently follow people in wherever relay they happen to be, made in Rust with egui.
 - [more-speech](https://github.com/unclebob/more-speech), a client that gives you a powerful global view and way of interacting with custom filtering based on web-of-trust and relay selection, made in Clojure. [Check out a guide here](https://www.youtube.com/watch?v=q3gQ42aUhls).
-- [Lume](https://uselume.xyz), an ambitious client running with Tauri.
+- [Lume](https://lume.nu), an ambitious client made with Tauri.

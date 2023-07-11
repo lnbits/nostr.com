@@ -26,23 +26,10 @@ const navigation = [
     ]
   },
   {
-    title: 'Clients',
+    title: 'Clients and relays',
     links: [
-      {title: 'Clients and how they work', href: '/clients'},
-      {title: 'Guide: Coracle (Web)', href: '/clients/coracle'},
-      {title: 'Guide: Damus (iOS)', href: '/clients/damus'},
-      {title: 'Guide: Gossip (Desktop)', href: '/clients/gossip'},
-      {title: 'Guide: Nostros (Android)', href: '/clients/nostros'}
-    ]
-  },
-  {
-    title: 'Relays',
-    links: [
-      {title: 'What are relays?', href: '/relays'},
-      {
-        title: 'List of relay implementations',
-        href: '/relays/implementations'
-      }
+      {title: 'Clients', href: '/clients'},
+      {title: 'Relays?', href: '/relays'}
     ]
   },
   {
