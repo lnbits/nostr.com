@@ -19,6 +19,7 @@ export default {
       path.startsWith('/naddr') ||
       path.startsWith('/note1') ||
       path.match(/^(\w+@)?(\w+\.)+\w+$/) ||
+      path.match(/^(wss?:\/\/)?[\w-_.]+\.[\w-_.]+(\/[\/\w]*)?$/) ||
       path.startsWith('/proxy/') ||
       path.startsWith('/image/') ||
       path.startsWith('/njump/')
