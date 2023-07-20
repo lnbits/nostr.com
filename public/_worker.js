@@ -24,7 +24,7 @@ export default {
       path.startsWith('/image/') ||
       path.startsWith('/njump/')
     ) {
-      return fetch(`https://njump.nostr.com/${path}${query}`)
+      return fetch(`https://njump.vitamino.it${path}${query}`)
     }
 
     return new Response('not found', {status: 404})
