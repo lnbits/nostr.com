@@ -9,6 +9,13 @@ import {Navigation} from '@/components/Navigation'
 import {Prose} from '@/components/Prose'
 import {ThemeSelector} from '@/components/ThemeSelector'
 
+const relays = [
+  'nostr.wine',
+  'relay.stoner.com',
+  'powrelay.xyz',
+  'relayable.org'
+]
+
 const navigation = [
   {
     title: 'The Basics',
@@ -240,6 +247,22 @@ export function Layout({children, title, tableOfContents}) {
                 </a>
               </li>
             </ol>
+            <h2 className="mt-5 font-display text-sm font-medium text-slate-900 dark:text-white">
+              Example relays
+            </h2>
+            <div className="mt-4 space-y-3 text-sm">
+              {relays.map(hostname => (
+                <div>
+                  <a
+                    className="mt-2 text-slate-500 hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-300"
+                    href={`https://nostr.com/r/${hostname}`}
+                    target="_blank"
+                  >
+                    Browse {hostname}
+                  </a>
+                </div>
+              ))}
+            </div>
           </nav>
         </div>
       </div>
