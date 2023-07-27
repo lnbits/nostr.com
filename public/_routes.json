@@ -4,6 +4,7 @@
     "/.well-known/nostr.json",
     "/e/*",
     "/p/*",
+    "/r/*",
     "/npub1*",
     "/nprofile1*",
     "/naddr1*",
