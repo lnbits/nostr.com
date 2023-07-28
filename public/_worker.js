@@ -22,7 +22,9 @@ export default {
       path.match(/^\/r\/(wss?:\/\/)?[\w-_.]+\.[\w-_.]+(\/[\/\w]*)?$/) ||
       path.startsWith('/proxy/') ||
       path.startsWith('/image/') ||
-      path.startsWith('/njump/')
+      path.startsWith('/njump/') ||
+      path.startsWith('/npubs-archive') ||
+      path.startsWith('/relays-archive')
     ) {
       return fetch(`https://njump.nostr.com/${path}${query}`)
     }
