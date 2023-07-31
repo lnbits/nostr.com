@@ -18,6 +18,11 @@ export default {
       path.startsWith('/nevent1') ||
       path.startsWith('/naddr') ||
       path.startsWith('/note1') ||
+      path.startsWith('/nostr:npub1') ||
+      path.startsWith('/nostr:nprofile1') ||
+      path.startsWith('/nostr:nevent1') ||
+      path.startsWith('/nostr:naddr') ||
+      path.startsWith('/nostr:note1') ||
       path.match(/^\/p\/(\w+@)?(\w+\.)+\w+$/) ||
       path.match(/^\/r\/(wss?:\/\/)?[\w-_.]+\.[\w-_.]+(\/[\/\w]*)?$/) ||
       path.startsWith('/proxy/') ||
