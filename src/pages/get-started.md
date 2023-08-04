@@ -19,7 +19,7 @@ Nostr itself is just a protocol; an agreed upon procedure for passing messages a
 
 You will access Nostr (the protocol) via a client. Clients can be web, desktop, or mobile apps. Clients can fetch data from relays and also generate new data and push that to relays so others can read.
 
-The only form of "data" that exists in Nostr is the [`event`](/the-protocol/event).
+The only form of "data" that exists in Nostr is the [`event`](/the-protocol/events).
 
 ### Signing events
 

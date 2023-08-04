@@ -49,7 +49,7 @@ Remember, your private key is your identity in Nostr, so if it is compromised yo
 ### Android
 
 - [Amethyst](https://play.google.com/store/apps/details?id=com.vitorpamplona.amethyst), a client that has all the features you might imagine.
-- [Nozzle](https://github.com/kaiwolfram/Nozzle/releases), a very lean client, but still a work-in-progress.
+- [Nozzle](https://github.com/dluvian/Nozzle/releases), a very lean client, but still a work-in-progress.
 - [Nostros](https://github.com/KoalaSat/nostros/releases), a feature-complete client with experimental relay tricks.
 - [Camelus](https://camelus.app), a very lean client with good fundamentals, but still a work-in-progress.
 
