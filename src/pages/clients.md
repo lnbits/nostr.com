@@ -32,11 +32,12 @@ Remember, your private key is your identity in Nostr, so if it is compromised yo
 - [Iris](https://iris.to), a client that throws you in instantly.
 - [Yosup](https://yosup.app), a minimalistic client.
 - [Satellite](https://satellite.earth), a client with excellent views for threaded conversations.
+- [nos.today](https://nos.today/), a small client that just provides search.
 
 ### iOS
 
-- [Damus](https://damus.io), the first Nostr client to be banned in China.
 - [Nos](https://nos.social), a beautiful and safe client for non-bitcoiners.
+- [Damus](https://damus.io), the first Nostr client to be banned in China.
 - [Nostur](https://nostur.com), a feature-complete client.
 - [Primal](https://primal.net/downloads), a very fast client that relies on server-side caching.
 
@@ -49,6 +50,7 @@ Remember, your private key is your identity in Nostr, so if it is compromised yo
 ### Android
 
 - [Amethyst](https://play.google.com/store/apps/details?id=com.vitorpamplona.amethyst), a client that has all the features you might imagine.
+- [Spring](https://spring.site/), a client for safely using web clients on your Android.
 - [Nozzle](https://github.com/dluvian/Nozzle/releases), a very lean client, but still a work-in-progress.
 - [Nostros](https://github.com/KoalaSat/nostros/releases), a feature-complete client with experimental relay tricks.
 - [Camelus](https://camelus.app), a very lean client with good fundamentals, but still a work-in-progress.
@@ -58,3 +60,11 @@ Remember, your private key is your identity in Nostr, so if it is compromised yo
 - [Gossip](https://github.com/mikedilger/gossip), a native client that tries to efficiently follow people in wherever relay they happen to be, made in Rust with egui.
 - [more-speech](https://github.com/unclebob/more-speech), a client that gives you a powerful global view and way of interacting with custom filtering based on web-of-trust and relay selection, made in Clojure. [Check out a guide here](https://www.youtube.com/watch?v=q3gQ42aUhls).
 - [Lume](https://lume.nu), an ambitious client made with Tauri.
+
+### Non-microblogging clients
+
+- [zap.stream](https://zap.stream), a video livestreaming browser and hosting platform.
+- [Yakihonne](https://yakihonne.com), an app for reading, writing and curating long-form articles.
+- [Highlighter](https://highlighter.com/), an app for annotating and curating content.
+- [Habla.news](https://habla.news), an app for reading and writing long-form articles.
+- [wikistr](https://wikistr.com), an early-stage decentralized Wikipedia replacement.

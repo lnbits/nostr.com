@@ -36,3 +36,7 @@ Finally, clients from others should include relay hints in events that mention o
 ## What public relays exist?
 
 The [nostr.watch](https://nostr.watch) website keeps a very complete list that has a bunch of information about each relay, not only their address.
+
+## How can I run a relay?
+
+You can either run one of the [open-source implementations](/relays/implementations) on your own server or you can rent one from relay hosting services like [relay.tools](https://relay.tools) and [relaying.io](https://relaying.io).
