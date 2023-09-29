@@ -30,8 +30,8 @@ Remember, your private key is your identity in Nostr, so if it is compromised yo
 - [Snort](https://snort.social), an easy-to-use client with great onboarding.
 - [Coracle](https://coracle.social), an experimental client that is advancing the UX and internals of social media.
 - [Iris](https://iris.to), a client that throws you in instantly.
-- [Yosup](https://yosup.app), a minimalistic client.
 - [Satellite](https://satellite.earth), a client with excellent views for threaded conversations.
+- [Yosup](https://yosup.app), a minimalistic client.
 - [nos.today](https://nos.today/), a small client that just provides search.
 
 ### iOS
@@ -39,21 +39,21 @@ Remember, your private key is your identity in Nostr, so if it is compromised yo
 - [Nos](https://nos.social), a beautiful and safe client for non-bitcoiners.
 - [Damus](https://damus.io), the first Nostr client to be banned in China.
 - [Nostur](https://nostur.com), a feature-complete client.
-- [Primal](https://primal.net/downloads), a very fast client that relies on server-side caching.
 
 ### iOS and Android
 
 - [Plebstr](https://plebstr.com), a closed-source client that is beautiful, fast and smooth.
+- [Primal](https://primal.net/downloads), a very fast client that relies on server-side caching.
 - [Current](https://app.getcurrent.io/), a client that comes with a built-in Bitcoin wallet.
 - [ZBD](https://zbd.gg), a custodial, hosted client for ZBD users.
 
 ### Android
 
-- [Amethyst](https://play.google.com/store/apps/details?id=com.vitorpamplona.amethyst), a client that has all the features you might imagine.
 - [Spring](https://spring.site/), a client for safely using web clients on your Android.
 - [Nozzle](https://github.com/dluvian/Nozzle/releases), a very lean client, but still a work-in-progress.
-- [Nostros](https://github.com/KoalaSat/nostros/releases), a feature-complete client with experimental relay tricks.
+- [Yana](https://github.com/frnandu/yana/releases), an early-stage fully-featured multi-platform client.
 - [Camelus](https://camelus.app), a very lean client with good fundamentals, but still a work-in-progress.
+- [Plasma](https://github.com/plasma-social/plasma/releases/tag/v0.0.29), an early-stage native Android client.
 
 ### Desktop
 
