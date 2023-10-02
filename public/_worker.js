@@ -1,5 +1,7 @@
+/* globals caches */
+
 export default {
-  async fetch(request, env, ctx) {
+  async fetch(request, _, ctx) {
     let url = new URL(request.url)
     let path = url.pathname
     let query = url.search
@@ -13,6 +15,7 @@ export default {
     if (
       path.startsWith('/e/') ||
       path.startsWith('/p/') ||
+      path.startsWith('/r/') ||
       path.startsWith('/npub1') ||
       path.startsWith('/nprofile1') ||
       path.startsWith('/nevent1') ||
@@ -23,15 +26,22 @@ export default {
       path.startsWith('/nostr:nevent1') ||
       path.startsWith('/nostr:naddr') ||
       path.startsWith('/nostr:note1') ||
-      path.match(/^\/p\/(\w+@)?(\w+\.)+\w+$/) ||
-      path.match(/^\/r\/(wss?:\/\/)?[\w-_.]+\.[\w-_.]+(\/[\/\w]*)?$/) ||
-      path.startsWith('/proxy/') ||
-      path.startsWith('/image/') ||
       path.startsWith('/njump/') ||
       path.startsWith('/npubs-archive') ||
       path.startsWith('/relays-archive')
     ) {
-      return fetch(`https://njump.nostr.com/${path}${query}`)
+      let next = `https://njump.me/${path}${query}`
+
+      let ua = request.headers.get('user-agent').toLowerCase()
+      let bots = ['bot', 'spider', 'google', 'bing', 'yandex']
+      if (bots.filter(b => ua.includes(b)).length) {
+        // if it's a bot, we redirect
+        return Response.redirect(next, 301)
+      }
+
+      // if it's a normal person or anything like that, we proxy
+      let req = new Request(new URL(next))
+      return await fetch(req)
     }
 
     return new Response('not found', {status: 404})
