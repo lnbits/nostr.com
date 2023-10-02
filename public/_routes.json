@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "include": [
+    "/.well-known/nostr.json",
+    "/e/*",
+    "/p/*",
+    "/r/*",
+    "/npub1*",
+    "/nprofile1*",
+    "/naddr1*",
+    "/nevent1*",
+    "/note1*",
+    "/proxy/*",
+    "/image/*",
+    "/njump/*"
+  ],
+  "exclude": []
+}
