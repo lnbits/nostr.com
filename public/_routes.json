@@ -10,7 +10,9 @@
     "/naddr1*",
     "/nevent1*",
     "/note1*",
-    "/njump/*"
+    "/njump/*",
+    "/npubs-archive",
+    "/relays-archive"
   ],
   "exclude": []
 }
