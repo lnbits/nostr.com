@@ -6,12 +6,23 @@ export default {
     let path = url.pathname
     let query = url.search
 
+    // ben's fancy pubkeys
     if (path === '/.well-known/nostr.json') {
       return fetch('https://nostrfy.com/nostr.json', cacheOnFetch(48)).then(
         cacheOnBrowser(72)
       )
     }
 
+    // redirect to nip
+    if (path.startsWith('/nip/')) {
+      let nipNumber = path.split('/')[2]
+      return Response.redirect(
+        `https://github.com/nostr-protocol/nips/blob/master/${nipNumber}.md`,
+        302
+      )
+    }
+
+    // proxy njump
     if (
       path.startsWith('/e/') ||
       path.startsWith('/p/') ||
