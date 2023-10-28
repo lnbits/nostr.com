@@ -49,10 +49,10 @@ Remember, your private key is your identity in Nostr, so if it is compromised yo
 
 ### Android
 
-- [Spring](https://spring.site/), a client for safely using web clients on your Android.
-- [Nozzle](https://github.com/dluvian/Nozzle/releases), a very lean client, but still a work-in-progress.
 - [Yana](https://github.com/frnandu/yana/releases), a smooth and fully-featured multi-platform client.
-- [Camelus](https://camelus.app), a very lean client with good fundamentals, but still a work-in-progress.
+- [Spring](https://spring.site/), a client for safely using web clients on your Android.
+- [Amethyst](https://play.google.com/store/apps/details?id=com.vitorpamplona.amethyst), a client that has all the features you might imagine.
+- [Nozzle](https://github.com/dluvian/Nozzle/releases), a very lean client, but still a work-in-progress.
 - [Plasma](https://github.com/plasma-social/plasma/releases/tag/v0.0.29), an early-stage native Android client.
 
 ### Desktop
