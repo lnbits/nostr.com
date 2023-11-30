@@ -27,12 +27,11 @@ Remember, your private key is your identity in Nostr, so if it is compromised yo
 
 ### Web
 
-- [Snort](https://snort.social), an easy-to-use client with great onboarding.
-- [Coracle](https://coracle.social), an experimental client that is advancing the UX and internals of social media.
-- [noStrudel](https://nostrudel.ninja), a chaotically good client that has everything and more, very fast.
-- [Satellite](https://satellite.earth), a client with excellent views for threaded conversations.
-- [Iris](https://iris.to), a client that throws you in instantly.
-- [nos.today](https://nos.today/), a small client that just provides search.
+- [Nostter](https://nostter.app/)
+- [Coracle](https://coracle.social)
+- [noStrudel](https://nostrudel.ninja)
+- [Snort](https://snort.social)
+- [Rabbit](https://syusui-s.github.io/rabbit/)
 
 ### iOS
 
@@ -52,8 +51,8 @@ Remember, your private key is your identity in Nostr, so if it is compromised yo
 - [Yana](https://github.com/frnandu/yana/releases), a smooth and fully-featured multi-platform client.
 - [Spring](https://spring.site/), a client for safely using web clients on your Android.
 - [Amethyst](https://play.google.com/store/apps/details?id=com.vitorpamplona.amethyst), a client that has all the features you might imagine.
+- [FreeFrom](https://freefrom.space/), a Twitter-like client.
 - [Nozzle](https://github.com/dluvian/Nozzle/releases), a very lean client, but still a work-in-progress.
-- [Plasma](https://github.com/plasma-social/plasma/releases/tag/v0.0.29), an early-stage native Android client.
 
 ### Desktop
 
