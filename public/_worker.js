@@ -50,10 +50,13 @@ export default {
       }
 
       // if it's a normal person or anything like that, we proxy
-      let req = request.clone()
-      req.url = next
-      req.headers.set('Host', 'nostr.com')
-      return await fetch(req)
+      return await fetch(next, {
+        headers: {
+          Host: 'nostr.com',
+          'User-Agent': request.headers.get('User-Agent'),
+          Accept: request.headers.get('Accept')
+        }
+      })
     }
 
     return new Response('not found', {status: 404})
