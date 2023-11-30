@@ -50,13 +50,20 @@ export default {
       }
 
       // if it's a normal person or anything like that, we proxy
-      return await fetch(next, {
+      let response = await fetch(next, {
         headers: {
-          Host: 'nostr.com',
           'User-Agent': request.headers.get('User-Agent'),
           Accept: request.headers.get('Accept')
         }
       })
+
+      // remove umami tracker so melvin carvalho can be quiet
+      let text = await response.text()
+      let stripped = text
+        .replace(/<script>let umami.*<\/script>/, '')
+        .replace(/<script .*umami\.is.*<\/script>/, '')
+
+      return new Response(stripped, response)
     }
 
     return new Response('not found', {status: 404})
