@@ -4,7 +4,6 @@ export default {
   async fetch(request, _, ctx) {
     let url = new URL(request.url)
     let path = url.pathname
-    let query = url.search
 
     // ben's fancy pubkeys
     if (path === '/.well-known/nostr.json') {
@@ -41,17 +40,19 @@ export default {
       path.startsWith('/npubs-archive') ||
       path.startsWith('/relays-archive')
     ) {
-      let next = `https://njump.me/${path}${query}`
-
+      let next = `https://njump.me/${path}${url.search}`
       let ua = request.headers.get('user-agent').toLowerCase()
       let bots = ['bot', 'spider', 'google', 'bing', 'yandex']
+
       if (bots.filter(b => ua.includes(b)).length) {
         // if it's a bot, we redirect
         return Response.redirect(next, 301)
       }
 
       // if it's a normal person or anything like that, we proxy
-      let req = new Request(new URL(next))
+      let req = request.clone()
+      req.url = next
+      req.headers.set('Host', 'nostr.com')
       return await fetch(req)
     }
 
