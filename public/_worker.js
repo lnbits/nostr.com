@@ -40,7 +40,7 @@ export default {
       path.startsWith('/npubs-archive') ||
       path.startsWith('/relays-archive')
     ) {
-      let next = `https://njump.nostr.wine/${path}${url.search}`
+      let next = `https://nostr.at/${path}${url.search}`
       let ua = request.headers.get('user-agent').toLowerCase()
       let bots = ['bot', 'spider', 'google', 'bing', 'yandex']
 
