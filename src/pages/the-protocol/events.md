@@ -32,7 +32,7 @@ Each `kind` number means something. For example, `0` is a "metadata" event, used
 
 You generally don't need more than kinds `0` and `1` to build a basic social-networking Nostr app, but other kinds were invented out of necessity by clients to provide other functionalities. They are specified in the [NIPs](/the-protocol/nips). Some kinds are unrelated to social-networking and serve other needs from clients specific to these other functionalities. The idea is that, for each new use case one can think of in Nostr, a subprotocol must be thought about and proposed as a NIP, for maximum interoperability with existing and future clients that may be interested in implementing that functionality -- while also ensuring backwards-compatibility and nice fallbacks for everything that exists and does not want to change.
 
-The `created_at` property is a UNIX timestamp set by the event creator, normally to the time it was created, but there are no checks made against that, but that is not a problem.
+The `created_at` property is a UNIX timestamp set by the event creator, normally to the time it was created. While there are no checks made against that, that is not a problem.
 
 The `content` is dependent of what the `kind` means. In the case of `kind:1`, it is just a plaintext string meant to be read by others.
 
