@@ -262,24 +262,6 @@ export function Layout({children, title, tableOfContents}) {
                   </a>
                 </div>
               ))}
-              <div>
-                <a
-                  href="/relays-archive"
-                  className="invisible mt-2 text-slate-500 hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-300"
-                  target="_blank"
-                >
-                  Browse nostr relays
-                </a>
-              </div>
-              <div>
-                <a
-                  href="/npubs-archive"
-                  className="invisible mt-2 text-slate-500 hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-300"
-                  target="_blank"
-                >
-                  Browse nostr npubs
-                </a>
-              </div>
             </div>
           </nav>
         </div>

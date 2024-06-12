@@ -11,8 +11,6 @@
     "/nevent1*",
     "/note1*",
     "/njump/*",
-    "/npubs-archive",
-    "/relays-archive",
     "/nip/*"
   ],
   "exclude": []

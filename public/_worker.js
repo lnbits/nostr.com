@@ -36,9 +36,7 @@ export default {
       path.startsWith('/nostr:nevent1') ||
       path.startsWith('/nostr:naddr') ||
       path.startsWith('/nostr:note1') ||
-      path.startsWith('/njump/') ||
-      path.startsWith('/npubs-archive') ||
-      path.startsWith('/relays-archive')
+      path.startsWith('/njump/')
     ) {
       let next = `https://nostr.at/${path}${url.search}`
       let ua = request.headers.get('user-agent').toLowerCase()
@@ -46,7 +44,7 @@ export default {
 
       if (bots.filter(b => ua.includes(b)).length) {
         // if it's a bot, we redirect
-        return Response.redirect(next, 301)
+        return Response.redirect(`https://njump.me/${path}${url.search}`, 301)
       }
 
       // if it's a normal person or anything like that, we proxy
