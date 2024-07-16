@@ -30,7 +30,7 @@ export function ThemeSelector(props) {
   }
 
   return (
-    <div style={{cursor: 'pointer'}}>
+    <div style={{cursor: 'pointer', alignSelf: 'center'}}>
       <Icon />
     </div>
   )

@@ -7,7 +7,8 @@ import {Hero} from '@/components/Hero'
 import {MobileNavigation} from '@/components/MobileNavigation'
 import {Navigation} from '@/components/Navigation'
 import {Prose} from '@/components/Prose'
-import {ThemeSelector} from '@/components/ThemeSelector'
+import { ThemeSelector } from '@/components/ThemeSelector'
+import { Nip05SearchBar } from '@/components/Nip05SearchBar'
 
 const relays = [
   'nostr.wine',
@@ -79,6 +80,9 @@ function Header({navigation}) {
         </Link>
       </div>
       <div className="relative flex basis-0 justify-end gap-6 sm:gap-8 md:flex-grow">
+        <div className="relative z-10 max-sm:hidden">
+          <Nip05SearchBar></Nip05SearchBar>
+        </div>
         <ThemeSelector className="relative z-10" />
       </div>
     </header>
