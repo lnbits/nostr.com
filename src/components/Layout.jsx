@@ -2,12 +2,14 @@ import {useCallback, useEffect, useState} from 'react'
 import Link from 'next/link'
 import {useRouter} from 'next/router'
 import clsx from 'clsx'
+import Image from 'next/image'
 
 import {Hero} from '@/components/Hero'
 import {MobileNavigation} from '@/components/MobileNavigation'
 import {Navigation} from '@/components/Navigation'
 import {Prose} from '@/components/Prose'
 import {ThemeSelector} from '@/components/ThemeSelector'
+import nostrLogo from '/src/images/nostr.svg'
 
 const relays = [
   'nostr.wine',
@@ -47,6 +49,7 @@ const navigation = [
 
 function Header({navigation}) {
   let [isScrolled, setIsScrolled] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
     function onScroll() {
@@ -58,6 +61,11 @@ function Header({navigation}) {
       window.removeEventListener('scroll', onScroll, {passive: true})
     }
   }, [])
+
+  const handleSearch = (event) => {
+    event.preventDefault()
+    window.location.href = `https://my.nostr.com/${searchQuery}`
+  }
 
   return (
     <header
@@ -72,14 +80,17 @@ function Header({navigation}) {
         <MobileNavigation navigation={navigation} />
       </div>
       <div className="relative flex flex-grow basis-0 items-center">
-        <Link href="/" aria-label="Home page">
+        <Link href="/" aria-label="Home page" className="flex items-center">
+          <Image src={nostrLogo} alt="Nostr Logo" width={40} height={40} className="mr-2" />
           <span className="flex font-display text-2xl font-bold text-slate-900 dark:text-sky-100 md:text-3xl">
             Nostr
           </span>
         </Link>
       </div>
-      <div className="relative flex basis-0 justify-end gap-6 sm:gap-8 md:flex-grow">
-        <ThemeSelector className="relative z-10" />
+      <div className="relative flex basis-0 justify-end gap-2 sm:gap-4 md:flex-grow items-center">
+        <div className="hidden sm:block">
+          <ThemeSelector className="relative z-10" />
+        </div>
       </div>
     </header>
   )
@@ -252,7 +263,7 @@ export function Layout({children, title, tableOfContents}) {
             </h2>
             <div className="mt-4 space-y-3 text-sm">
               {relays.map(hostname => (
-                <div>
+                <div key={hostname}>
                   <a
                     className="mt-2 text-slate-500 hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-300"
                     href={`https://njump.me/r/${hostname}`}

@@ -21,3 +21,52 @@
   font-named-instance: 'Italic';
   src: url('/fonts/Inter-italic.var.woff2') format('woff2');
 }
+.video-container {
+  position: relative;
+  padding-bottom: 56.25%; /* 16:9 aspect ratio */
+  height: 0;
+  overflow: hidden;
+  max-width: 100%;
+  background: #000;
+}
+
+.video-container iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+form {
+  display: flex;
+  align-items: center;
+  background-color: #374151;
+  border-radius: 9999px;
+  padding: 0.25rem;
+  font-size: 0.875rem;
+}
+
+input {
+  background-color: transparent;
+  color: #fff;
+  border: none;
+  outline: none;
+  padding: 0.25rem;
+  border-radius: 9999px;
+  width: 100px; /* shorter width */
+}
+
+button {
+  background-color: #38bdf8;
+  color: #1e293b;
+  border: none;
+  border-radius: 9999px;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  font-size: 0.75rem; /* smaller font size */
+}
+
+button:hover {
+  background-color: #0ea5e9;
+}
