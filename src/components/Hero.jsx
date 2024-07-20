@@ -1,25 +1,11 @@
-import {Fragment} from 'react'
+import {Fragment, useState} from 'react'
 import Image from 'next/image'
 import clsx from 'clsx'
-import Highlight, {defaultProps} from 'prism-react-renderer'
 
 import {Button} from '@/components/Button'
 import {HeroBackground} from '@/components/HeroBackground'
 import blurCyanImage from '@/images/blur-cyan.webp'
 import blurIndigoImage from '@/images/blur-indigo.webp'
-
-const codeLanguage = 'json'
-const code = `{
-  "id": "b9fead6eef87d8400cbc1a5621600b360438affb9760a6a043cc0bddea21dab6",
-  "kind": 1,
-  "pubkey": "82341f882b6eabcd2ba7f1ef90aad961cf074af15b9ef44a09f9d2a8fbfbe6a2",
-  "created_at": 1676161639,
-  "content": "this is going to work",
-  "tags": [],
-  "sig": "76d19889a803236165a290fa8f3cf5365af8977ee1e002afcfd37063d1355fc755d0293d27ba0ec1c2468acfaf95b7e950e57df275bb32d7a4a3136f8862d2b7"
-}`
-
-const tabs = [{name: 'event.json', isActive: true}]
 
 function TrafficLightsIcon(props) {
   return (
@@ -32,6 +18,13 @@ function TrafficLightsIcon(props) {
 }
 
 export function Hero() {
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const handleSearch = (event) => {
+    event.preventDefault();
+    window.location.href = `https://my.nostr.com/${searchQuery}`;
+  };
+
   return (
     <div className="overflow-hidden bg-slate-900 dark:-mb-32 dark:mt-[-4.5rem] dark:pb-32 dark:pt-[4.5rem] dark:lg:mt-[-4.75rem] dark:lg:pt-[4.75rem]">
       <div className="py-16 sm:px-2 lg:relative lg:py-20 lg:px-0">
@@ -48,21 +41,29 @@ export function Hero() {
             />
             <div className="relative">
               <p className="inline bg-gradient-to-r from-indigo-200 via-sky-400 to-indigo-200 bg-clip-text font-display text-5xl tracking-tight text-transparent">
-                A decentralized social network with a chance of working
+                A better internet is possible: decentralize Twitter, eBay, IoT and other stuff.
               </p>
               <p className="mt-3 text-2xl tracking-tight text-slate-400">
-                Learn about Nostr: A simple, open protocol that enables a truly
-                censorship-resistant and global social network.
+                Smart-client/dumb-server architecture that can create the free and open internet we were promised.
               </p>
               <div className="mt-8 flex gap-4 md:justify-center lg:justify-start">
-                <Button href="/get-started">Get started</Button>
-                <Button
-                  href="https://github.com/nostr-protocol/nostr"
+                <Button href="https://github.com/nostr-protocol/nostr">Github</Button>
+                <Button 
+                  href="https://nostr.org"
+                >
+                  Nostr.org
+                </Button>
+                <Button 
+                  href="https://shop.lnbits.com/product-category/nostr"
                   variant="secondary"
                 >
-                  View Nostr on GitHub
+                  Shop
                 </Button>
               </div>
+              <p className="mt-3 text-xs tracking-tight text-slate-400">
+                Nostr is a protocol; explore the Github or visit nostr.org to learn more. Nostr.com has commercial features.
+              </p>
+
             </div>
           </div>
           <div className="relative lg:static xl:pl-10">
@@ -79,93 +80,25 @@ export function Hero() {
                 unoptimized
                 priority
               />
-              <Image
-                className="absolute -bottom-40 -right-44"
-                src={blurIndigoImage}
-                alt=""
-                width={567}
-                height={567}
-                unoptimized
-                priority
-              />
-              <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-sky-300 via-sky-300/70 to-blue-300 opacity-10 blur-lg" />
-              <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-sky-300 via-sky-300/70 to-blue-300 opacity-10" />
-              <div className="relative rounded-2xl bg-[#0A101F]/80 ring-1 ring-white/10 backdrop-blur">
-                <div className="absolute -top-px left-20 right-11 h-px bg-gradient-to-r from-sky-300/0 via-sky-300/70 to-sky-300/0" />
-                <div className="absolute -bottom-px left-11 right-20 h-px bg-gradient-to-r from-blue-400/0 via-blue-400 to-blue-400/0" />
-                <div className="pl-4 pt-4">
-                  <TrafficLightsIcon className="h-2.5 w-auto stroke-slate-500/30" />
-                  <div className="mt-4 flex space-x-2 text-xs">
-                    {tabs.map(tab => (
-                      <div
-                        key={tab.name}
-                        className={clsx(
-                          'flex h-6 rounded-full',
-                          tab.isActive
-                            ? 'bg-gradient-to-r from-sky-400/30 via-sky-400 to-sky-400/30 p-px font-medium text-sky-300'
-                            : 'text-slate-500'
-                        )}
-                      >
-                        <div
-                          className={clsx(
-                            'flex items-center rounded-full px-2.5',
-                            tab.isActive && 'bg-slate-800'
-                          )}
-                        >
-                          {tab.name}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-6 flex items-start px-1 text-sm">
-                    <div
-                      aria-hidden="true"
-                      className="select-none border-r border-slate-300/5 pr-4 font-mono text-slate-600"
-                    >
-                      {Array.from({
-                        length: code.split('\n').length
-                      }).map((_, index) => (
-                        <Fragment key={index}>
-                          {(index + 1).toString().padStart(2, '0')}
-                          <br />
-                        </Fragment>
-                      ))}
-                    </div>
-                    <Highlight
-                      {...defaultProps}
-                      code={code}
-                      language={codeLanguage}
-                      theme={undefined}
-                    >
-                      {({
-                        className,
-                        style,
-                        tokens,
-                        getLineProps,
-                        getTokenProps
-                      }) => (
-                        <pre
-                          className={clsx(
-                            className,
-                            'flex overflow-x-hidden pb-6'
-                          )}
-                          style={style}
-                        >
-                          <code className="px-4">
-                            {tokens.map((line, lineIndex) => (
-                              <div key={lineIndex} {...getLineProps({line})}>
-                                {line.map((token, tokenIndex) => (
-                                  <span
-                                    key={tokenIndex}
-                                    {...getTokenProps({token})}
-                                  />
-                                ))}
-                              </div>
-                            ))}
-                          </code>
-                        </pre>
-                      )}
-                    </Highlight>
+              <div className="relative">
+                <Image
+                  className="absolute -bottom-40 -right-44"
+                  src={blurIndigoImage}
+                  alt=""
+                  width={567}
+                  height={567}
+                  unoptimized
+                  priority
+                />
+                <div className="relative z-20">
+                  <div className="video-container">
+                    <iframe
+                      src="https://www.youtube.com/embed/5W-jtbbh3eA"
+                      title="YouTube video player"
+                      frameBorder="0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    ></iframe>
                   </div>
                 </div>
               </div>
