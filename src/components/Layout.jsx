@@ -82,6 +82,21 @@ function Header({ navigation }) {
         </Link>
       </div>
       <div className="relative flex basis-0 justify-end gap-2 sm:gap-4 md:flex-grow items-center">
+        <form onSubmit={handleSearch} className="flex items-center bg-slate-700 rounded-full p-1" title="get your NIP05 name!">
+          <input
+            type="text"
+            placeholder="@nostr.com"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="bg-transparent text-white placeholder-slate-400 focus:outline-none w-24 sm:w-32"
+          />
+          <button
+            type="submit"
+            className="ml-2 px-3 py-1 bg-sky-400 text-slate-900 rounded-full text-sm"
+          >
+            Search
+          </button>
+        </form>
         <div className="hidden sm:block">
           <ThemeSelector className="relative z-10" />
         </div>
