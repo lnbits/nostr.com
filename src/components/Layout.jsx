@@ -246,19 +246,6 @@ export function Layout({children, title, tableOfContents}) {
               </>
             )}
             <h2 className="mt-5 font-display text-sm font-medium text-slate-900 dark:text-white">
-              Announcements
-            </h2>
-            <ol className="mt-4 space-y-3 text-sm">
-              <li>
-                <a
-                  href="https://shop.lnbits.com/product-category/nostr"
-                  target="_blank"
-                >
-                  <img src="/images/ad-lnbits-shop.png" />
-                </a>
-              </li>
-            </ol>
-            <h2 className="mt-5 font-display text-sm font-medium text-slate-900 dark:text-white">
               Example relays
             </h2>
             <div className="mt-4 space-y-3 text-sm">
