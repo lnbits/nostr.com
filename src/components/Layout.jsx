@@ -1,14 +1,14 @@
-import {useCallback, useEffect, useState} from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import {useRouter} from 'next/router'
+import { useRouter } from 'next/router'
 import clsx from 'clsx'
 import Image from 'next/image'
 
-import {Hero} from '@/components/Hero'
-import {MobileNavigation} from '@/components/MobileNavigation'
-import {Navigation} from '@/components/Navigation'
-import {Prose} from '@/components/Prose'
-import {ThemeSelector} from '@/components/ThemeSelector'
+import { Hero } from '@/components/Hero'
+import { MobileNavigation } from '@/components/MobileNavigation'
+import { Navigation } from '@/components/Navigation'
+import { Prose } from '@/components/Prose'
+import { ThemeSelector } from '@/components/ThemeSelector'
 import nostrLogo from '/src/images/nostr.svg'
 
 const relays = [
@@ -22,50 +22,44 @@ const navigation = [
   {
     title: 'The Basics',
     links: [
-      {title: 'What is Nostr?', href: '/'},
-      {title: 'Get started', href: '/get-started'}
+      { title: 'What is Nostr?', href: '/' },
+      { title: 'Get started', href: '/get-started' }
     ]
   },
   {
     title: 'The Protocol',
     links: [
-      {title: 'The Nostr Protocol', href: '/the-protocol'},
-      {title: 'Events', href: '/the-protocol/events'},
-      {title: 'NIPs', href: '/the-protocol/nips'}
+      { title: 'The Nostr Protocol', href: '/the-protocol' },
+      { title: 'Events', href: '/the-protocol/events' },
+      { title: 'NIPs', href: '/the-protocol/nips' }
     ]
   },
   {
     title: 'Clients and relays',
     links: [
-      {title: 'Clients', href: '/clients'},
-      {title: 'Relays?', href: '/relays'}
+      { title: 'Clients', href: '/clients' },
+      { title: 'Relays?', href: '/relays' }
     ]
   },
   {
     title: 'Contributing',
-    links: [{title: 'How to help Nostr', href: '/contribute'}]
+    links: [{ title: 'How to help Nostr', href: '/contribute' }]
   }
 ]
 
-function Header({navigation}) {
+function Header({ navigation }) {
   let [isScrolled, setIsScrolled] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
     function onScroll() {
       setIsScrolled(window.scrollY > 0)
     }
     onScroll()
-    window.addEventListener('scroll', onScroll, {passive: true})
+    window.addEventListener('scroll', onScroll, { passive: true })
     return () => {
-      window.removeEventListener('scroll', onScroll, {passive: true})
+      window.removeEventListener('scroll', onScroll, { passive: true })
     }
   }, [])
-
-  const handleSearch = (event) => {
-    event.preventDefault()
-    window.location.href = `https://my.nostr.com/${searchQuery}`
-  }
 
   return (
     <header
@@ -110,7 +104,7 @@ function useTableOfContents(tableOfContents) {
         let scrollMt = parseFloat(style.scrollMarginTop)
 
         let top = window.scrollY + el.getBoundingClientRect().top - scrollMt
-        return {id, top}
+        return { id, top }
       })
   }, [])
 
@@ -129,17 +123,17 @@ function useTableOfContents(tableOfContents) {
       }
       setCurrentSection(current)
     }
-    window.addEventListener('scroll', onScroll, {passive: true})
+    window.addEventListener('scroll', onScroll, { passive: true })
     onScroll()
     return () => {
-      window.removeEventListener('scroll', onScroll, {passive: true})
+      window.removeEventListener('scroll', onScroll, { passive: true })
     }
   }, [getHeadings, tableOfContents])
 
   return currentSection
 }
 
-export function Layout({children, title, tableOfContents}) {
+export function Layout({ children, title, tableOfContents }) {
   let router = useRouter()
   let isHomePage = router.pathname === '/'
   let section = navigation.find(section =>

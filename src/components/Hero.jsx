@@ -1,30 +1,11 @@
-import {Fragment, useState} from 'react'
 import Image from 'next/image'
-import clsx from 'clsx'
 
-import {Button} from '@/components/Button'
-import {HeroBackground} from '@/components/HeroBackground'
+import { Button } from '@/components/Button'
+import { HeroBackground } from '@/components/HeroBackground'
 import blurCyanImage from '@/images/blur-cyan.webp'
 import blurIndigoImage from '@/images/blur-indigo.webp'
 
-function TrafficLightsIcon(props) {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 42 10" fill="none" {...props}>
-      <circle cx="5" cy="5" r="4.5" />
-      <circle cx="21" cy="5" r="4.5" />
-      <circle cx="37" cy="5" r="4.5" />
-    </svg>
-  )
-}
-
 export function Hero() {
-  const [searchQuery, setSearchQuery] = useState('');
-
-  const handleSearch = (event) => {
-    event.preventDefault();
-    window.location.href = `https://my.nostr.com/${searchQuery}`;
-  };
-
   return (
     <div className="overflow-hidden bg-slate-900 dark:-mb-32 dark:mt-[-4.5rem] dark:pb-32 dark:pt-[4.5rem] dark:lg:mt-[-4.75rem] dark:lg:pt-[4.75rem]">
       <div className="py-16 sm:px-2 lg:relative lg:py-20 lg:px-0">
@@ -47,23 +28,17 @@ export function Hero() {
                 Smart-client/dumb-server architecture that can create the free and open internet we were promised.
               </p>
               <div className="mt-8 flex gap-4 md:justify-center lg:justify-start">
-                <Button href="https://github.com/nostr-protocol/nostr">Github</Button>
-                <Button 
-                  href="https://nostr.org"
-                >
+                <Button href="https://github.com/nostr-protocol/nostr">GitHub</Button>
+                <Button href="https://nostr.org">
                   Nostr.org
                 </Button>
-                <Button 
-                  href="https://shop.lnbits.com/product-category/nostr"
-                  variant="secondary"
-                >
+                <Button href="https://shop.lnbits.com/product-category/nostr" variant="secondary">
                   Shop
                 </Button>
               </div>
               <p className="mt-3 text-xs tracking-tight text-slate-400">
-                Nostr is a protocol; explore the Github or visit nostr.org to learn more. Nostr.com has commercial features.
+                Nostr is a protocol; explore the GitHub or visit nostr.org to learn more. Nostr.com has commercial features.
               </p>
-
             </div>
           </div>
           <div className="relative lg:static xl:pl-10">
