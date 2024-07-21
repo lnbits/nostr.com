@@ -10,5 +10,6 @@ module.exports = withMarkdoc({
   },
   images: {
     unoptimized: true
-  }
+  },
+  output: 'export'
 })
