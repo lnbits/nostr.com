@@ -1,14 +1,14 @@
-import { useCallback, useEffect, useState } from 'react'
+import {useCallback, useEffect, useState} from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/router'
+import {useRouter} from 'next/router'
 import clsx from 'clsx'
 import Image from 'next/image'
 
-import { Hero } from '@/components/Hero'
-import { MobileNavigation } from '@/components/MobileNavigation'
-import { Navigation } from '@/components/Navigation'
-import { Prose } from '@/components/Prose'
-import { ThemeSelector } from '@/components/ThemeSelector'
+import {Hero} from '@/components/Hero'
+import {MobileNavigation} from '@/components/MobileNavigation'
+import {Navigation} from '@/components/Navigation'
+import {Prose} from '@/components/Prose'
+import {ThemeSelector} from '@/components/ThemeSelector'
 import nostrLogo from '/src/images/nostr.svg'
 
 const relays = [
@@ -22,44 +22,53 @@ const navigation = [
   {
     title: 'The Basics',
     links: [
-      { title: 'What is Nostr?', href: '/' },
-      { title: 'Get started', href: '/get-started' }
+      {title: 'What is Nostr?', href: '/'},
+      {title: 'Get started', href: '/get-started'}
     ]
   },
   {
     title: 'The Protocol',
     links: [
-      { title: 'The Nostr Protocol', href: '/the-protocol' },
-      { title: 'Events', href: '/the-protocol/events' },
-      { title: 'NIPs', href: '/the-protocol/nips' }
+      {title: 'The Nostr Protocol', href: '/the-protocol'},
+      {title: 'Events', href: '/the-protocol/events'},
+      {title: 'NIPs', href: '/the-protocol/nips'}
     ]
   },
   {
     title: 'Clients and relays',
     links: [
-      { title: 'Clients', href: '/clients' },
-      { title: 'Relays?', href: '/relays' }
+      {title: 'Clients', href: '/clients'},
+      {title: 'Relays?', href: '/relays'}
     ]
   },
   {
     title: 'Contributing',
-    links: [{ title: 'How to help Nostr', href: '/contribute' }]
+    links: [{title: 'How to help Nostr', href: '/contribute'}]
   }
 ]
 
-function Header({ navigation }) {
+function Header({navigation}) {
   let [isScrolled, setIsScrolled] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
     function onScroll() {
       setIsScrolled(window.scrollY > 0)
     }
     onScroll()
-    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('scroll', onScroll, {passive: true})
     return () => {
-      window.removeEventListener('scroll', onScroll, { passive: true })
+      window.removeEventListener('scroll', onScroll, {passive: true})
     }
   }, [])
+
+  const handleSearch = event => {
+    event.preventDefault()
+    if (!searchQuery.trim()) {
+      return
+    }
+    window.location.href = `https://my.${location.host}?q=${searchQuery.trim()}`
+  }
 
   return (
     <header
@@ -75,13 +84,38 @@ function Header({ navigation }) {
       </div>
       <div className="relative flex flex-grow basis-0 items-center">
         <Link href="/" aria-label="Home page" className="flex items-center">
-          <Image src={nostrLogo} alt="Nostr Logo" width={40} height={40} className="mr-2" />
+          <Image
+            src={nostrLogo}
+            alt="Nostr Logo"
+            width={40}
+            height={40}
+            className="mr-2"
+          />
           <span className="flex font-display text-2xl font-bold text-slate-900 dark:text-sky-100 md:text-3xl">
             Nostr
           </span>
         </Link>
       </div>
-      <div className="relative flex basis-0 justify-end gap-2 sm:gap-4 md:flex-grow items-center">
+      <div className="relative flex basis-0 items-center justify-end gap-2 sm:gap-4 md:flex-grow">
+        <form
+          onSubmit={handleSearch}
+          className="flex items-center rounded-full bg-slate-700 p-1"
+          title="get your NIP05 name!"
+        >
+          <input
+            type="text"
+            placeholder="@nostr.com"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-24 bg-transparent text-white placeholder-slate-400 focus:outline-none sm:w-32"
+          />
+          <button
+            type="submit"
+            className="ml-2 rounded-full bg-sky-400 px-3 py-1 text-sm text-slate-900"
+          >
+            Search
+          </button>
+        </form>
         <div className="hidden sm:block">
           <ThemeSelector className="relative z-10" />
         </div>
@@ -104,7 +138,7 @@ function useTableOfContents(tableOfContents) {
         let scrollMt = parseFloat(style.scrollMarginTop)
 
         let top = window.scrollY + el.getBoundingClientRect().top - scrollMt
-        return { id, top }
+        return {id, top}
       })
   }, [])
 
@@ -123,17 +157,17 @@ function useTableOfContents(tableOfContents) {
       }
       setCurrentSection(current)
     }
-    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('scroll', onScroll, {passive: true})
     onScroll()
     return () => {
-      window.removeEventListener('scroll', onScroll, { passive: true })
+      window.removeEventListener('scroll', onScroll, {passive: true})
     }
   }, [getHeadings, tableOfContents])
 
   return currentSection
 }
 
-export function Layout({ children, title, tableOfContents }) {
+export function Layout({children, title, tableOfContents}) {
   let router = useRouter()
   let isHomePage = router.pathname === '/'
   let section = navigation.find(section =>
@@ -160,8 +194,8 @@ export function Layout({ children, title, tableOfContents }) {
       <div className="relative mx-auto flex max-w-8xl justify-center sm:px-2 lg:px-8 xl:px-12">
         <div className="hidden lg:relative lg:block lg:flex-none">
           <div className="absolute inset-y-0 right-0 w-[50vw] bg-slate-50 dark:hidden" />
-          <div className="absolute top-16 bottom-0 right-0 hidden h-12 w-px bg-gradient-to-t from-slate-800 dark:block" />
-          <div className="absolute top-28 bottom-0 right-0 hidden w-px bg-slate-800 dark:block" />
+          <div className="absolute bottom-0 right-0 top-16 hidden h-12 w-px bg-gradient-to-t from-slate-800 dark:block" />
+          <div className="absolute bottom-0 right-0 top-28 hidden w-px bg-slate-800 dark:block" />
           <div className="sticky top-[4.5rem] -ml-0.5 h-[calc(100vh-4.5rem)] overflow-y-auto overflow-x-hidden py-16 pl-0.5">
             <Navigation
               navigation={navigation}
@@ -169,7 +203,7 @@ export function Layout({ children, title, tableOfContents }) {
             />
           </div>
         </div>
-        <div className="min-w-0 max-w-2xl flex-auto px-4 py-16 lg:max-w-none lg:pr-0 lg:pl-8 xl:px-16">
+        <div className="min-w-0 max-w-2xl flex-auto px-4 py-16 lg:max-w-none lg:pl-8 lg:pr-0 xl:px-16">
           <article>
             {(title || section) && (
               <header className="mb-9 space-y-1">
@@ -239,6 +273,7 @@ export function Layout({ children, title, tableOfContents }) {
                 </ol>
               </>
             )}
+
             <h2 className="mt-5 font-display text-sm font-medium text-slate-900 dark:text-white">
               Example relays
             </h2>
