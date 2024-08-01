@@ -27,7 +27,7 @@ export function Hero() {
               <p className="mt-3 text-2xl tracking-tight text-slate-400">
                 Smart-client/dumb-server architecture that can create the free and open internet we were promised.
               </p>
-              <div className="mt-8 flex gap-4 md:justify-center lg:justify-start">
+              <div className="mt-8 flex flex-wrap gap-4 md:justify-center lg:justify-start">
                 <Button href="https://github.com/nostr-protocol/nostr" target="_blank">GitHub</Button>
                 <Button href="https://nostr.org" target="_blank">
                   Nostr.org
