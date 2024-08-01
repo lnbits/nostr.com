@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-const URL = 'https://localhost:9090?q='
+const URL = 'https://my.nostr.com/'
 
 export function Nip05SearchBar({ query = '' }) {
     const [searchQuery, setSearchQuery] = useState(query)
@@ -12,7 +12,7 @@ export function Nip05SearchBar({ query = '' }) {
 
     const handleSearch = () => {
         if (searchQuery) {
-            return window.open(URL + searchQuery, '_blank', 'noopener', 'noreferrer')
+            return window.open(`${URL}?q=${searchQuery}`, '_blank', 'noopener', 'noreferrer')
         }
     }
 

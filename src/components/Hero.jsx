@@ -59,7 +59,8 @@ export function Hero() {
                 censorship-resistant and global social network.
               </p>
               <div className="mt-8 flex gap-4 md:justify-center lg:justify-start">
-                <Button href="/get-started">Get started</Button>
+                 <Button href="https://my.nostr.com">Get Account</Button>
+                {/* <Button href="/get-started">Get started</Button> */}
                 <Button
                   href="https://github.com/nostr-protocol/nostr"
                   variant="secondary"
