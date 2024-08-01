@@ -8,7 +8,8 @@ import {Hero} from '@/components/Hero'
 import {MobileNavigation} from '@/components/MobileNavigation'
 import {Navigation} from '@/components/Navigation'
 import {Prose} from '@/components/Prose'
-import {ThemeSelector} from '@/components/ThemeSelector'
+import { ThemeSelector } from '@/components/ThemeSelector'
+import { Nip05SearchBar } from '@/components/Nip05SearchBar'
 import nostrLogo from '/src/images/nostr.svg'
 
 const relays = [
@@ -49,7 +50,6 @@ const navigation = [
 
 function Header({navigation}) {
   let [isScrolled, setIsScrolled] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
     function onScroll() {
@@ -61,14 +61,6 @@ function Header({navigation}) {
       window.removeEventListener('scroll', onScroll, {passive: true})
     }
   }, [])
-
-  const handleSearch = event => {
-    event.preventDefault()
-    if (!searchQuery.trim()) {
-      return
-    }
-    window.location.href = `https://my.${location.host}?q=${searchQuery.trim()}`
-  }
 
   return (
     <header
@@ -87,8 +79,8 @@ function Header({navigation}) {
           <Image
             src={nostrLogo}
             alt="Nostr Logo"
-            width={40}
-            height={40}
+            width={32}
+            height={32}
             className="mr-2"
           />
           <span className="flex font-display text-2xl font-bold text-slate-900 dark:text-sky-100 md:text-3xl">
@@ -97,28 +89,10 @@ function Header({navigation}) {
         </Link>
       </div>
       <div className="relative flex basis-0 items-center justify-end gap-2 sm:gap-4 md:flex-grow">
-        <form
-          onSubmit={handleSearch}
-          className="flex items-center rounded-full bg-slate-700 p-1"
-          title="get your NIP05 name!"
-        >
-          <input
-            type="text"
-            placeholder="@nostr.com"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            className="w-24 bg-transparent text-white placeholder-slate-400 focus:outline-none sm:w-32"
-          />
-          <button
-            type="submit"
-            className="ml-2 rounded-full bg-sky-400 px-3 py-1 text-sm text-slate-900"
-          >
-            Search
-          </button>
-        </form>
-        <div className="hidden sm:block">
-          <ThemeSelector className="relative z-10" />
+        <div className="relative z-10 max-sm:hidden">
+          <Nip05SearchBar></Nip05SearchBar>
         </div>
+          <ThemeSelector className="relative z-10" />
       </div>
     </header>
   )
