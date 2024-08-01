@@ -79,8 +79,8 @@ function Header({navigation}) {
           <Image
             src={nostrLogo}
             alt="Nostr Logo"
-            width={40}
-            height={40}
+            width={32}
+            height={32}
             className="mr-2"
           />
           <span className="flex font-display text-2xl font-bold text-slate-900 dark:text-sky-100 md:text-3xl">
