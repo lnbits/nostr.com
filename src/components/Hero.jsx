@@ -25,10 +25,10 @@ export function Hero() {
               priority
             />
             <div className="relative">
-              <p className="inline bg-gradient-to-r from-indigo-200 via-sky-400 to-indigo-200 bg-clip-text font-display text-5xl tracking-tight text-transparent">
+              <p className="inline bg-gradient-to-r from-indigo-200 via-sky-400 to-indigo-200 bg-clip-text font-display text-2xl md:text-5xl tracking-tight text-transparent">
                 A better internet is possible: decentralize Twitter, eBay, IoT and other stuff.
               </p>
-              <p className="mt-3 text-2xl tracking-tight text-slate-400">
+              <p className="mt-3 text-xl md:text-2xl tracking-tight text-slate-400">
                 Smart-client/dumb-server architecture that can create the free and open internet we were promised.
               </p>
               <div className="mt-8 flex flex-wrap gap-4 md:justify-center lg:justify-start">
