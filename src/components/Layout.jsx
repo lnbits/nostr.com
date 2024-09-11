@@ -71,6 +71,7 @@ function Header({navigation}) {
           : 'dark:bg-transparent'
       )}
     >
+      <div className="relative flex mr-6">
       <div className="mr-6 flex lg:hidden">
         <MobileNavigation navigation={navigation} />
       </div>
@@ -88,8 +89,10 @@ function Header({navigation}) {
           </span>
         </Link>
       </div>
-      <div className="relative flex basis-0 items-center justify-end gap-2 sm:gap-4 md:flex-grow">
-        <div className="relative z-10 max-sm:hidden">
+
+      </div>
+      <div className="relative flex flex-auto basis-0 items-center justify-end gap-2 sm:gap-4 md:flex-grow">
+        <div className="relative z-10 max-sm:hidden sm:w-3/4 lg:w-1/2 lg:max-w-[40vw]">
           <Nip05SearchBar></Nip05SearchBar>
         </div>
           <ThemeSelector className="relative z-10" />
