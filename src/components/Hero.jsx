@@ -108,7 +108,7 @@ export function Hero() {
             Use Nostr everywhere, keep your nsec secure at home.
           </p>
           <div className="mt-4">
-            <Button href="https://shop.lnbits.com/product/hardware-nsec-bunker" target="_blank" variant="secondary">
+            <Button href="https://shop.lnbits.com/product/nsec-remote-signer" target="_blank" variant="secondary">
               Order now $99!
             </Button></div>
         </div>
