@@ -5,6 +5,8 @@ import { HeroBackground } from '@/components/HeroBackground'
 import { Nip05SearchBar } from '@/components/Nip05SearchBar'
 import blurCyanImage from '@/images/blur-cyan.webp'
 import blurIndigoImage from '@/images/blur-indigo.webp'
+import hwNsecBunker from '/src/images/nsecbunker.png'
+import nostrMerch from '/src/images/nostrmerch.png'
 
 export function Hero() {
   return (
@@ -86,8 +88,52 @@ export function Hero() {
               </div>
             </div>
           </div>
+
+        </div>
+
+      </div>
+
+      <div className="flex justify-center items-center">
+        <Image
+          src={hwNsecBunker}
+          alt="Hardware Nsec Bunker"
+          width={200}
+          className="mr-2"
+        />
+        <div className="relative">
+          <p className="inline bg-gradient-to-r from-indigo-200 via-sky-400 to-indigo-200 bg-clip-text font-display text-2xl md:text-3xl tracking-tight text-transparent">
+            Hardware Nsec Bunker pre-sale!
+          </p>
+          <p className="mt-3 text-lg md:text-1x1 tracking-tight text-slate-400">
+            Use Nostr everywhere, keep your nsec secure at home.
+          </p>
+          <div className="mt-4">
+            <Button href="https://shop.lnbits.com/product/nsec-remote-signer" target="_blank" variant="secondary">
+              Order now $99!
+            </Button></div>
+        </div>
+        <div className="hidden md:flex items-center">
+        <Image
+          src={nostrMerch}
+          alt="Hardware Nsec Bunker"
+          width={200}
+          className="ml-8"
+        />
+        <div className="relative">
+          <p className="inline bg-gradient-to-r from-indigo-200 via-sky-400 to-indigo-200 bg-clip-text font-display text-2xl md:text-3xl tracking-tight text-transparent">
+            Nostr merch
+          </p>
+          <p className="mt-3 text-lg md:text-1x1 tracking-tight text-slate-400">
+            Nostr merch, to help you spread the word.
+          </p>
+          <div className="mt-4">
+            <Button href="https://shop.lnbits.com/product-category/nostr" target="_blank" variant="secondary">
+              Visit Shop 
+            </Button></div>
         </div>
       </div>
+      </div>
     </div>
+
   )
 }
