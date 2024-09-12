@@ -102,7 +102,7 @@ export function Hero() {
         />
         <div className="relative">
           <p className="inline bg-gradient-to-r from-indigo-200 via-sky-400 to-indigo-200 bg-clip-text font-display text-2xl md:text-3xl tracking-tight text-transparent">
-            Hardware Nsec Bunker pre-sale!
+            Nsec Remote Signer pre-sale!
           </p>
           <p className="mt-3 text-lg md:text-1x1 tracking-tight text-slate-400">
             Use Nostr everywhere, keep your nsec secure at home.
