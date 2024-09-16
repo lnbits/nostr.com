@@ -11,7 +11,7 @@ import nostrMerch from '/src/images/nostrmerch.png'
 export function Hero() {
   return (
     <div className="overflow-hidden bg-slate-900 dark:-mb-32 dark:mt-[-4.5rem] dark:pb-32 dark:pt-[4.5rem] dark:lg:mt-[-4.75rem] dark:lg:pt-[4.75rem]">
-      <div className="relative hidden max-sm:block w-3/4 px-4 pt-2 mx-auto">
+      <div className="relative hidden max-sm:block px-4 pt-2 mx-8 mx-auto z-20">
         <Nip05SearchBar></Nip05SearchBar>
       </div>
       <div className="pt-14 pb-16 sm:px-2 lg:relative lg:pt-20 lg:px-0">
