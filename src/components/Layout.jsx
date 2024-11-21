@@ -1,13 +1,13 @@
-import {useCallback, useEffect, useState} from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import {useRouter} from 'next/router'
+import { useRouter } from 'next/router'
 import clsx from 'clsx'
 import Image from 'next/image'
 
-import {Hero} from '@/components/Hero'
-import {MobileNavigation} from '@/components/MobileNavigation'
-import {Navigation} from '@/components/Navigation'
-import {Prose} from '@/components/Prose'
+import { Hero } from '@/components/Hero'
+import { MobileNavigation } from '@/components/MobileNavigation'
+import { Navigation } from '@/components/Navigation'
+import { Prose } from '@/components/Prose'
 import { ThemeSelector } from '@/components/ThemeSelector'
 import { Nip05SearchBar } from '@/components/Nip05SearchBar'
 import nostrLogo from '/src/images/nostr.svg'
@@ -23,32 +23,32 @@ const navigation = [
   {
     title: 'The Basics',
     links: [
-      {title: 'What is Nostr?', href: '/'},
-      {title: 'Get started', href: '/get-started'}
+      { title: 'What is Nostr?', href: '/' },
+      { title: 'Get started', href: '/get-started' }
     ]
   },
   {
     title: 'The Protocol',
     links: [
-      {title: 'The Nostr Protocol', href: '/the-protocol'},
-      {title: 'Events', href: '/the-protocol/events'},
-      {title: 'NIPs', href: '/the-protocol/nips'}
+      { title: 'The Nostr Protocol', href: '/the-protocol' },
+      { title: 'Events', href: '/the-protocol/events' },
+      { title: 'NIPs', href: '/the-protocol/nips' }
     ]
   },
   {
     title: 'Clients and relays',
     links: [
-      {title: 'Clients', href: '/clients'},
-      {title: 'Relays?', href: '/relays'}
+      { title: 'Clients', href: '/clients' },
+      { title: 'Relays?', href: '/relays' }
     ]
   },
   {
     title: 'Contributing',
-    links: [{title: 'How to help Nostr', href: '/contribute'}]
+    links: [{ title: 'How to help Nostr', href: '/contribute' }]
   }
 ]
 
-function Header({navigation}) {
+function Header({ navigation }) {
   let [isScrolled, setIsScrolled] = useState(false)
 
   useEffect(() => {
@@ -56,9 +56,9 @@ function Header({navigation}) {
       setIsScrolled(window.scrollY > 0)
     }
     onScroll()
-    window.addEventListener('scroll', onScroll, {passive: true})
+    window.addEventListener('scroll', onScroll, { passive: true })
     return () => {
-      window.removeEventListener('scroll', onScroll, {passive: true})
+      window.removeEventListener('scroll', onScroll, { passive: true })
     }
   }, [])
 
@@ -72,30 +72,30 @@ function Header({navigation}) {
       )}
     >
       <div className="relative flex mr-6">
-      <div className="mr-6 flex lg:hidden">
-        <MobileNavigation navigation={navigation} />
-      </div>
-      <div className="relative flex flex-grow basis-0 items-center">
-        <Link href="/" aria-label="Home page" className="flex items-center">
-          <Image
-            src={nostrLogo}
-            alt="Nostr Logo"
-            width={32}
-            height={32}
-            className="mr-2"
-          />
-          <span className="flex font-display text-2xl font-bold text-slate-900 dark:text-sky-100 md:text-3xl">
-            Nostr
-          </span>
-        </Link>
-      </div>
+        <div className="mr-6 flex lg:hidden">
+          <MobileNavigation navigation={navigation} />
+        </div>
+        <div className="relative flex flex-grow basis-0 items-center">
+          <Link href="/" aria-label="Home page" className="flex items-center">
+            <Image
+              src={nostrLogo}
+              alt="Nostr Logo"
+              width={32}
+              height={32}
+              className="mr-2"
+            />
+            <span className="flex font-display text-2xl font-bold text-slate-900 dark:text-sky-100 md:text-3xl">
+              Nostr
+            </span>
+          </Link>
+        </div>
 
       </div>
       <div className="relative flex flex-auto basis-0 items-center justify-end gap-2 sm:gap-4 md:flex-grow">
-        <div className="relative z-10 max-sm:hidden sm:w-3/4 lg:w-1/2 lg:max-w-[40vw]">
+        <div className="relative z-10 max-sm:hidden sm:w-3/4 lg:w-1/2 lg:max-w-[34vw]">
           <Nip05SearchBar></Nip05SearchBar>
         </div>
-          <ThemeSelector className="relative z-10" />
+        <ThemeSelector className="relative z-10" />
       </div>
     </header>
   )
@@ -115,7 +115,7 @@ function useTableOfContents(tableOfContents) {
         let scrollMt = parseFloat(style.scrollMarginTop)
 
         let top = window.scrollY + el.getBoundingClientRect().top - scrollMt
-        return {id, top}
+        return { id, top }
       })
   }, [])
 
@@ -134,17 +134,17 @@ function useTableOfContents(tableOfContents) {
       }
       setCurrentSection(current)
     }
-    window.addEventListener('scroll', onScroll, {passive: true})
+    window.addEventListener('scroll', onScroll, { passive: true })
     onScroll()
     return () => {
-      window.removeEventListener('scroll', onScroll, {passive: true})
+      window.removeEventListener('scroll', onScroll, { passive: true })
     }
   }, [getHeadings, tableOfContents])
 
   return currentSection
 }
 
-export function Layout({children, title, tableOfContents}) {
+export function Layout({ children, title, tableOfContents }) {
   let router = useRouter()
   let isHomePage = router.pathname === '/'
   let section = navigation.find(section =>

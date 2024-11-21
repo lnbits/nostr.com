@@ -1,8 +1,7 @@
-import {useEffect, useState} from 'react'
+import { useEffect, useState } from 'react'
 
 export function ThemeSelector(props) {
-  let defaultTheme =
-    (typeof window !== 'undefined' && window.localStorage.theme) || 'dark'
+  let defaultTheme = 'dark'
   let [selectedTheme, setSelectedTheme] = useState(defaultTheme)
 
   useEffect(() => {
@@ -30,7 +29,7 @@ export function ThemeSelector(props) {
   }
 
   return (
-    <div style={{cursor: 'pointer'}}>
+    <div style={{ cursor: 'pointer' }}>
       <Icon />
     </div>
   )
