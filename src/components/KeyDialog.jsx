@@ -115,7 +115,7 @@ export function KeyDialog() {
                             <div className="mt-6 flex flex-col items-start space-y-4">
                                 <p className="relative group">
                                     <p className="pb-2 sm:text-2xl md:text-xl tracking-tight text-slate-400">
-                                        This is you private key. Keep it private, and save it somewhere safe.
+                                        This is your private key. Keep it private, and save it somewhere safe.
                                     </p>
                                     <span
                                         className={`${isSecretVisible

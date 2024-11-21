@@ -53,10 +53,11 @@ export function Hero() {
               <div className="relative z-10 flex flex-col md:flex-row pt-5 items-start md:items-center space-y-4 md:space-y-0">
                 <KeyDialog></KeyDialog>
                 <button
-                  type="submit"
-                  className="rounded-full border-2 border-sky-300 text-sky-300 text-lg  md:text-2xl 
-        hover:bg-transparent hover:text-sky-400 hover:border-sky-400 py-5 
-        font-bold transition-colors duration-200 md:ml-4"
+                  type="button"
+                  onClick={() => window.open('https://my.nostr.com', '_blank')}
+                  className="rounded-full border-2 border-sky-300 text-sky-300 text-lg md:text-2xl 
+    hover:bg-transparent hover:text-sky-400 hover:border-sky-400 py-5 
+    font-bold transition-colors duration-200 md:ml-4"
                 >
                   I already have a nostr account/keys
                 </button>
@@ -146,7 +147,7 @@ export function Hero() {
             src={AndroidLink}
             alt="Android Download Link"
             width={200}
-            className="flex-1  sm:max-w-[200px] md:max-w-[150px] lg:max-w-[200px]"
+            className="flex-1  sm:max-w-[200px] md:max-w-[150px] lg:max-w-[200px] relative z-10"
           />
         </a>
         <a
@@ -158,7 +159,7 @@ export function Hero() {
             src={FDroid}
             alt="F-Droid Download Link"
             width={200}
-            className="flex-1  sm:max-w-[200px] md:max-w-[150px] lg:max-w-[200px]"
+            className="flex-1  sm:max-w-[200px] md:max-w-[150px] lg:max-w-[200px] relative z-10"
           />
         </a>
         <a
@@ -170,7 +171,7 @@ export function Hero() {
             src={AppleLink}
             alt="Apple App Store Download Link"
             width={200}
-            className="flex-1  sm:max-w-[200px] md:max-w-[150px] lg:max-w-[200px]"
+            className="flex-1  sm:max-w-[200px] md:max-w-[150px] lg:max-w-[200px] relative z-10"
           />
         </a>
         <a
@@ -182,7 +183,7 @@ export function Hero() {
             src={WebBrowser}
             alt="Web Browser Version"
             width={200}
-            className="flex-1  sm:max-w-[200px] md:max-w-[150px] lg:max-w-[200px]"
+            className="flex-1  sm:max-w-[200px] md:max-w-[150px] lg:max-w-[200px] relative z-10"
           />
         </a>
         <a
@@ -194,7 +195,7 @@ export function Hero() {
             src={NostrApps}
             alt="All Nostr Apps"
             width={200}
-            className="flex-1  sm:max-w-[200px] md:max-w-[150px] lg:max-w-[200px]"
+            className="flex-1  sm:max-w-[200px] md:max-w-[150px] lg:max-w-[200px] relative z-10"
           />
         </a>
         <a
@@ -206,7 +207,7 @@ export function Hero() {
             src={NostrGitHub}
             alt="nostr Github"
             width={200}
-            className="flex-1  sm:max-w-[200px] md:max-w-[150px] lg:max-w-[200px]"
+            className="flex-1  sm:max-w-[200px] md:max-w-[150px] lg:max-w-[200px] relative z-10"
           />
         </a>
       </div>
