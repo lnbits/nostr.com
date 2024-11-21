@@ -45,7 +45,7 @@ export function KeyDialog() {
             const blob = new Blob(["############ NOSTR KEYS ############\n\n", "Your public key (npub):\n", keys.npub, "\n\n", "Your private key (nsec). Keep it PRIVATE:\n", keys.nsec], { type: "text/plain" });
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);
-            link.download = "private-key.txt";
+            link.download = "nostr-keys.txt";
             link.click();
             showNotification("Keys downloaded.");
         }
