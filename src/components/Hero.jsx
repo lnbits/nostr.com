@@ -71,7 +71,7 @@ export function Hero() {
           <div className="relativemd:text-center lg:text-left">
             <div className="relative">
               <p className="inline bg-gradient-to-r from-indigo-200 via-sky-400 to-indigo-200 bg-clip-text font-display text-4xl md:text-5xl tracking-tight text-transparent">
-                Twitter/X, eBay, Uber and other stuff as an apolitical commons everyone can access.
+                Social media and other stuff as a commons everyone can access.
               </p>
               <p className="mt-3 text-xl md:text-2xl tracking-tight text-slate-400">
                 Smart-client/dumb-server architecture that can create the free and open internet we were promised.
