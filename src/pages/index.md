@@ -10,7 +10,7 @@ Nostr is a simple, open protocol that enables global, decentralized, and censors
 
 {% quick-link title="Get started" icon="installation" href="/get-started" description="Create an account and join thousands of others on Nostr." /%}
 
-{% quick-link title="The protocol" icon="presets" href="/the-protocol" description="Learn more about how the Nostr protocol works and what makes it special." /%}
+{% quick-link title="The protocol" icon="presets" href="/protocol" description="Learn more about how the Nostr protocol works and what makes it special." /%}
 
 {% quick-link title="Find a client" icon="plugins" href="/clients" description="Find a client (app) for the web, iOS, Android, or Desktop." /%}
 
@@ -53,17 +53,10 @@ See also the [comparisons with other alternative social media protocols](/compar
 ## Recommended external content for learning about Nostr
 
 - [Nostr, an Introduction](https://wiki.wellorder.net/post/nostr-intro/), by scsibug
-- [Why I’m Betting Big on Nostr](https://hivemind.vc/nostr/), by Max Webster
+- [Nostr: a quick introduction](https://habla.news/fiatjaf/d0b15ac7), by fiatjaf
 - [Why Nostr Matters](https://blog.lopp.net/why-nostr-matters/), by Jameson Lopp
-- [A vision for content discovery and relay usage](https://fiatjaf.com/3f106d31.html), by fiatjaf
-- [Thoughts on relay browsing](https://blog.coracle.social/posts/2f375ecdcefa65f5d7d9ae5b74f3d276a6e2b2c9a4aafad50c48cc6be66407b2), by Jon Staab
 - The [Thank God for Nostr podcast](https://tgfb.com/podcasts/thank-god-for-nostr/) is airing interesting Nostr-related interviews every week.
 
-## Micro tools to help you navigate and use Nostr
+## Jump into Nostr!
 
-- [nostr.band](https://nostr.band) is indexing the entirety of Nostr it can find and making it searchable.
-- [nostr.watch](https://nostr.watch) has an index and connection stats of all public relays on the internet.
-- [njump](https://njump.me) generates nice embeddable link previews for profiles and events and renders them.
-- [Nostr Profile Manager](https://metadata.nostr.com/) lets you edit, backup and restore profile metadata, contacts and relay lists.
-- [nostr army knife](https://nak.nostr.com/) and [NostrStuff](https://nostrstuff.com/) let you inspect Nostr identifiers, events and relays and convert between formats.
-- [zaplife.lol](https://zaplife.lol/) shows a stream of zaps and zapped notes.
+[nstart](https://start.njump.me/) gives you an easy way to dive in and get started quickly and safely.
