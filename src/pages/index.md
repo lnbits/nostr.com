@@ -56,7 +56,3 @@ See also the [comparisons with other alternative social media protocols](/compar
 - [Nostr: a quick introduction](https://habla.news/fiatjaf/d0b15ac7), by fiatjaf
 - [Why Nostr Matters](https://blog.lopp.net/why-nostr-matters/), by Jameson Lopp
 - The [Thank God for Nostr podcast](https://tgfb.com/podcasts/thank-god-for-nostr/) is airing interesting Nostr-related interviews every week.
-
-## Jump into Nostr!
-
-[nstart](https://start.njump.me/) gives you an easy way to dive in and get started quickly and safely.
