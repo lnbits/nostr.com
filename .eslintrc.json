@@ -11,7 +11,9 @@
 
   "env": {
     "es6": true,
-    "node": true
+    "node": true,
+    "browser": true,
+    "es2021": true
   },
 
   "plugins": ["react"],

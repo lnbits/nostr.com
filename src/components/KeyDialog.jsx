@@ -53,6 +53,7 @@ export function KeyDialog() {
 
   const downloadKey = () => {
     if (keys.nsec) {
+      // Create a blob with the keys
       const blob = new Blob(
         [
           '############ NOSTR KEYS ############\n\n',
@@ -62,12 +63,16 @@ export function KeyDialog() {
           'Your private key (nsec). Keep it PRIVATE:\n',
           keys.nsec
         ],
-        {type: 'text/plain'}
+        { type: 'text/plain' }
       )
+  
+      // Create a temporary link to trigger download
       const link = document.createElement('a')
       link.href = URL.createObjectURL(blob)
       link.download = 'nostr-keys.txt'
       link.click()
+  
+      // Show notification to user
       showNotification('Keys downloaded.')
     }
   }
