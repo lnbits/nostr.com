@@ -39,7 +39,7 @@ export function Hero() {
               <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl md:text-5xl">
                 <br /> <br />
                 <br />
-                nostr{' '}
+                Nostr{' '}
                 <span className="italic text-slate-500 dark:text-slate-400">
                   /ˈnɒstʃrə/
                 </span>{' '}

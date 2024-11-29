@@ -84,7 +84,7 @@ export function KeyDialog() {
         className="rounded-full bg-sky-300 px-10 py-5 text-lg font-bold text-slate-900 hover:bg-sky-200 md:text-2xl"
         onClick={openDialog}
       >
-        Create your nostr account
+        Create your Nostr account
       </button>
 
       {/* Dialog Box */}
