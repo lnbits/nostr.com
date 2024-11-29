@@ -37,9 +37,16 @@ export function KeyDialog() {
         setIsSecretVisible(false);
     };
 
-    const copyToClipboard = () => {
+    const copyNsecToClipboard = () => {
         if (keys.nsec) {
             navigator.clipboard.writeText(keys.nsec);
+            showNotification("Copied to clipboard.");
+        }
+    };
+
+    const copyNpubToClipboard = () => {
+        if (keys.nsec) {
+            navigator.clipboard.writeText(keys.npub);
             showNotification("Copied to clipboard.");
         }
     };
@@ -78,7 +85,7 @@ export function KeyDialog() {
                     onClick={closeDialog} // Close the dialog when the overlay is clicked
                 >
                     <div
-                        className="dark:bg-slate-900 p-6 rounded-lg shadow-lg max-w-5xl w-full"
+                        className="dark:bg-slate-900 p-6 rounded-lg shadow-lg max-w-4xl w-full"
                         onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside the dialog
                     >
                         <div className="relative">
@@ -89,53 +96,71 @@ export function KeyDialog() {
                                 Nostr uses cryptographic keys to keep users in control.
                             </p>
 
-                            {/* Display Secret Key */}
+                            {/* Display Public Key */}
                             <div className="mt-4 flex flex-col items-start space-y-4">
-                                <p className="relative group">
+                                <div className="relative group">
                                     <p className="pb-2 sm:text-2xl md:text-xl tracking-tight text-slate-400">
-                                        This is your public key. You can share this. Make a copy now.
+                                        This is your public key. You can share this.
                                     </p>
-                                    <span id="npub" className="text-slate-200">
-                                        {keys.npub}
-                                    </span>
-                                    <button
-                                        type="button"
-                                        className="mt-2 flex items-center bg-sky-300 font-bold text-slate-900 hover:bg-sky-200 rounded group relative"
-                                        onClick={copyToClipboard}
-                                    >
-                                        <span className="material-icons">content_copy</span>
-                                        <span className="absolute left-0 top-full mt-1 hidden w-max text-sm text-white bg-gray-700 px-3 py-1 rounded group-hover:block">
-                                            Copy to Clipboard
+                                    <div className="flex items-center space-x-2">
+                                        <button
+                                            type="button"
+                                            className="bg-sky-300 font-bold text-slate-900 hover:bg-sky-200 rounded group relative px-2 py-1 text-xs"
+                                            onClick={copyNpubToClipboard}
+                                        >
+                                            <span className="material-icons text-xs">content_copy</span>
+                                            <span className="absolute left-0 top-full mt-1 hidden w-max text-sm text-white text-xs bg-gray-700 px-3 py-1 rounded group-hover:block">
+                                                Copy to Clipboard
+                                            </span>
+                                        </button>
+                                        <span id="npub" className="text-slate-400 bg-gray-800 px-2 py-1 rounded text-xs">
+                                            {keys.npub}
                                         </span>
-                                    </button>
-
-                                </p>{/* Copy Button */}
-
-
+                                    </div>
+                                </div>
                             </div>
 
-
                             {/* Display Secret Key */}
-                            <div className="mt-6 flex flex-col items-start space-y-4">
-                                <p className="relative group">
+                            <div className="mt-6 flex flex-col items-start space-y-4 z-10">
+                                <div className="relative group">
                                     <p className="pb-2 sm:text-2xl md:text-xl tracking-tight text-slate-400">
-                                        This is your private key. Keep it private. Save it somewhere safe.
+                                        This is your private key. Keep it private.
                                     </p>
-                                    <span
-                                        className={`${isSecretVisible
-                                            ? "text-slate-200"
-                                            : "text-slate-400 bg-gray-800 px-2 py-1 rounded"
-                                            }`}
-                                    >
-                                        {isSecretVisible
-                                            ? keys.nsec
+                                    <div className="flex items-center space-x-2">
+                                        <button
+                                            type="button"
+                                            className="bg-sky-300 font-bold text-slate-900 hover:bg-sky-200 rounded group relative px-2 py-1 text-xs"
+                                            onClick={copyNsecToClipboard}
+                                        >
+                                            <span className="material-icons text-xs">content_copy</span>
+                                            <span className="absolute left-0 top-full mt-1 hidden w-max text-sm text-white text-xs bg-gray-700 px-3 py-1 rounded group-hover:block">
+                                                Copy to Clipboard
+                                            </span>
+                                        </button>
+                                        <span className="text-slate-400 bg-gray-800 px-2 py-1 rounded text-xs">
+                                            {isSecretVisible
                                                 ? keys.nsec
-                                                : "N/A"
-                                            : "********************************"}
-                                    </span>
-
+                                                    ? keys.nsec
+                                                    : "N/A"
+                                                : "****************************************************************"}
+                                        </span>
+                                    </div>
+                                </div>
+                                <p className="pb-2 sm:text-2xl md:text-xl tracking-tight text-slate-400">
+                                    Save these keys somewhere safe, they were created locally in your browser and will not be shown again!
                                 </p>
                                 <div className="flex flex-row items-center space-x-4">
+                                    {/* Download Button */}
+                                    <button
+                                        type="button"
+                                        className="bg-sky-300 text-slate-900 font-bold hover:bg-sky-200 px-3 py-2 rounded group relative"
+                                        onClick={downloadKey}
+                                    >
+                                        Download keys
+                                        <span className="absolute left-0 top-full mt-1 hidden w-max text-sm text-white bg-gray-700 px-3 py-1 rounded group-hover:block">
+                                            Download Keys
+                                        </span>
+                                    </button>
                                     <button
                                         type="button"
                                         onClick={() => setIsSecretVisible(!isSecretVisible)}
@@ -147,29 +172,7 @@ export function KeyDialog() {
                                         </span>
                                     </button>
 
-                                    {/* Copy Button */}
-                                    <button
-                                        type="button"
-                                        className="flex items-center bg-sky-300 font-bold text-slate-900 hover:bg-sky-200 rounded group relative"
-                                        onClick={copyToClipboard}
-                                    >
-                                        <span className="material-icons">content_copy</span>
-                                        <span className="absolute left-0 top-full mt-1 hidden w-max text-sm text-white bg-gray-700 px-3 py-1 rounded group-hover:block">
-                                            Copy to Clipboard
-                                        </span>
-                                    </button>
 
-                                    {/* Download Button */}
-                                    <button
-                                        type="button"
-                                        className="flex items-center bg-sky-300 font-bold text-slate-900 hover:bg-sky-200 rounded group relative"
-                                        onClick={downloadKey}
-                                    >
-                                        <span className="material-icons">download</span>
-                                        <span className="absolute left-0 top-full mt-1 hidden w-max text-sm text-white bg-gray-700 px-3 py-1 rounded group-hover:block">
-                                            Download Keys
-                                        </span>
-                                    </button>
                                 </div>
                             </div>
 
