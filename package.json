@@ -8,6 +8,7 @@
     "@headlessui/react": "^1.7.9",
     "@markdoc/markdoc": "0.2.2",
     "@markdoc/next.js": "0.2.1",
+    "@nostr/tools": "npm:@jsr/nostr__tools@^2.10.3",
     "@sindresorhus/slugify": "^2.2.0",
     "@tailwindcss/typography": "^0.5.7",
     "@vercel/analytics": "^0.1.8",
@@ -16,6 +17,7 @@
     "focus-visible": "^5.2.0",
     "js-yaml": "^4.1.0",
     "next": "^14.2.5",
+    "nostr-tools": "^2.10.3",
     "postcss": "^8.4.21",
     "postcss-focus-visible": "^8.0.1",
     "postcss-import": "^15.1.0",
@@ -34,6 +36,6 @@
     "eslint-plugin-prettier": "^4.2.1",
     "prettier": "^2.8.3",
     "prettier-plugin-tailwindcss": "^0.2.2",
-    "typescript": "^4.9.5"
+    "typescript": "^5.6.3"
   }
 }
