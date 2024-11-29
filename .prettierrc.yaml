@@ -5,6 +5,7 @@ printWidth: 80
 proseWrap: preserve
 singleQuote: true
 trailingComma: none
+endOfLine: lf
 useTabs: false
-jsxBracketSameLine: false
+bracketSameLine: false
 bracketSpacing: false
