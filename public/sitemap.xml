@@ -15,17 +15,17 @@
     <priority>0.80</priority>
   </url>
   <url>
-    <loc>https://nostr.com/the-protocol</loc>
+    <loc>https://nostr.com/protocol</loc>
     <lastmod>2023-08-05T12:43:10+00:00</lastmod>
     <priority>0.80</priority>
   </url>
   <url>
-    <loc>https://nostr.com/the-protocol/events</loc>
+    <loc>https://nostr.com/events</loc>
     <lastmod>2023-08-05T12:43:10+00:00</lastmod>
     <priority>0.80</priority>
   </url>
   <url>
-    <loc>https://nostr.com/the-protocol/nips</loc>
+    <loc>https://nostr.com/nips</loc>
     <lastmod>2023-08-05T12:43:10+00:00</lastmod>
     <priority>0.80</priority>
   </url>

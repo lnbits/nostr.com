@@ -9,34 +9,30 @@ What are Relays and how do they work?
 
 ## What are relays?
 
-Relays are like the backend servers for Nostr. They allow Nostr clients to send them messages, and they may (or may not) store those messages and broadcast those messages to all other connected clients.
+Relays are like the backend servers for Nostr. They allow Nostr clients to send them messages, and they store those messages and broadcast those messages to all other connected clients.
 
-The world of relays is changing fast so expect many changes here in the future. One thing to note, because Nostr is decentralized and depends on relays to store and retrieve data, if you notice that your Nostr client feels slow, it's most likely due to the relays that you're using. It might be worth adding a few more relays to your client.
+## Do relays store all the data?
 
-## Where can I find a list of relays?
+No, each relay only stores whatever it wants. The basic idea is that users are attached to some relays they choose and they publish their notes to those, and other users learn about relay preferences of their friends, then connect to their friends' relays to download their notes.
 
-The best resource we've found for browsing and assessing the speed of known relays is the [nostr.watch site](https://nostr.watch/relays/find).
+## That sounds cumbersome.
 
-## What happens if all the relays I use stop working?
-
-If _all_ the relays that you have used in the past go offline, all your posts will be unretrievable. This is one reason that Nostr allows users to connect to many relays – this ensures some degree of backup. That said, if you're really interested in being uncensorable, you can run your own personal relay.
+Yes, but it should all be done automatically by your client software, you shouldn't have to worry too much.
 
 ## Should I run my own relay?
 
-For most people, no, it's not worth the hassle. That said, if you're technical and want to ensure that your speech is absolutely uncensorable, then you can and should run your own relay. This ensures that you always have a copy of all your Nostr posts and interactions for all time. We're working on a guide to this but in the meantime, [here is a guide](https://andreneves.xyz/p/set-up-a-nostr-relay-server-in-under) from Andre Neves.
+For most people, no, it's better to just pick a few public relays or relays from people you know and trust, or even relays that offer paid services.
+
+With that said, if you want to ensure that your speech is absolutely uncensorable or if you want to run a special-purpose relay for you and maybe some friends or a community you totally should!
+
+[Relay Wizard](https://relaywizard.com/) has a one-click setup script ready for you with multiple relay software options, while [Relay Runner](https://relayrunner.org/) has more detailed explanations and step-by-step guides.
 
 ## How can someone find me in a personal or obscure relay?
 
-You should be able to hint where you are publishing to to people that may be interested by using the [NIP-19](https://nips.be/19) `nprofile` code or the [NIP-05](https://nips.be/5) `"relays"` field.
+That's a long explanation, but [hodlbod](https://njump.me/nprofile1qqsf03c2gsmx5ef4c9zmxvlew04gdh7u94afnknp33qvv3c94kvwxgspp4mhxue69uhkummn9ekx7mqpr4mhxue69uhkummnw3ez6ur4vgh8wetvd3hhyer9wghxuet5qyfhwumn8ghj7un9d3shjctzd3jjummjvuq3yamnwvaz7tmsw4e8qmr9wpskwtn9wvq3xamnwvaz7tmwdaehgu3wxcurstn0wfns4hdyej) tried his hand at explaining it [here](https://yakihonne.com/article/naddr1qvzqqqr4gupzp978pfzrv6n9xhq5tvenl9e74pklmskh4xw6vxxyp3j8qkke3cezqq2nskt2w9vx6dznfdvj64rpw4mk5nmxf3v9xsd0gdy) and [Jeff](https://njump.me/nprofile1qyw8wumn8ghj7mn0wd68ytfsxyh8jcttd95x7mnwv5hxxmmdqyw8wumn8ghj7mn0wd68ytfsxgh8jcttd95x7mnwv5hxxmmdqy28wumn8ghj7un9d3shjtnyv9kh2uewd9hsz9nhwden5te0wfjkccte9ehx7um5wghxyctwvsqzq9eemymaerqvwdc25f6ctyuvzx0zt3qld3zp5hf5cmfc2qlrzdh0c8xvr7) gave it a shot [here](https://yakihonne.com/article/naddr1qqxnzde3xy6rvwpnx56rvdpkqgspwwwexlwgcrrnwz4zwkze8rq3ncjug8mvgsd96dxx6wzs8ccndmcrqsqqqa28jnw7un).
 
-If you manage to (and your client helps) you can publish a [list of the relays you use](https://nips.be/65) to multiple other relays that you _don't_, so others can find that list and start following you were you are.
+[This is interactive demo](https://how-nostr-works.pages.dev/#/outbox) that shows how Nostr clients find the relays for others and keep updating their findings as conditions change.
 
-Finally, clients from others should include relay hints in events that mention or reply to you, the hints should point to where your notes can be found, so that can give clients a clue.
+## OK, but where do I find some relays to use?
 
-## What public relays exist?
-
-The [nostr.watch](https://nostr.watch) website keeps a very complete list that has a bunch of information about each relay, not only their address.
-
-## How can I run a relay?
-
-You can either run one of the [open-source implementations](/relays/implementations) on your own server or you can rent one from relay hosting services like [relay.tools](https://relay.tools) and [relaying.io](https://relaying.io).
+It's pointless to maintain a list of known relays and you shouldn't worry about it. Once you install a [client](/clients) it will probably give you some default relays. From there you can start learning about other options, who controls each relay, what are the peculiarities of each and then be able to pick and choose as you become an advanced user.
