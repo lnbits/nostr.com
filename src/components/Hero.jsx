@@ -212,12 +212,18 @@ export function Hero() {
         </a>
       </div>
       <div className="flex justify-center items-center">
-        <Image
-          src={hwNsecBunker}
-          alt="Hardware Nsec Bunker"
-          width={200}
-          className="mr-2"
-        />
+        <a
+          href="https://shop.lnbits.com/product/nsec-remote-signer"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <Image
+            src={hwNsecBunker}
+            alt="Hardware Nsec Bunker"
+            width={200}
+            className="mr-2"
+          />
+        </a>
         <div className="relative">
           <p className="inline bg-gradient-to-r from-indigo-200 via-sky-400 to-indigo-200 bg-clip-text font-display text-2xl md:text-3xl tracking-tight text-transparent">
             Nsec Remote Signer pre-sale!
@@ -231,12 +237,18 @@ export function Hero() {
             </Button></div>
         </div>
         <div className="hidden md:flex items-center">
-          <Image
-            src={nostrMerch}
-            alt="Hardware Nsec Bunker"
-            width={200}
-            className="ml-8"
-          />
+          <a
+            href="https://shop.lnbits.com/product-category/nostr"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Image
+              src={nostrMerch}
+              alt="Hardware Nsec Bunker"
+              width={200}
+              className="ml-8"
+            />
+          </a>
           <div className="relative">
             <p className="inline bg-gradient-to-r from-indigo-200 via-sky-400 to-indigo-200 bg-clip-text font-display text-2xl md:text-3xl tracking-tight text-transparent">
               Nostr merch
@@ -250,6 +262,5 @@ export function Hero() {
         </div>
       </div>
     </div>
-
   )
 }
