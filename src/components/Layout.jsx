@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import {useCallback, useEffect, useState} from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/router'
+import {useRouter} from 'next/router'
 import clsx from 'clsx'
 import Image from 'next/image'
 
@@ -23,8 +23,8 @@ const navigation = [
   {
     title: 'The Basics',
     links: [
-      { title: 'What is Nostr?', href: '/' },
-      { title: 'Get started', href: '/get-started' }
+      {title: 'What is Nostr?', href: '/'},
+      {title: 'Get started', href: '/get-started'}
     ]
   },
   {
@@ -46,11 +46,11 @@ const navigation = [
   },
   {
     title: 'Contributing',
-    links: [{ title: 'How to help Nostr', href: '/contribute' }]
+    links: [{title: 'How to help Nostr', href: '/contribute'}]
   }
 ]
 
-function Header({ navigation }) {
+function Header({navigation}) {
   let [isScrolled, setIsScrolled] = useState(false)
 
   useEffect(() => {
@@ -58,9 +58,9 @@ function Header({ navigation }) {
       setIsScrolled(window.scrollY > 0)
     }
     onScroll()
-    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('scroll', onScroll, {passive: true})
     return () => {
-      window.removeEventListener('scroll', onScroll, { passive: true })
+      window.removeEventListener('scroll', onScroll, {passive: true})
     }
   }, [])
 
@@ -116,7 +116,7 @@ function useTableOfContents(tableOfContents) {
         let scrollMt = parseFloat(style.scrollMarginTop)
 
         let top = window.scrollY + el.getBoundingClientRect().top - scrollMt
-        return { id, top }
+        return {id, top}
       })
   }, [])
 
@@ -135,17 +135,17 @@ function useTableOfContents(tableOfContents) {
       }
       setCurrentSection(current)
     }
-    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('scroll', onScroll, {passive: true})
     onScroll()
     return () => {
-      window.removeEventListener('scroll', onScroll, { passive: true })
+      window.removeEventListener('scroll', onScroll, {passive: true})
     }
   }, [getHeadings, tableOfContents])
 
   return currentSection
 }
 
-export function Layout({ children, title, tableOfContents }) {
+export function Layout({children, title, tableOfContents}) {
   let router = useRouter()
   let isHomePage = router.pathname === '/'
   let section = navigation.find(section =>
