@@ -208,9 +208,7 @@ export function KeyDialog() {
                     type="button"
                     button
                     onClick={handleScroll}
-                    className="rounded-full py-5 text-lg  font-bold 
-        text-sky-300 transition-colors duration-200 hover:border-sky-400 
-        hover:bg-transparent hover:text-sky-400 md:ml-4 md:text-2xl"
+                    className="rounded-full py-5 text-lg  font-bold text-sky-300 transition-colors duration-200 hover:border-sky-400 hover:bg-transparent hover:text-sky-400 md:ml-4 md:text-2xl"
                   >
                     Skip and checkout nostr apps
                   </button>

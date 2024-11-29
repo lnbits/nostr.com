@@ -63,9 +63,7 @@ export function Hero() {
                 <button
                   type="button"
                   onClick={() => window.open('https://my.nostr.com', '_blank')}
-                  className="rounded-full border-2 border-sky-300 py-5 text-lg font-bold 
-    text-sky-300 transition-colors duration-200 hover:border-sky-400 
-    hover:bg-transparent hover:text-sky-400 md:ml-4 md:text-2xl"
+                  className="rounded-full border-2 border-sky-300 py-5 text-lg font-bold text-sky-300 transition-colors duration-200 hover:border-sky-400 hover:bg-transparent hover:text-sky-400 md:ml-4 md:text-2xl"
                 >
                   I already have a nostr account/keys
                 </button>
