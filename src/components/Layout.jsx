@@ -8,8 +8,8 @@ import {Hero} from '@/components/Hero'
 import {MobileNavigation} from '@/components/MobileNavigation'
 import {Navigation} from '@/components/Navigation'
 import {Prose} from '@/components/Prose'
-import { ThemeSelector } from '@/components/ThemeSelector'
-import { Nip05SearchBar } from '@/components/Nip05SearchBar'
+import {ThemeSelector} from '@/components/ThemeSelector'
+import {Nip05SearchBar} from '@/components/Nip05SearchBar'
 import nostrLogo from '/src/images/nostr.svg'
 
 const relays = [
@@ -30,16 +30,18 @@ const navigation = [
   {
     title: 'The Protocol',
     links: [
-      {title: 'The Nostr Protocol', href: '/the-protocol'},
-      {title: 'Events', href: '/the-protocol/events'},
-      {title: 'NIPs', href: '/the-protocol/nips'}
+      {title: 'The Nostr Protocol', href: '/protocol'},
+      {title: 'Events', href: '/events'},
+      {title: 'NIPs', href: '/nips'}
     ]
   },
   {
     title: 'Clients and relays',
     links: [
+      {title: 'Relays', href: '/relays'},
       {title: 'Clients', href: '/clients'},
-      {title: 'Relays?', href: '/relays'}
+      {title: 'Other Stuff', href: '/other-stuff'},
+      {title: 'More Utils', href: '/tools'}
     ]
   },
   {
@@ -71,31 +73,30 @@ function Header({navigation}) {
           : 'dark:bg-transparent'
       )}
     >
-      <div className="relative flex mr-6">
-      <div className="mr-6 flex lg:hidden">
-        <MobileNavigation navigation={navigation} />
-      </div>
-      <div className="relative flex flex-grow basis-0 items-center">
-        <Link href="/" aria-label="Home page" className="flex items-center">
-          <Image
-            src={nostrLogo}
-            alt="Nostr Logo"
-            width={32}
-            height={32}
-            className="mr-2"
-          />
-          <span className="flex font-display text-2xl font-bold text-slate-900 dark:text-sky-100 md:text-3xl">
-            Nostr
-          </span>
-        </Link>
-      </div>
-
+      <div className="relative mr-6 flex">
+        <div className="mr-6 flex lg:hidden">
+          <MobileNavigation navigation={navigation} />
+        </div>
+        <div className="relative flex flex-grow basis-0 items-center">
+          <Link href="/" aria-label="Home page" className="flex items-center">
+            <Image
+              src={nostrLogo}
+              alt="Nostr Logo"
+              width={32}
+              height={32}
+              className="mr-2"
+            />
+            <span className="flex font-display text-2xl font-bold text-slate-900 dark:text-sky-100 md:text-3xl">
+              Nostr
+            </span>
+          </Link>
+        </div>
       </div>
       <div className="relative flex flex-auto basis-0 items-center justify-end gap-2 sm:gap-4 md:flex-grow">
         <div className="relative z-10 max-sm:hidden sm:w-3/4 lg:w-1/2 lg:max-w-[40vw]">
           <Nip05SearchBar></Nip05SearchBar>
         </div>
-          <ThemeSelector className="relative z-10" />
+        <ThemeSelector className="relative z-10" />
       </div>
     </header>
   )

@@ -11,59 +11,25 @@ Clients are the way that you access and interact with the Nostr protocol.
 
 A client in Nostr is just the app that you use to access and interact with the protocol. It's like the Twitter iOS app or web app that you use to interact with Twitter's feed of tweets.
 
-Because the Nostr protocol is very simple and flexible, different clients have approached the protocol in different ways: some try to make the experience look exactly like Twitter, others try to highlight the importance of relays to the protocol and expose that to users, and others try to use heuristics and algorithms to ensure the maximum degree of censorship-resistance without burdening users too much.
+## What is the point of having multiple clients?
 
-## Can I switch clients?
+Each client has its own peculiarities, each exposes different parts of the data and allows you to interact differently with it or create different kinds of content.
 
-Yes. Because a client is just a way to access the underlying data held by relays, you can switch clients or sign into as many clients as you'd like. As long as each client is looking at the same set of relays for their data, you'll see the same messages in each client.
-
-## Should I enter my private key in the client?
-
-Generally, it's better not to enter your private key into any client. Most clients that ask for private keys do their absolute best to keep your key secure but given the nature of software, there are always breaches, exploits, and bugs that could potentially expose your private key.
-
-Remember, your private key is your identity in Nostr, so if it is compromised you'll lose your followers and will have to start from scratch rebuilding your identity.
+However everything is interoperable and the data in the underlying network always the same, so your profile will be the same no matter what client you use, your list of contacts and the data you published will be with you in every client.
 
 ## A few of our favorite clients
 
-### Web
-
-- [Nostter](https://nostter.app/)
-- [Coracle](https://coracle.social)
-- [noStrudel](https://nostrudel.ninja)
-- [Snort](https://snort.social)
-- [Rabbit](https://syusui-s.github.io/rabbit/)
-
-### iOS
-
-- [Damus](https://damus.io), the first Nostr client to be banned in China.
-- [Nos](https://nos.social), a beautiful and safe client for non-bitcoiners.
-- [Nostur](https://nostur.com), a feature-complete client.
-
-### iOS and Android
-
-- [Plebstr](https://plebstr.com), a closed-source client that is beautiful, fast and smooth.
-- [Primal](https://primal.net/downloads), a very fast client that relies on server-side caching.
-- [Current](https://app.getcurrent.io/), a client that comes with a built-in Bitcoin wallet.
-- [ZBD](https://zbd.gg), a custodial, hosted client for ZBD users.
-
-### Android
-
-- [Yana](https://github.com/frnandu/yana/releases), a smooth and fully-featured multi-platform client.
-- [Spring](https://spring.site/), a client for safely using web clients on your Android.
-- [Amethyst](https://play.google.com/store/apps/details?id=com.vitorpamplona.amethyst), a client that has all the features you might imagine.
-- [FreeFrom](https://freefrom.space/), a Twitter-like client.
-- [Nozzle](https://github.com/dluvian/Nozzle/releases), a very lean client, but still a work-in-progress.
-
-### Desktop
-
-- [Gossip](https://github.com/mikedilger/gossip), a native client that tries to efficiently follow people in wherever relay they happen to be, made in Rust with egui.
-- [more-speech](https://github.com/unclebob/more-speech), a client that gives you a powerful global view and way of interacting with custom filtering based on web-of-trust and relay selection, made in Clojure. [Check out a guide here](https://www.youtube.com/watch?v=q3gQ42aUhls).
-- [Lume](https://lume.nu), an ambitious client made with Tauri.
-
-### Non-microblogging clients
-
-- [zap.stream](https://zap.stream), a video livestreaming browser and hosting platform.
-- [Yakihonne](https://yakihonne.com), an app for reading, writing and curating long-form articles.
-- [Highlighter](https://highlighter.com/), an app for annotating and curating content.
-- [Habla.news](https://habla.news), an app for reading and writing long-form articles.
-- [wikistr](https://wikistr.com), an early-stage decentralized Wikipedia replacement.
+- Damus - [iOS](https://apps.apple.com/us/app/damus/id1628663131)
+- Coracle - [web](https://coracle.social)
+- Voyage - [Android](https://github.com/dluvian/voyage/releases)
+- Yakihonne - [iOS](https://apps.apple.com/mo/app/yakihonne/id6472556189?l=en-GB&platform=iphone) | [Android](https://play.google.com/store/apps/details?id=com.yakihonne.yakihonne&hl=en_US&pli=1) | [web](https://yakihonne.com)
+- Gossip - [desktop](https://github.com/mikedilger/gossip)
+- Nos - [iOS](https://nos.social)
+- Nostur - [iOS](https://apps.apple.com/us/app/nostur-nostr-client/id1672780508)
+- Highlighter - [web](https://highlighter.com)
+- Primal- [iOS](https://apps.apple.com/us/app/primal/id1673134518) | [Android](https://github.com/PrimalHQ/primal-android-app/releases) | [web](https://primal.net/)
+- Nostter - [web](https://nostter.app/)
+- noStrudel - [web](https://nostrudel.ninja)
+- Amethyst - [Android](https://github.com/vitorpamplona/amethyst/releases)
+- Snort - [web](https://snort.social)
+- FreeFrom - [iOS](https://apps.apple.com/us/app/freefrom-the-nostr-client/id6446819930) | [Android](https://play.google.com/store/apps/details?id=com.freefrom)

@@ -11,35 +11,22 @@ A step-by-step guide to getting started with Nostr.
 
 Each Nostr account is based on a public/private key pair. A simple way to think about this is that your public key is your username and your private key is your password, with one major caveat. Unlike a password, your private key cannot be reset if lost.
 
-The public key is generally presented as a string with the prefix `npub1` and the private key with the prefix `nsec1`. Make sure you store you private key somewhere safe, like a password manager.
+The public key is generally presented as a string with the prefix `npub` and the private key with the prefix `nsec`. Make sure you store you private key somewhere safe, like a password manager.
 
-## Protocol vs Client
+### Keeping keys safe
 
-Nostr itself is just a protocol; an agreed upon procedure for passing messages around on the internet.
+If you are using Nostr on a web browser it is probably a good idea to install an extension like [Connect](https://chromewebstore.google.com/detail/nostr-connect/ampjiinddmggbhpebhaegmjkbbeofoaj), [nos2x](https://github.com/fiatjaf/nos2x) or [Alby](https://getalby.com/products/browser-extension), then input your secret key there (or it will generate a secret key for you). From there you will be able to use all web apps very easily with no worries. For the paranoid, keeping your key on a [hardware device](https://shop.lnbits.com/product/nostr-signing-device) is also an option.
 
-You will access Nostr (the protocol) via a client. Clients can be web, desktop, or mobile apps. Clients can fetch data from relays and also generate new data and push that to relays so others can read.
+If you are on Android, installing [Amber](https://github.com/greenart7c3/Amber/releases) is the safest way to use Nostr without having to paste your key directly into apps.
 
-The only form of "data" that exists in Nostr is the [`event`](/the-protocol/events).
-
-### Signing events
-
-These events must contain a signature (`sig`). The signature ensures that it can be proven mathematically that they were created by whoever happens to be their true author.
-
-To be able to construct the signature, clients will need your private key. Native apps will generally have a place where you can paste your private key when first opening them. From the private key they can derive your public key too.
-
-For web apps it is not recommended to paste the private key, we instead recomment using a browser extension that implements the [Nostr-related functionality](https://nips.be/7) that allows web clients to use your keys without ever learning them. Some examples include [Flamingo](https://www.getflamingo.org/), [Alby](https://getalby.com) and [nos2x](https://github.com/fiatjaf/nos2x).
+Otherwise it's probably safe to paste your `nsec` into well-established and security-minded apps such as [Damus](https://damus.io), so don't worry too much.
 
 ## Let's do this!
 
-Here are [some clients](/clients) we recommend.
+Now that you know what it takes, just [pick a client](/clients) to start using Nostr!
 
-## Find friends to follow
+## Finding people to follow
 
-- If you are a Twitter user, you can use [nostr.directory](https://nostr.directory) to find Twitter people that you follow that have linked their Twitter accounts to Nostr public keys. [Snort](https://snort.social) also does a seamless import of followers on your behalf.
-- Otherwise, you can just start following a dozen of prominent Nostr keys, for example, by checking [nostr.band](https://nostr.band) and looking at their interactions, replies and so on.
+If you know someone that is on Nostr, start by following them, then look at whom they are following and whom they are interacting with, and sooner rather than later you'll have a bunch of followers and a community for yourself inside Nostr.
 
-## Can I use other clients?
-
-Yes! Now that you have created your public/private key pair, you can use this pair on any Nostr client to access your account. Remember, the client is just an interface to see messages broadcast on the Nostr protocol.
-
-Since it's so early in Nostr's development, not all clients support all protocol features in the same way. It's worth checking out our [clients page](/clients) to find the best client for you, or jump into the chaos of all the other available clients at [nostr.net](https://nostr.net).
+Otherwise, you can always take a look at trending [posts](https://nostr.band/?trending=posts) and [people](https://nostr.band/?trending=people) and get people from there.
