@@ -20,12 +20,16 @@ export function KeyDialog() {
     };
 
     const openDialog = () => {
-        const sk = generateSecretKey(); // `sk` is a Uint8Array
-        const pk = getPublicKey(sk); // `pk` is a hex string
-        let nsec = nip19.nsecEncode(sk);
-        let npub = nip19.npubEncode(pk);
-        setKeys({ nsec, npub });
-        setIsDialogOpen(true);
+        setNotification("Generating keys...");
+        setTimeout(() => {
+            const sk = generateSecretKey(); // `sk` is a Uint8Array
+            const pk = getPublicKey(sk); // `pk` is a hex string
+            let nsec = nip19.nsecEncode(sk);
+            let npub = nip19.npubEncode(pk);
+            setKeys({ nsec, npub });
+            setIsDialogOpen(true);
+            setNotification(null);
+        }, 1000);
     };
 
     const closeDialog = () => {
