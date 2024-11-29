@@ -29,6 +29,7 @@ These include chat, marketplaces, Instagram-like photo feeds, long-form articles
 - Pollerama (_polls_) - [web](https://pollerama.fun/)
 - Olas (_photos_) - [iOS](https://testflight.apple.com/join/2FMVX2yM) | [Android](https://github.com/pablof7z/snapstr/releases)
 - Stemstr (_music_) - [web](https://stemstr.app/)
+- Highlighter (_long-form articles_) - [web](https://highlighter.com)
 - Habla (_long-form articles_) - [web](https://habla.news)
 - Obsidian plugin (_long-form articles_) - [desktop](https://github.com/jamesmagoo/nostr-writer)
 - Comet (_long-form articles_) - [desktop](https://comet.md)

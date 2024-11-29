@@ -26,7 +26,6 @@ However everything is interoperable and the data in the underlying network alway
 - Gossip - [desktop](https://github.com/mikedilger/gossip)
 - Nos - [iOS](https://nos.social)
 - Nostur - [iOS](https://apps.apple.com/us/app/nostur-nostr-client/id1672780508)
-- Highlighter - [web](https://highlighter.com)
 - Primal- [iOS](https://apps.apple.com/us/app/primal/id1673134518) | [Android](https://github.com/PrimalHQ/primal-android-app/releases) | [web](https://primal.net/)
 - Nostter - [web](https://nostter.app/)
 - noStrudel - [web](https://nostrudel.ninja)
