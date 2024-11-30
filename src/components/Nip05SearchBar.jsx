@@ -32,7 +32,7 @@ export function Nip05SearchBar({query = ''}) {
         placeholder="@nostr.com"
         value={searchQuery}
         onChange={handleChange}
-        className="w-3/4 flex-auto bg-transparent text-white placeholder-slate-400 focus:outline-none sm:w-32"
+        className="w-3/4 flex-auto bg-transparent pl-4 text-white placeholder-slate-400 focus:outline-none sm:w-32"
         style={{
           overflow: 'hidden',
           textOverflow: 'ellipsis',

@@ -33,10 +33,10 @@ export function NIP05NameSearchDialog({query = ''}) {
     >
       <input
         type="text"
-        placeholder="Pick a name"
+        placeholder="Choose a name"
         value={searchQuery}
         onChange={handleChange}
-        className="h-10 w-1/2 flex-auto bg-transparent text-white placeholder-slate-400 focus:outline-none sm:w-32"
+        className="h-10 w-56 flex-auto bg-transparent pl-4 text-white placeholder-slate-400 focus:outline-none"
         style={{
           overflow: 'hidden',
           textOverflow: 'ellipsis',

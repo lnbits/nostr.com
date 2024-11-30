@@ -62,7 +62,7 @@ export function KeyDialog() {
           'Your private key (nsec). Keep it PRIVATE:\n',
           keys.nsec
         ],
-        { type: 'text/plain' }
+        {type: 'text/plain'}
       )
       const link = document.createElement('a')
       link.href = URL.createObjectURL(blob)
@@ -196,8 +196,7 @@ export function KeyDialog() {
                   I have saved my keys, what next?
                 </p>
                 <p className="mt-3 tracking-tight text-slate-400 sm:text-2xl md:text-2xl">
-                  Get a pretty name for nostr (your-name@nostr.com) or skip and
-                  get an app.
+                  Get a @nostr.com Nostr address (your-name@nostr.com):
                 </p>
                 <div className="relative z-10 flex flex-col items-start space-y-4 pt-5 md:flex-row md:items-center md:space-y-0">
                   <div className="relative flex flex-col sm:w-1/4 lg:w-2/5 lg:max-w-[34vw]">
@@ -209,7 +208,7 @@ export function KeyDialog() {
                     onClick={handleScroll}
                     className="rounded-full py-5 text-lg  font-bold text-sky-300 transition-colors duration-200 hover:border-sky-400 hover:bg-transparent hover:text-sky-400 md:ml-4 md:text-2xl"
                   >
-                    Skip and checkout nostr apps
+                    Skip and checkout Nostr apps
                   </button>
                 </div>
               </div>

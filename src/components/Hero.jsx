@@ -65,7 +65,7 @@ export function Hero() {
                   onClick={() => window.open('https://my.nostr.com', '_blank')}
                   className="rounded-full border-2 border-sky-300 py-5 text-lg font-bold text-sky-300 transition-colors duration-200 hover:border-sky-400 hover:bg-transparent hover:text-sky-400 md:ml-4 md:text-2xl"
                 >
-                  I already have a nostr account/keys
+                  I just want a @nostr.com address
                 </button>
               </div>
             </div>
@@ -167,7 +167,7 @@ export function Hero() {
             src={AndroidLink}
             alt="Android Download Link"
             width={200}
-            className="relative  z-10 flex-1 sm:max-w-[200px] md:max-w-[150px] lg:max-w-[200px]"
+            className="relative flex-1 sm:max-w-[200px] md:max-w-[150px] lg:max-w-[200px]"
           />
         </a>
         <a
@@ -179,7 +179,7 @@ export function Hero() {
             src={FDroid}
             alt="F-Droid Download Link"
             width={200}
-            className="relative  z-10 flex-1 sm:max-w-[200px] md:max-w-[150px] lg:max-w-[200px]"
+            className="relative flex-1 sm:max-w-[200px] md:max-w-[150px] lg:max-w-[200px]"
           />
         </a>
         <a
@@ -191,11 +191,11 @@ export function Hero() {
             src={AppleLink}
             alt="Apple App Store Download Link"
             width={200}
-            className="relative  z-10 flex-1 sm:max-w-[200px] md:max-w-[150px] lg:max-w-[200px]"
+            className="relative flex-1 sm:max-w-[200px] md:max-w-[150px] lg:max-w-[200px]"
           />
         </a>
         <a
-          href="https://snort.social/"
+          href="https://coracle.social/"
           target="_blank"
           rel="noopener noreferrer"
         >
@@ -203,7 +203,7 @@ export function Hero() {
             src={WebBrowser}
             alt="Web Browser Version"
             width={200}
-            className="relative  z-10 flex-1 sm:max-w-[200px] md:max-w-[150px] lg:max-w-[200px]"
+            className="relative flex-1 sm:max-w-[200px] md:max-w-[150px] lg:max-w-[200px]"
           />
         </a>
         <a
@@ -215,7 +215,7 @@ export function Hero() {
             src={NostrApps}
             alt="All Nostr Apps"
             width={200}
-            className="relative  z-10 flex-1 sm:max-w-[200px] md:max-w-[150px] lg:max-w-[200px]"
+            className="relative flex-1 sm:max-w-[200px] md:max-w-[150px] lg:max-w-[200px]"
           />
         </a>
         <a
@@ -227,7 +227,7 @@ export function Hero() {
             src={NostrGitHub}
             alt="nostr Github"
             width={200}
-            className="relative  z-10 flex-1 sm:max-w-[200px] md:max-w-[150px] lg:max-w-[200px]"
+            className="relative flex-1 sm:max-w-[200px] md:max-w-[150px] lg:max-w-[200px]"
           />
         </a>
       </div>
