@@ -96,7 +96,7 @@ function Header({navigation}) {
         <div className="relative z-10 max-sm:hidden sm:w-3/4 lg:w-1/2 lg:max-w-[34vw]">
           <Nip05SearchBar></Nip05SearchBar>
         </div>
-        <ThemeSelector className="relative z-10" />
+        {/* <ThemeSelector className="relative z-10" /> will put back once I have fixed elements */}
       </div>
     </header>
   )
