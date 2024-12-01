@@ -97,7 +97,7 @@ function Header({navigation}) {
           <Nip05SearchBar></Nip05SearchBar>
         </div>
         {/* will put back once I have fixed new elements */}
-        <ThemeSelector className="relative z-10" style="display:none" /> 
+        <ThemeSelector className="relative z-10" style="display:none" />
         {/* will put back once I have fixed new elements */}
       </div>
     </header>
