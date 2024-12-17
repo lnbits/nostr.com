@@ -4,12 +4,12 @@ import {useRouter} from 'next/router'
 import clsx from 'clsx'
 import Image from 'next/image'
 
+import {Button} from '@/components/Button'
 import {Hero} from '@/components/Hero'
 import {MobileNavigation} from '@/components/MobileNavigation'
 import {Navigation} from '@/components/Navigation'
 import {Prose} from '@/components/Prose'
 import {ThemeSelector} from '@/components/ThemeSelector'
-import {Nip05SearchBar} from '@/components/Nip05SearchBar'
 import nostrLogo from '/src/images/nostr.svg'
 
 const relays = [
@@ -93,8 +93,13 @@ function Header({navigation}) {
         </div>
       </div>
       <div className="relative flex flex-auto basis-0 items-center justify-end gap-2 sm:gap-4 md:flex-grow">
-        <div className="relative z-10 max-sm:hidden sm:w-3/4 lg:w-1/2 lg:max-w-[34vw]">
-          <Nip05SearchBar></Nip05SearchBar>
+        <div className="relative z-10 mr-3">
+          <Button
+            href="https://my.nostr.com/login"
+            target="_blank"
+          >
+            Account
+          </Button>
         </div>
         {/* will put back once I have fixed new elements */}
         <ThemeSelector className="relative z-10" style="display:none" />
