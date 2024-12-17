@@ -96,7 +96,6 @@ function Header({navigation}) {
         <div className="relative z-10 mr-3">
           <Button
             href="https://my.nostr.com/login"
-            target="_blank"
           >
             Account
           </Button>
