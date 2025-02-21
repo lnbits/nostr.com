@@ -12,6 +12,7 @@ import AndroidLink from '/src/images/nostr_android_google_play.png'
 import AppleLink from '/src/images/nostr_app_store.png'
 import WebBrowser from '/src/images/nostr_web_browser.png'
 import NostrApps from '/src/images/nostr_apps.png'
+import NostrNetApps from '/src/images/nostr_net_apps.png'
 import NostrGitHub from '/src/images/nostr_github.png'
 import nostrMerch from '/src/images/nostrmerch.png'
 
@@ -219,13 +220,13 @@ export function Hero() {
           />
         </a>
         <a
-          href="https://github.com/nostr-protocol"
+          href="https://nostr.net"
           target="_blank"
           rel="noopener noreferrer"
         >
           <Image
-            src={NostrGitHub}
-            alt="nostr Github"
+            src={NostrNetApps}
+            alt="More Nostr Apps"
             width={200}
             className="relative flex-1 sm:max-w-[200px] md:max-w-[150px] lg:max-w-[200px]"
           />
