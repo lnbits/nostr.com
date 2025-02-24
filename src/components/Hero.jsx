@@ -13,7 +13,6 @@ import AppleLink from '/src/images/nostr_app_store.png'
 import WebBrowser from '/src/images/nostr_web_browser.png'
 import NostrApps from '/src/images/nostr_apps.png'
 import NostrNetApps from '/src/images/nostr_net_apps.png'
-import NostrGitHub from '/src/images/nostr_github.png'
 import nostrMerch from '/src/images/nostrmerch.png'
 
 export function Hero() {
