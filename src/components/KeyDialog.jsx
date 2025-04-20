@@ -81,10 +81,10 @@ export function KeyDialog() {
       {/* Button */}
       <button
         type="button"
-        className="rounded-full bg-sky-300 px-10 py-5 text-lg font-bold text-slate-900 hover:bg-sky-200 md:text-2xl"
+        className="rounded-full dark:bg-white bg-teal-600 hover:bg-teal-500 px-10 py-5 text-lg font-bold dark:text-teal-700 text-white dark:hover:bg-teal-100 md:text-2xl"
         onClick={openDialog}
       >
-        Create your Nostr account
+        Start your journey
       </button>
 
       {/* Dialog Box */}

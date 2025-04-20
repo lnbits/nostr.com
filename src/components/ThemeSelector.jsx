@@ -15,14 +15,14 @@ export function ThemeSelector(props) {
       return (
         <LightIcon
           onClick={() => setSelectedTheme('light')}
-          className="hidden h-4 w-4 fill-sky-400 [[data-theme=dark]_&]:block"
+          className="hidden h-4 w-4 fill-white [[data-theme=dark]_&]:block"
         />
       )
     } else {
       return (
         <DarkIcon
           onClick={() => setSelectedTheme('dark')}
-          className="hidden h-4 w-4 fill-sky-400 [[data-theme=light]_&]:block"
+          className="hidden h-4 w-4 fill-white [[data-theme=light]_&]:block"
         />
       )
     }
