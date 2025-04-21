@@ -68,7 +68,7 @@ export default function App({Component, pageProps}) {
         <meta charSet="utf-8" />
         <title>{pageTitle}</title>
         {description && <meta name="description" content={description} />}
-        <link rel="icon" type="image/jpg" href="/images/logo.jpg" />
+        <link rel="icon" type="image/png" href="/images/logo.png" />
       </Head>
       <Layout title={title} tableOfContents={tableOfContents}>
         <Component {...pageProps} />

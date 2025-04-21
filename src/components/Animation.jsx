@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 
 const Animation = () => {
-  const frameCount = 44;
+  const frameCount = 55;
   const fps = 4;
   const interval = 1000 / fps;
 
@@ -49,7 +49,7 @@ const Animation = () => {
         src={imagesRef.current[frame]?.src}
         alt="Capybara Ostrich Animation"
         style={{
-          width: '575px',
+          width: '1200px',
           height: 'auto',
           imageRendering: 'pixelated'
         }}
