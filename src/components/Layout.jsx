@@ -41,7 +41,13 @@ function Header({ navigation }) {
       </div>
       <div className="relative flex flex-auto basis-0 items-center justify-end gap-2 sm:gap-4 md:flex-grow">
         <div className="relative z-10 mr-3">
-          <Button className="bg-white hover:bg-teal-100 text-teal-900" href="https://my.nostr.com/login">Account</Button>
+          <button
+                    type="button"
+                    className="py-2 px-4 bg-white hover:bg-teal-100 text-teal-900 dark:bg-white dark:hover:bg-teal-100 dark:text-teal-900"
+                    onClick={() => window.open('https://my.nostr.com/login', '_blank')}
+                  >
+                    Account
+                  </button>
           <Button
             className="ml-3"
             href="https://shop.lnbits.com/product-category/nostr"

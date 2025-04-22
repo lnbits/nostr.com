@@ -29,14 +29,14 @@ export function NIP05NameSearchDialog({query = ''}) {
     <form
       onSubmit={handleSearch}
       className="rounded-full bg-slate-700 p-1 md:flex-row lg:flex"
-      title="get your NIP05 name!"
+      title="get your NIP05 name! (optional commercial service)"
     >
       <input
         type="text"
         placeholder="Choose a name"
         value={searchQuery}
         onChange={handleChange}
-        className="h-10 w-56 flex-auto bg-transparent pl-4 text-white placeholder-slate-400 focus:outline-none"
+        className="h-10 w-48 sm:w-56 flex-auto bg-transparent pl-4 text-white placeholder-slate-400 focus:outline-none"
         style={{
           overflow: 'hidden',
           textOverflow: 'ellipsis',
@@ -46,7 +46,7 @@ export function NIP05NameSearchDialog({query = ''}) {
       />
       <button
         type="submit"
-        className="ml-2 h-10 w-32 rounded-full bg-teal-600 px-3 py-1 text-sm text-white hover:bg-teal-500"
+        className="ml-2 h-10 w-24 sm:w-32 rounded-full bg-teal-600 px-3 py-1 text-sm text-white hover:bg-teal-500"
         style={{
           fontSize: '1rem'
         }}

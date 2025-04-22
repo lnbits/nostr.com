@@ -19,7 +19,7 @@ export function Hero() {
       <div className="pb-5 sm:px-2 lg:relative lg:px-0">
 
         {/* Section: Hero + Cloud Background */}
-        <div className="relative z-10 pb-20 pt-40 dark:bg-teal-700">
+        <div className="relative z-10 pb-20 pt-10 md:pt-40 dark:bg-teal-700">
           {/* Clouds */}
           <img src="images/cloud1.png" className="absolute top-10 -left-32 w-64 opacity-40 z-0 pointer-events-none" aria-hidden="true" />
           <img src="images/cloud2.png" className="absolute top-40 -right-32 w-72 opacity-40 z-0 pointer-events-none" aria-hidden="true" />
@@ -80,7 +80,7 @@ export function Hero() {
 
         {/* Section: App Universe Text */}
 
-        <div className="mt-16 relative flex h-3/4 items-center justify-center z-8">
+        <div className="sm:mt-16 relative flex h-3/4 items-center justify-center z-8">
           <div className="relative z-8 flex w-full max-w-7xl px-6 md:flex-row flex-col items-center justify-between">
             <p className="bg-clip-text font-display text-4xl text-teal-600 dark:text-white md:text-4xl">
               A universe of apps all working together.
@@ -94,7 +94,7 @@ export function Hero() {
           <div className="flex flex-col lg:flex-row items-center justify-center gap-16 max-w-7xl mx-auto">
 
             {/* Left: Overlapping phones */}
-            <div className="relative w-[260px] h-[520px]">
+            <div className="relative w-[200px] sm:w-[260px] h-[520px]">
               <a href="https://amethyst.social" target="_blank" rel="noopener noreferrer">
                 <Image
                   src="/images/amethyst.png"
@@ -116,7 +116,7 @@ export function Hero() {
             </div>
 
             {/* Right: Overlapping desktop apps */}
-            <div className="relative w-full max-w-[770px] h-[520px]">
+            <div className="relative w-full max-w-[770px] h-[360px] sm:h-[520px]">
               <a href="https://primal.net" target="_blank" rel="noopener noreferrer">
                 <Image
                   src="/images/primal.png"
@@ -141,24 +141,24 @@ export function Hero() {
         </div>
 
         {/* Section: App Links */}
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-y-5 pt-10">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-y-5 md:pt-10">
           <a href="https://play.google.com/store/search?q=nostr&c=apps" target="_blank" rel="noopener noreferrer">
-            <Image src={AndroidLink} alt="Android Download Link" width={200} className="relative flex-1 sm:max-w-[200px] md:max-w-[150px] lg:max-w-[200px]" />
+            <Image src={AndroidLink} alt="Android Download Link" className="relative flex-1 max-w-[150px] sm:max-w-[100px] md:max-w-[150px] lg:max-w-[200px]" />
           </a>
           <a href="https://search.f-droid.org/?q=nostr&lang=en" target="_blank" rel="noopener noreferrer">
-            <Image src={FDroid} alt="F-Droid Download Link" width={200} className="relative flex-1 sm:max-w-[200px] md:max-w-[150px] lg:max-w-[200px]" />
+            <Image src={FDroid} alt="F-Droid Download Link" className="relative flex-1 max-w-[150px] sm:max-w-[100px] md:max-w-[150px] lg:max-w-[200px]" />
           </a>
           <a href="https://www.apple.com/us/search/nostr?src=globalnav" target="_blank" rel="noopener noreferrer">
-            <Image src={AppleLink} alt="Apple App Store Download Link" width={200} className="relative flex-1 sm:max-w-[200px] md:max-w-[150px] lg:max-w-[200px]" />
+            <Image src={AppleLink} alt="Apple App Store Download Link" className="relative flex-1 max-w-[150px] sm:max-w-[100px] md:max-w-[150px] lg:max-w-[200px]" />
           </a>
           <a href="https://coracle.social/" target="_blank" rel="noopener noreferrer">
-            <Image src={WebBrowser} alt="Web Browser Version" width={200} className="relative flex-1 sm:max-w-[200px] md:max-w-[150px] lg:max-w-[200px]" />
+            <Image src={WebBrowser} alt="Web Browser Version" className="relative flex-1 max-w-[150px] sm:max-w-[100px] md:max-w-[150px] lg:max-w-[200px]" />
           </a>
           <a href="https://nostrapps.com" target="_blank" rel="noopener noreferrer">
-            <Image src={NostrApps} alt="All Nostr Apps" width={200} className="relative flex-1 sm:max-w-[200px] md:max-w-[150px] lg:max-w-[200px]" />
+            <Image src={NostrApps} alt="All Nostr Apps" className="relative flex-1 max-w-[150px] sm:max-w-[100px] md:max-w-[150px] lg:max-w-[200px]" />
           </a>
           <a href="https://nostr.net" target="_blank" rel="noopener noreferrer">
-            <Image src={NostrNetApps} alt="More Nostr Apps" width={200} className="relative flex-1 sm:max-w-[200px] md:max-w-[150px] lg:max-w-[200px]" />
+            <Image src={NostrNetApps} alt="More Nostr Apps" className="relative flex-1 max-w-[150px] sm:max-w-[100px] md:max-w-[150px] lg:max-w-[200px]" />
           </a>
         </div>
 
