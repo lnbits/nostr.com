@@ -179,6 +179,12 @@ export function Hero() {
           </div>
 
           {/* Section Content */}
+          <div className="text-center relative">
+            <p className="bg-clip-text font-display text-4xl text-teal-600 dark:text-white md:text-5xl">
+              <span className="bg-gray-200 dark:bg-gray-700 px-1 rounded font-mono text-black dark:text-white">N</span>otes and <span className="bg-gray-200 dark:bg-gray-700 px-1 rounded font-mono text-black dark:text-white">O</span>ther <span className="bg-gray-200 dark:bg-gray-700 px-1 rounded font-mono text-black dark:text-white">S</span>tuff <span className="bg-gray-200 dark:bg-gray-700 px-1 rounded font-mono text-black dark:text-white">T</span>ransmitted by <span className="bg-gray-200 dark:bg-gray-700 px-1 rounded font-mono text-black dark:text-white">R</span>elays
+            </p>
+          </div>
+
           <div className="px-6 pt-10 max-w-7xl mx-auto">
             <div className="text-slate-900 dark:text-white grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
               {/* Column 1 */}
