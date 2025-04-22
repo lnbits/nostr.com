@@ -30,11 +30,11 @@ export function Hero() {
 
               {/* Left: Text */}
               <div className="w-full md:w-3/4 flex flex-col items-start space-y-4">
-                <p className="bg-clip-text text-center font-display text-3xl font-bold tracking-tight md:text-3xl lg:text-6xl text-teal-600 dark:text-white">
+                <p className="bg-clip-text font-display text-4xl font-bold tracking-tight md:text-4xl lg:text-6xl text-teal-600 dark:text-white">
                   A better internet is possible!
                 </p>
                 <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl md:text-5xl">
-                  <span className="text-xl text-slate-900 dark:text-white md:text-3xl">
+                  <span className="text-xl text-slate-900 dark:text-white sm:text-3xl">
                     Social media and other stuff everyone can access.
                   </span>
                 </h1>
@@ -66,7 +66,7 @@ export function Hero() {
                 Nostr = Freedom
               </p>
               <p className="pt-7 text-xl tracking-tight text-slate-400 md:text-2xl">
-                YOU control your identity and data NOT the corporate platform or government.
+                YOU control your identity and data NOT the corporation or government.
               </p>
 
               <div className="pt-10 flex flex-wrap justify-center gap-4">
