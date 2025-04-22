@@ -1,11 +1,11 @@
-import {useState} from 'react'
-import {generateSecretKey, getPublicKey} from 'nostr-tools/pure'
-import {NIP05NameSearchDialog} from '@/components/NIP05NameSearchDialog'
+import { useState } from 'react'
+import { generateSecretKey, getPublicKey } from 'nostr-tools/pure'
+import { NIP05NameSearchDialog } from '@/components/NIP05NameSearchDialog'
 import * as nip19 from 'nostr-tools/nip19'
 
 export function KeyDialog() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [keys, setKeys] = useState({sk: null, pk: null})
+  const [keys, setKeys] = useState({ sk: null, pk: null })
   const [isSecretVisible, setIsSecretVisible] = useState(false)
   const [notification, setNotification] = useState(null) // Declare notification state
 
@@ -13,7 +13,7 @@ export function KeyDialog() {
     const target = document.getElementById('get-nostr')
     if (target) {
       setIsDialogOpen(false)
-      target.scrollIntoView({behavior: 'smooth'})
+      target.scrollIntoView({ behavior: 'smooth' })
     } else {
       console.error('Element with id "hero-section" not found.')
     }
@@ -26,7 +26,7 @@ export function KeyDialog() {
       const pk = getPublicKey(sk) // `pk` is a hex string
       let nsec = nip19.nsecEncode(sk)
       let npub = nip19.npubEncode(pk)
-      setKeys({nsec, npub})
+      setKeys({ nsec, npub })
       setIsDialogOpen(true)
       setNotification(null)
     }, 1000)
@@ -62,7 +62,7 @@ export function KeyDialog() {
           'Your private key (nsec). Keep it PRIVATE:\n',
           keys.nsec
         ],
-        {type: 'text/plain'}
+        { type: 'text/plain' }
       )
       const link = document.createElement('a')
       link.href = URL.createObjectURL(blob)
@@ -79,32 +79,29 @@ export function KeyDialog() {
   return (
     <div className="flex flex-col items-center justify-center">
       {/* Button */}
+
       <button
         type="button"
-        className="rounded-full bg-sky-300 px-10 py-5 text-lg font-bold text-slate-900 hover:bg-sky-200 md:text-2xl"
+        className="rounded-full dark:bg-white bg-teal-600 hover:bg-teal-500 px-10 py-5 text-lg font-bold dark:text-teal-700 text-white dark:hover:bg-teal-100 md:text-2xl"
         onClick={openDialog}
       >
-        Create your Nostr account
+        Start your journey
       </button>
 
       {/* Dialog Box */}
       {isDialogOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
-          onClick={closeDialog} // Close the dialog when the overlay is clicked
-        >
-          <div
-            className="w-full max-w-4xl rounded-lg p-6 shadow-lg dark:bg-slate-900"
-            onClick={e => e.stopPropagation()} // Prevent closing when clicking inside the dialog
-          >
+  className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 text-left p-4 overflow-y-auto"
+  onClick={closeDialog}
+>
+  <div
+    className="w-full max-w-4xl rounded-lg p-6 shadow-lg bg-slate-100 dark:bg-[rgb(32,34,36)]"
+    onClick={(e) => e.stopPropagation()}
+  >
             <div className="relative">
-              <p className="inline bg-gradient-to-r from-indigo-200 via-sky-400 to-indigo-200 bg-clip-text font-display text-3xl tracking-tight text-transparent md:text-5xl">
+              <p className="inline text-teal-600 dark:text-white bg-clip-text font-display text-3xl tracking-tight md:text-5xl">
                 Welcome to nostr!
               </p>
-              <p className="mt-3 tracking-tight text-slate-400 sm:text-2xl md:text-2xl">
-                Nostr uses cryptographic keys to keep users in control.
-              </p>
-
               {/* Display Public Key */}
               <div className="mt-4 flex flex-col items-start space-y-4">
                 <div className="group relative">
@@ -114,7 +111,7 @@ export function KeyDialog() {
                   <div className="flex items-center space-x-2">
                     <button
                       type="button"
-                      className="group relative rounded bg-sky-300 px-2 py-1 text-xs font-bold text-slate-900 hover:bg-sky-200"
+                      className="group relative rounded bg-sky-300 px-2 py-1 text-xs font-bold dark:bg-white bg-teal-600 hover:bg-teal-500 dark:text-teal-700 text-white dark:hover:bg-teal-100"
                       onClick={copyNpubToClipboard}
                     >
                       <span className="material-icons text-xs">
@@ -143,7 +140,7 @@ export function KeyDialog() {
                   <div className="flex items-center space-x-2">
                     <button
                       type="button"
-                      className="group relative rounded bg-sky-300 px-2 py-1 text-xs font-bold text-slate-900 hover:bg-sky-200"
+                      className="group relative rounded bg-sky-300 px-2 py-1 text-xs font-bold dark:bg-white bg-teal-600 hover:bg-teal-500 dark:text-teal-700 text-white dark:hover:bg-teal-100"
                       onClick={copyNsecToClipboard}
                     >
                       <span className="material-icons text-xs">
@@ -162,15 +159,11 @@ export function KeyDialog() {
                     </span>
                   </div>
                 </div>
-                <p className="pb-2 tracking-tight text-slate-400 sm:text-2xl md:text-xl">
-                  Save these keys somewhere safe, they were created locally in
-                  your browser and will not be shown again!
-                </p>
                 <div className="flex flex-row items-center space-x-4">
                   {/* Download Button */}
                   <button
                     type="button"
-                    className="group relative rounded bg-sky-300 px-3 py-2 font-bold text-slate-900 hover:bg-sky-200"
+                    className="group relative rounded dark:bg-white bg-teal-600 hover:bg-teal-500 text-sm sm:text-lg dark:text-teal-700 text-white dark:hover:bg-teal-100"
                     onClick={downloadKey}
                   >
                     Download keys
@@ -181,7 +174,7 @@ export function KeyDialog() {
                   <button
                     type="button"
                     onClick={() => setIsSecretVisible(!isSecretVisible)}
-                    className="group relative rounded bg-sky-300 px-3 py-2 font-bold text-slate-900 hover:bg-sky-200"
+                    className="group relative rounded dark:bg-white bg-teal-600 hover:bg-teal-500  text-sm sm:text-lg dark:text-teal-700 text-white dark:hover:bg-teal-100"
                   >
                     {isSecretVisible ? 'Hide Private Key' : 'Show Private Key'}
                     <span className="absolute left-0 top-full mt-1 hidden w-max rounded bg-gray-700 px-3 py-1 text-sm text-white group-hover:block">
@@ -192,11 +185,8 @@ export function KeyDialog() {
               </div>
 
               <div className="relative mt-10">
-                <p className="inline bg-gradient-to-r from-indigo-200 via-sky-400 to-indigo-200 bg-clip-text font-display text-2xl tracking-tight text-transparent md:text-4xl">
+                <p className="inline text-teal-600 dark:text-white bg-clip-text font-display text-2xl tracking-tight md:text-4xl">
                   I have saved my keys, what next?
-                </p>
-                <p className="mt-3 tracking-tight text-slate-400 sm:text-2xl md:text-2xl">
-                  Get a @nostr.com Nostr address (your-name@nostr.com):
                 </p>
                 <div className="relative z-10 flex flex-col items-start space-y-4 pt-5 md:flex-row md:items-center md:space-y-0">
                   <div className="relative flex flex-col sm:w-1/4 lg:w-2/5 lg:max-w-[34vw]">
@@ -206,7 +196,7 @@ export function KeyDialog() {
                     type="button"
                     button
                     onClick={handleScroll}
-                    className="rounded-full py-5 text-lg  font-bold text-sky-300 transition-colors duration-200 hover:border-sky-400 hover:bg-transparent hover:text-sky-400 md:ml-4 md:text-2xl"
+                    className="rounded-full py-5 text-lg font-bold text-teal-600 hover:text-teal-500 dark:text-white dark:hover:text-teal-100 transition-colors duration-200 hover:border-sky-400 hover:bg-transparent md:ml-4 md:text-2xl"
                   >
                     Skip and checkout Nostr apps
                   </button>
@@ -217,7 +207,7 @@ export function KeyDialog() {
                 <button
                   type="button"
                   onClick={closeDialog}
-                  className="absolute right-4 top-4 flex items-center justify-center rounded-full text-lg font-bold text-sky-300 transition-colors duration-200 hover:border-sky-400 hover:bg-transparent hover:text-sky-400 md:text-2xl"
+                  className="absolute right-1 top-1 flex items-center justify-center rounded-full text-lg font-bold text-teal-700 transition-colors duration-200 hover:border-teal-500 hover:bg-transparent hover:text-teal-500 md:text-2xl"
                   title="Close"
                 >
                   <span className="material-icons">close</span>
