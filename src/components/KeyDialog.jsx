@@ -91,16 +91,16 @@ export function KeyDialog() {
       {/* Dialog Box */}
       {isDialogOpen && (
         <div
-  className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 text-left p-4 overflow-y-auto"
-  onClick={closeDialog}
->
-  <div
-    className="w-full max-w-4xl rounded-lg p-6 shadow-lg bg-slate-100 dark:bg-[rgb(32,34,36)]"
-    onClick={(e) => e.stopPropagation()}
-  >
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 text-left p-4 overflow-y-auto"
+          onClick={closeDialog}
+        >
+          <div
+            className="w-full max-w-4xl rounded-lg p-6 shadow-lg bg-slate-100 dark:bg-[rgb(32,34,36)]"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="relative">
               <p className="inline text-teal-600 dark:text-white bg-clip-text font-display text-3xl tracking-tight md:text-5xl">
-                Welcome to nostr!
+                Welcome to Nostr!
               </p>
               {/* Display Public Key */}
               <div className="mt-4 flex flex-col items-start space-y-4">

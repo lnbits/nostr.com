@@ -35,19 +35,19 @@ function Header({ navigation }) {
         <div className="relative flex flex-grow basis-0 items-center">
           <Link href="/" aria-label="Home page" className="flex items-center">
             <Image src={nostrLogo} alt="Nostr Logo" width={32} height={32} className="mr-2" />
-            <span className="flex font-display text-2xl font-bold text-white md:text-3xl">nostr</span>
+            <span className="flex font-display text-2xl font-bold text-white md:text-3xl">Nostr</span>
           </Link>
         </div>
       </div>
       <div className="relative flex flex-auto basis-0 items-center justify-end gap-2 sm:gap-4 md:flex-grow">
         <div className="relative z-10 mr-3">
           <button
-                    type="button"
-                    className="py-2 px-4 bg-white hover:bg-teal-100 text-teal-900 dark:bg-white dark:hover:bg-teal-100 dark:text-teal-900"
-                    onClick={() => window.open('https://my.nostr.com/login', '_blank')}
-                  >
-                    Account
-                  </button>
+            type="button"
+            className="py-2 px-4 bg-white hover:bg-teal-100 text-teal-900 dark:bg-white dark:hover:bg-teal-100 dark:text-teal-900"
+            onClick={() => window.open('https://my.nostr.com/login', '_blank')}
+          >
+            Account
+          </button>
           <Button
             className="ml-3"
             href="https://shop.lnbits.com/product-category/nostr"

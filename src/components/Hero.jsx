@@ -63,7 +63,7 @@ export function Hero() {
 
             <div className="text-center relative">
               <p className="bg-clip-text font-display text-4xl text-teal-600 dark:text-white md:text-5xl">
-                nostr = freedom
+                Nostr = Freedom
               </p>
               <p className="pt-7 text-xl tracking-tight text-slate-400 md:text-2xl">
                 YOU control your identity and data NOT the corporate platform or government.
@@ -83,7 +83,7 @@ export function Hero() {
         <div className="sm:mt-16 relative flex h-3/4 items-center justify-center z-8">
           <div className="relative z-8 flex w-full max-w-7xl px-6 md:flex-row flex-col items-center justify-between">
             <p className="bg-clip-text font-display text-4xl text-teal-600 dark:text-white md:text-4xl">
-              A universe of apps all working together.
+              A Universe of Apps all working together.
             </p>
           </div>
         </div>
@@ -277,10 +277,10 @@ export function Hero() {
 
             <div className="text-center relative">
               <p className="bg-clip-text font-display text-4xl text-teal-600 dark:text-white md:text-5xl">
-                Get your nostr.com nostr identifier!
+                Get your nostr.com Nostr identifier!
               </p>
               <p className="pt-5 text-xl tracking-tight text-slate-400 md:text-2xl">
-                Buy and sell nostr identifiers, and much more...
+                Buy and sell Nostr identifiers, and much more...
               </p>
               <div className="relative pt-10 flex flex-wrap justify-center gap-4">
                 <KeyDialog />
