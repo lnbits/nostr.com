@@ -1,11 +1,11 @@
-import {useState} from 'react'
-import {generateSecretKey, getPublicKey} from 'nostr-tools/pure'
-import {NIP05NameSearchDialog} from '@/components/NIP05NameSearchDialog'
+import { useState } from 'react'
+import { generateSecretKey, getPublicKey } from 'nostr-tools/pure'
+import { NIP05NameSearchDialog } from '@/components/NIP05NameSearchDialog'
 import * as nip19 from 'nostr-tools/nip19'
 
 export function KeyDialog() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [keys, setKeys] = useState({sk: null, pk: null})
+  const [keys, setKeys] = useState({ sk: null, pk: null })
   const [isSecretVisible, setIsSecretVisible] = useState(false)
   const [notification, setNotification] = useState(null) // Declare notification state
 
@@ -13,7 +13,7 @@ export function KeyDialog() {
     const target = document.getElementById('get-nostr')
     if (target) {
       setIsDialogOpen(false)
-      target.scrollIntoView({behavior: 'smooth'})
+      target.scrollIntoView({ behavior: 'smooth' })
     } else {
       console.error('Element with id "hero-section" not found.')
     }
@@ -26,7 +26,7 @@ export function KeyDialog() {
       const pk = getPublicKey(sk) // `pk` is a hex string
       let nsec = nip19.nsecEncode(sk)
       let npub = nip19.npubEncode(pk)
-      setKeys({nsec, npub})
+      setKeys({ nsec, npub })
       setIsDialogOpen(true)
       setNotification(null)
     }, 1000)
@@ -62,7 +62,7 @@ export function KeyDialog() {
           'Your private key (nsec). Keep it PRIVATE:\n',
           keys.nsec
         ],
-        {type: 'text/plain'}
+        { type: 'text/plain' }
       )
       const link = document.createElement('a')
       link.href = URL.createObjectURL(blob)
@@ -79,7 +79,7 @@ export function KeyDialog() {
   return (
     <div className="flex flex-col items-center justify-center">
       {/* Button */}
-      
+
       <button
         type="button"
         className="rounded-full dark:bg-white bg-teal-600 hover:bg-teal-500 px-10 py-5 text-lg font-bold dark:text-teal-700 text-white dark:hover:bg-teal-100 md:text-2xl"
@@ -206,15 +206,15 @@ export function KeyDialog() {
                   <button
                     type="button"
                     button
-                    onClick={handleScroll}                    
+                    onClick={handleScroll}
                     className="rounded-full py-5 text-lg font-bold text-teal-600 hover:text-teal-500 dark:text-white dark:hover:text-teal-100 transition-colors duration-200 hover:border-sky-400 hover:bg-transparent md:ml-4 md:text-2xl"
                   >
                     Skip and checkout Nostr apps
                   </button>
                 </div>
                 <p className="text-xs tracking-tight text-slate-400">
-                ☝️  Optional commercial nostr.com service.
-              </p>
+                  ☝️  Optional commercial nostr.com service.
+                </p>
               </div>
 
               <div className="mt-4">
