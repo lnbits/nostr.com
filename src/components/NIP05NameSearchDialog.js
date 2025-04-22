@@ -46,7 +46,7 @@ export function NIP05NameSearchDialog({query = ''}) {
       />
       <button
         type="submit"
-        className="ml-2 h-10 w-32 rounded-full bg-sky-300 px-3 py-1 text-sm text-slate-900 hover:bg-sky-200"
+        className="ml-2 h-10 w-32 rounded-full bg-teal-600 px-3 py-1 text-sm text-white hover:bg-teal-500"
         style={{
           fontSize: '1rem'
         }}

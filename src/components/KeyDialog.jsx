@@ -79,6 +79,7 @@ export function KeyDialog() {
   return (
     <div className="flex flex-col items-center justify-center">
       {/* Button */}
+      
       <button
         type="button"
         className="rounded-full dark:bg-white bg-teal-600 hover:bg-teal-500 px-10 py-5 text-lg font-bold dark:text-teal-700 text-white dark:hover:bg-teal-100 md:text-2xl"
@@ -90,15 +91,15 @@ export function KeyDialog() {
       {/* Dialog Box */}
       {isDialogOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50  text-left"
           onClick={closeDialog} // Close the dialog when the overlay is clicked
         >
           <div
-            className="w-full max-w-4xl rounded-lg p-6 shadow-lg dark:bg-slate-900"
+            className="w-full max-w-4xl rounded-lg p-6 shadow-lg bg-slate-100 dark:bg-[rgb(32,34,36)]"
             onClick={e => e.stopPropagation()} // Prevent closing when clicking inside the dialog
           >
             <div className="relative">
-              <p className="inline bg-gradient-to-r from-indigo-200 via-sky-400 to-indigo-200 bg-clip-text font-display text-3xl tracking-tight text-transparent md:text-5xl">
+              <p className="inline text-teal-600 dark:text-white bg-clip-text font-display text-3xl tracking-tight md:text-5xl">
                 Welcome to nostr!
               </p>
               <p className="mt-3 tracking-tight text-slate-400 sm:text-2xl md:text-2xl">
@@ -114,7 +115,7 @@ export function KeyDialog() {
                   <div className="flex items-center space-x-2">
                     <button
                       type="button"
-                      className="group relative rounded bg-sky-300 px-2 py-1 text-xs font-bold text-slate-900 hover:bg-sky-200"
+                      className="group relative rounded bg-sky-300 px-2 py-1 text-xs font-bold dark:bg-white bg-teal-600 hover:bg-teal-500 dark:text-teal-700 text-white dark:hover:bg-teal-100"
                       onClick={copyNpubToClipboard}
                     >
                       <span className="material-icons text-xs">
@@ -143,7 +144,7 @@ export function KeyDialog() {
                   <div className="flex items-center space-x-2">
                     <button
                       type="button"
-                      className="group relative rounded bg-sky-300 px-2 py-1 text-xs font-bold text-slate-900 hover:bg-sky-200"
+                      className="group relative rounded bg-sky-300 px-2 py-1 text-xs font-bold dark:bg-white bg-teal-600 hover:bg-teal-500 dark:text-teal-700 text-white dark:hover:bg-teal-100"
                       onClick={copyNsecToClipboard}
                     >
                       <span className="material-icons text-xs">
@@ -170,7 +171,7 @@ export function KeyDialog() {
                   {/* Download Button */}
                   <button
                     type="button"
-                    className="group relative rounded bg-sky-300 px-3 py-2 font-bold text-slate-900 hover:bg-sky-200"
+                    className="group relative rounded dark:bg-white bg-teal-600 hover:bg-teal-500  text-lg dark:text-teal-700 text-white dark:hover:bg-teal-100"
                     onClick={downloadKey}
                   >
                     Download keys
@@ -181,7 +182,7 @@ export function KeyDialog() {
                   <button
                     type="button"
                     onClick={() => setIsSecretVisible(!isSecretVisible)}
-                    className="group relative rounded bg-sky-300 px-3 py-2 font-bold text-slate-900 hover:bg-sky-200"
+                    className="group relative rounded dark:bg-white bg-teal-600 hover:bg-teal-500  text-lg dark:text-teal-700 text-white dark:hover:bg-teal-100"
                   >
                     {isSecretVisible ? 'Hide Private Key' : 'Show Private Key'}
                     <span className="absolute left-0 top-full mt-1 hidden w-max rounded bg-gray-700 px-3 py-1 text-sm text-white group-hover:block">
@@ -192,7 +193,7 @@ export function KeyDialog() {
               </div>
 
               <div className="relative mt-10">
-                <p className="inline bg-gradient-to-r from-indigo-200 via-sky-400 to-indigo-200 bg-clip-text font-display text-2xl tracking-tight text-transparent md:text-4xl">
+                <p className="inline text-teal-600 dark:text-white bg-clip-text font-display text-2xl tracking-tight md:text-4xl">
                   I have saved my keys, what next?
                 </p>
                 <p className="mt-3 tracking-tight text-slate-400 sm:text-2xl md:text-2xl">
@@ -205,19 +206,22 @@ export function KeyDialog() {
                   <button
                     type="button"
                     button
-                    onClick={handleScroll}
-                    className="rounded-full py-5 text-lg  font-bold text-sky-300 transition-colors duration-200 hover:border-sky-400 hover:bg-transparent hover:text-sky-400 md:ml-4 md:text-2xl"
+                    onClick={handleScroll}                    
+                    className="rounded-full py-5 text-lg font-bold text-teal-600 hover:text-teal-500 dark:text-white dark:hover:text-teal-100 transition-colors duration-200 hover:border-sky-400 hover:bg-transparent md:ml-4 md:text-2xl"
                   >
                     Skip and checkout Nostr apps
                   </button>
                 </div>
+                <p className="text-xs tracking-tight text-slate-400">
+                ☝️  Optional commercial nostr.com service.
+              </p>
               </div>
 
               <div className="mt-4">
                 <button
                   type="button"
                   onClick={closeDialog}
-                  className="absolute right-4 top-4 flex items-center justify-center rounded-full text-lg font-bold text-sky-300 transition-colors duration-200 hover:border-sky-400 hover:bg-transparent hover:text-sky-400 md:text-2xl"
+                  className="absolute right-4 top-4 flex items-center justify-center rounded-full text-lg font-bold text-teal-700 transition-colors duration-200 hover:border-teal-500 hover:bg-transparent hover:text-teal-500 md:text-2xl"
                   title="Close"
                 >
                   <span className="material-icons">close</span>

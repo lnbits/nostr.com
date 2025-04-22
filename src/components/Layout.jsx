@@ -6,8 +6,6 @@ import Image from 'next/image'
 
 import { Button } from '@/components/Button'
 import { Hero } from '@/components/Hero'
-import { MobileNavigation } from '@/components/MobileNavigation'
-import { Navigation } from '@/components/Navigation'
 import { ThemeSelector } from '@/components/ThemeSelector'
 import nostrLogo from '/src/images/nostr.png'
 
@@ -26,16 +24,14 @@ function Header({ navigation }) {
   return (
     <header
       className={clsx(
-        'sticky top-0 z-50 flex flex-wrap items-center justify-between bg-teal-600 dark:bg-teal-600 px-4 py-5 shadow-md shadow-slate-900/5 transition duration-500 dark:shadow-none sm:px-6 lg:px-8',
+        'sticky top-0 z-50 flex flex-wrap items-center justify-between bg-teal-600 dark:bg-teal-700 px-4 py-5 shadow-md shadow-slate-900/5 transition duration-500 dark:shadow-none sm:px-6 lg:px-8',
         isScrolled
-          ? 'dark:bg-teal-600/95 dark:backdrop-blur dark:[@supports(backdrop-filter:blur(0))]:bg-teal-600/75'
-          : 'dark:bg-transparent'
+          ? 'bg-teal-600/95 dark:bg-teal-600/95 dark:backdrop-blur dark:[@supports(backdrop-filter:blur(0))]:bg-teal-600/75'
+          : 'dark:bg-teal-800'
       )}
     >
       <div className="relative mr-6 flex">
-        <div className="mr-6 flex lg:hidden">
-          <MobileNavigation navigation={navigation} />
-        </div>
+
         <div className="relative flex flex-grow basis-0 items-center">
           <Link href="/" aria-label="Home page" className="flex items-center">
             <Image src={nostrLogo} alt="Nostr Logo" width={32} height={32} className="mr-2" />
@@ -45,7 +41,7 @@ function Header({ navigation }) {
       </div>
       <div className="relative flex flex-auto basis-0 items-center justify-end gap-2 sm:gap-4 md:flex-grow">
         <div className="relative z-10 mr-3">
-          <Button href="https://my.nostr.com/login">Account</Button>
+          <Button className="bg-white hover:bg-teal-100 text-teal-900" href="https://my.nostr.com/login">Account</Button>
           <Button
             className="ml-3"
             href="https://shop.lnbits.com/product-category/nostr"

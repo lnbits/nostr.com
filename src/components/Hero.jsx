@@ -4,7 +4,6 @@ import { Button } from '@/components/Button'
 import { KeyDialog } from '@/components/KeyDialog'
 import Animation from './Animation'
 
-import hwNsecBunker from '/src/images/nsecbunker.png'
 import FDroid from '/src/images/f_droid_nostr.png'
 import Capybara from '/src/images/capybara.png'
 import AndroidLink from '/src/images/nostr_android_google_play.png'
@@ -12,7 +11,6 @@ import AppleLink from '/src/images/nostr_app_store.png'
 import WebBrowser from '/src/images/nostr_web_browser.png'
 import NostrApps from '/src/images/nostr_apps.png'
 import NostrNetApps from '/src/images/nostr_net_apps.png'
-import nostrMerch from '/src/images/nostrmerch.png'
 
 export function Hero() {
   return (
@@ -50,8 +48,8 @@ export function Hero() {
                 <Image
                   src={Capybara}
                   alt="F-Droid Download Link"
-                  width={200}
-                  className="relative flex-1 sm:max-w-[200px] md:max-w-[150px] lg:max-w-[200px]"
+                  className="w-full max-w-[150px] sm:max-w-[180px] md:max-w-[150px] lg:max-w-[200px]"
+                  priority
                 />
               </div>
             </div>
@@ -67,18 +65,15 @@ export function Hero() {
               <p className="bg-clip-text font-display text-4xl text-teal-600 dark:text-white md:text-5xl">
                 nostr = freedom
               </p>
-              <p className="pt-5 text-xl tracking-tight text-slate-400 md:text-2xl">
-                In nostr YOU control your identity not the corporate platform or government.
+              <p className="pt-7 text-xl tracking-tight text-slate-400 md:text-2xl">
+                YOU control your identity and data NOT the corporate platform or government.
               </p>
 
               <div className="pt-10 flex flex-wrap justify-center gap-4">
-                <Button className="md:text-xl" href="https://github.com/nostr-protocol/nostr" target="_blank">GitHub</Button>
-                <Button className="md:text-xl ml-10" href="https://nostr.org" target="_blank">Nostr.org</Button>
+                <Button className="md:text-xl font-bold" href="https://github.com/nostr-protocol/nostr" target="_blank">GitHub</Button>
+                <Button id="get-nostr" className="md:text-xl ml-10 font-bold" href="https://nostr.org" target="_blank">Nostr.org</Button>
               </div>
 
-              <p id="get-nostr" className="mt-3 text-xs tracking-tight text-slate-400">
-                Nostr is a protocol; explore the GitHub or visit nostr.org to learn more. Nostr.com has commercial features.
-              </p>
             </div>
           </div>
         </div>
@@ -145,9 +140,6 @@ export function Hero() {
           </div>
         </div>
 
-
-
-
         {/* Section: App Links */}
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-y-5 pt-10">
           <a href="https://play.google.com/store/search?q=nostr&c=apps" target="_blank" rel="noopener noreferrer">
@@ -170,7 +162,7 @@ export function Hero() {
           </a>
         </div>
 
-        <section className="bg-slate-100 dark:bg-teal-700 text-white dark:bg-teal-700 relative z-10">
+        <section className="bg-slate-100 dark:bg-teal-700 text-white dark:bg-teal-700 relative z-8">
           {/* Top wave */}
           <div className="w-full overflow-hidden leading-none">
             <svg
@@ -187,14 +179,14 @@ export function Hero() {
           </div>
 
           {/* Section Content */}
-          <div className="px-6 py-16 max-w-7xl mx-auto">
+          <div className="px-6 pt-10 max-w-7xl mx-auto">
             <div className="text-slate-900 dark:text-white grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
               {/* Column 1 */}
               <div>
                 <h3 className="text-xl font-semibold mb-2">Public-key cryptography</h3>
                 <p className="text-base opacity-90">
-                  There is only one way to give users control over their identity and that is with public-key cryptography.
-                  Nostr prepares its users for a world where they own their identity and data.
+                  Nostr uses public-key cyrptography. Users can easily verify the data you sent is yours and has not been altered.
+                  You can also encrypt messages to send privately.
                 </p>
               </div>
 
@@ -203,20 +195,24 @@ export function Hero() {
                 <h3 className="text-xl font-semibold mb-2">Relays</h3>
                 <p className="text-base opacity-90">
                   Data is shared between users via relays. Users can choose which relays to use and can run their own.
-                  This means that no single entity, corporation or government can control the flow of information.
+                  No single entity, corporation or government can control the flow of information.
                 </p>
               </div>
 
               {/* Column 3 */}
               <div>
-                <h3 className="text-xl font-semibold mb-2">Websockets</h3>
+                <h3 className="text-xl font-semibold mb-2">Nostr Improvement Possibilities (NIPs)</h3>
                 <p className="text-base opacity-90">
-                  Nostr uses websockets to send and receive messages. This means that users can interact with each other in real-time.
-                  Websockets are a standard technology used by many web applications.
+                  Nostr is a protocol, and uses shared standards called NIPs, which allow different apps to share data seamlessly.
+                  Nostr is permissionless so ANYONE can create an application.
                 </p>
               </div>
             </div>
           </div>
+          <div className="relative center">
+            <Animation />
+          </div>
+
 
           {/* Bottom wave */}
           <div className="w-full overflow-hidden leading-none">
@@ -275,7 +271,7 @@ export function Hero() {
 
 
         {/* Section: Hero + Cloud Background */}
-        <div className="relative z-10 pb-20 pt-20 mt-40 dark:bg-teal-700">
+        <div className="relative z-8 pb-20 pt-20 mt-40 dark:bg-teal-700">
           {/* Clouds */}
           <div className="relative max-w-7xl mx-auto grid grid-cols-1 items-center gap-x-8 gap-y-16 xl:gap-x-16 xl:px-12">
 
@@ -286,25 +282,25 @@ export function Hero() {
               <p className="pt-5 text-xl tracking-tight text-slate-400 md:text-2xl">
                 Buy and sell nostr identifiers, and much more...
               </p>
-              <div className="pt-10 flex flex-wrap justify-center gap-4">
-              <KeyDialog />
-              <div className="flex flex-col items-center justify-center">
-              <button
-              type="button"
-        className="rounded-full dark:bg-white bg-teal-600 hover:bg-teal-500 px-10 py-5 text-lg font-bold dark:text-teal-700 text-white dark:hover:bg-teal-100 md:text-2xl"
-        onClick={() => window.open('https://my.nostr.com', '_blank')}
-      >
-        Go to my.nostr.com
-      </button>
-      </div>
+              <div className="relative pt-10 flex flex-wrap justify-center gap-4">
+                <KeyDialog />
+                <div className="flex flex-col items-center justify-center">
+                  <button
+                    type="button"
+                    className="rounded-full dark:bg-white bg-teal-600 hover:bg-teal-500 px-10 py-5 text-lg font-bold dark:text-teal-700 text-white dark:hover:bg-teal-100 md:text-2xl"
+                    onClick={() => window.open('https://my.nostr.com', '_blank')}
+                  >
+                    Go to my.nostr.com
+                  </button>
+                </div>
               </div>
 
             </div>
           </div>
         </div>
       </div>
-      <p id="get-nostr" className="mx-auto text-center pb-5 text-xs tracking-tight text-slate-400">
-      When captchas and passwords become too difficult, humanity will empower itself with public-key cryptography — a byproduct will be widespread free speech.
+      <p className="mx-auto text-center pb-5 text-xs tracking-tight text-slate-400">
+        When captchas and passwords become too difficult, humanity will empower itself with public-key cryptography — a byproduct will be widespread free speech.
       </p>
     </div>
   )
