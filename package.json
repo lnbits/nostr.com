@@ -6,7 +6,6 @@
   },
   "dependencies": {
     "@headlessui/react": "^1.7.9",
-    "@markdoc/markdoc": "0.2.2",
     "@markdoc/next.js": "0.2.1",
     "@nostr/tools": "npm:@jsr/nostr__tools@^2.10.3",
     "@sindresorhus/slugify": "^2.2.0",

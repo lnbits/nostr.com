@@ -11,10 +11,39 @@ import AppleLink from '/src/images/nostr_app_store.png'
 import WebBrowser from '/src/images/nostr_web_browser.png'
 import NostrApps from '/src/images/nostr_apps.png'
 import NostrNetApps from '/src/images/nostr_net_apps.png'
+import { useEffect } from 'react'
+import { useRouter } from 'next/router'
 
 export function Hero() {
+  const router = useRouter()
+
+  useEffect(() => {
+    const pathToId = {
+      '/clients': 'clients',
+      '/get-started': 'get-started',
+      '/relays': 'nostr',
+      '/nips': 'nostr',
+      '/keys': 'nostr',
+      '/protocol': 'nostr',
+      '/apps': 'clients',
+    }
+    const targetId = pathToId[router.pathname]
+    if (targetId) {
+      let attempts = 0
+      const scrollToTarget = () => {
+        const el = document.getElementById(targetId)
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth' })
+        } else if (attempts < 10) {
+          attempts++
+          requestAnimationFrame(scrollToTarget)
+        }
+      }
+      scrollToTarget()
+    }
+  }, [router.pathname])
   return (
-    <div className="overflow-hidden dark:-mb-32 dark:mt-[-4.5rem] dark:pt-[4.5rem] dark:lg:mt-[-4.75rem] dark:lg:pt-[4.75rem]">
+    <div id="get-started" className="overflow-hidden dark:-mb-32 dark:mt-[-4.5rem] dark:pt-[4.5rem] dark:lg:mt-[-4.75rem] dark:lg:pt-[4.75rem]">
 
       <div className="pb-5 sm:px-2 lg:relative lg:px-0">
 
@@ -79,7 +108,7 @@ export function Hero() {
         </div>
 
         {/* Section: App Universe Text */}
-
+        <div id="clients"></div>
         <div className="sm:mt-16 relative flex h-3/4 items-center justify-center z-8">
           <div className="relative z-8 flex w-full max-w-7xl px-6 md:flex-row flex-col items-center justify-between">
             <p className="bg-clip-text font-display text-4xl text-teal-600 dark:text-white md:text-4xl">
@@ -179,7 +208,7 @@ export function Hero() {
           </div>
 
           {/* Section Content */}
-          <div className="text-center relative">
+          <div id="nostr" className="text-center relative">
             <p className="bg-clip-text font-display text-4xl text-teal-600 dark:text-white md:text-5xl">
               <span className="bg-gray-200 dark:bg-gray-700 px-1 rounded font-mono text-black dark:text-white">N</span>otes and <span className="bg-gray-200 dark:bg-gray-700 px-1 rounded font-mono text-black dark:text-white">O</span>ther <span className="bg-gray-200 dark:bg-gray-700 px-1 rounded font-mono text-black dark:text-white">S</span>tuff <span className="bg-gray-200 dark:bg-gray-700 px-1 rounded font-mono text-black dark:text-white">T</span>ransmitted by <span className="bg-gray-200 dark:bg-gray-700 px-1 rounded font-mono text-black dark:text-white">R</span>elays
             </p>

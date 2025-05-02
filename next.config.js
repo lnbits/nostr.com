@@ -1,15 +1,19 @@
-const withMarkdoc = require('@markdoc/next.js')
-
-module.exports = withMarkdoc({
-  mode: 'static'
-})({
+module.exports = {
   reactStrictMode: true,
-  pageExtensions: ['js', 'jsx', 'md'],
+  pageExtensions: ['js', 'jsx'],
   experimental: {
-    scrollRestoration: true
+    scrollRestoration: true,
   },
   images: {
-    unoptimized: true
+    unoptimized: true,
   },
-  output: 'export'
-})
+  output: 'export',
+  async exportPathMap() {
+    return {
+      '/': { page: '/' },
+      '/clients': { page: '/clients' },
+      '/get-started': { page: '/get-started' },
+      '/relays': { page: '/relays' },
+    }
+  },
+}

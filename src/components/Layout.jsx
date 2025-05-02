@@ -1,11 +1,9 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/router'
 import clsx from 'clsx'
 import Image from 'next/image'
 
 import { Button } from '@/components/Button'
-import { Hero } from '@/components/Hero'
 import { ThemeSelector } from '@/components/ThemeSelector'
 import nostrLogo from '/src/images/nostr.png'
 
@@ -64,13 +62,10 @@ function Header({ navigation }) {
 }
 
 export function Layout({ children }) {
-  const router = useRouter()
-  const isHomePage = router.pathname === '/'
-
   return (
     <>
       <Header navigation={navigation} />
-      {isHomePage && <Hero />}
+      {children}
     </>
   )
 }
