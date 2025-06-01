@@ -1,0 +1,874 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nostr - Notes and Other Stuff Transmitted by Relays</title>
+    <link href="/base.css" rel="stylesheet" />
+  </head>
+  <body class="bg-background-light text-primarytext font-sans">
+    <!-- Header -->
+    <header class="border-b">
+      <div class="max-w-7xl mx-auto flex justify-between items-center px-4 py-4">
+        <div class="text-xl font-bold tracking-tight">
+          <span class="text-primarytext">nostr</span>
+        </div>
+        <nav class="hidden md:flex gap-6 text-sm text-primarytext">
+          <a href="https://nostrapps.com/" target="_blank">Apps</a>
+          <a href="https://nostr.band" target="_blank">Explore</a>
+          <a href="https://github.com/nostr-protocol/nips" target="_blank">NIPs</a>
+        </nav>
+      </div>
+    </header>
+
+    <!-- Hero -->
+    <section class="text-center py-20 px-6">
+      <h1 class="mt-4 text-5xl md:text-7xl font-bold max-w-3xl mx-auto mb-6 scroll-reveal-slow">
+        An open protocol with a chance of working
+      </h1>
+      <p class="text-base md:text-lg max-w-2xl mx-auto text-primarytextlighter mb-8 scroll-reveal">
+        Nostr doesn't have owners or organizations that control it — it's just a simple standard
+        that allows a scalable architecture of clients and servers to interact. Combining old
+        reliable technology with a new a many-to-many approach is the main innovation.
+      </p>
+      <div class="flex flex-col sm:flex-row justify-center gap-4 scroll-reveal">
+        <a
+          href="https://nstart.me"
+          target="_blank"
+          class="inline-flex items-center bg-secondary text-white font-medium px-6 py-2.5 rounded-full text-sm transition hover:opacity-90"
+        >
+          Join Nostr
+          <span class="ml-1 text-lg">›</span>
+        </a>
+        <a
+          href="https://www.youtube.com/watch?v=Tbt3jL1Ms0w"
+          target="_blank"
+          class="inline-flex items-center border border-secondary text-primarytext font-medium px-6 py-2.5 rounded-full text-sm transition hover:bg-grayish"
+        >
+          Watch a presentation
+          <span class="ml-1 text-lg">›</span>
+        </a>
+      </div>
+    </section>
+
+    <!-- Screenshots -->
+    <section
+      class="px-4 mb-20 px-16 sm:px-4 h-150 overflow max-w-xl sm:max-w-3xl md:max-w-5xl mx-auto relative scroll-reveal-stagger"
+    >
+      <!-- Terminal Mock -->
+      <div
+        class="hidden sm:block max-w-3xl absolute left-5 bottom-5 bg-primarytextlighter rounded-xl border shadow-lg overflow-hidden transition duration-500 opacity-70 hover:opacity-100 hover:z-20"
+      >
+        <div class="text-sm font-mono text-gray-200 p-4 break-all leading-snug">
+          <span class="font-semibold text-green-700">~</span
+          ><span class="font-semibold">&gt;</span> <span class="text-teal-500">nak</span>
+          <span class="text-purple-300"
+            >event --sec 7465 -c
+            <span class="text-yellow-500">'this is going to work'</span> nostr.wine relay.damus.io
+            nostr.mom</span
+          ><br />
+          <span class="font-semibold text-green-400">nostr.wine</span>... ok.<br />
+          <span class="font-semibold text-green-400">relay.damus.io</span>... ok.<br />
+          <span class="font-semibold text-green-400">nostr.mom</span>... ok.<br />
+          {"kind":1,"id":"b9fead6eef87d8400cbc1a5621400b360438affb9760a6a043cc0bddea21dab6","pubkey":"82341f882b6eabcd2ba7f1ef90aad961cf074af15b9ef44a09f9d2a8fbfbe6a2","created_at":1676161639,"tags":[],"content":"this
+          is going to
+          work","sig":"76d19889a803236165a290fa8f3cf5365af8977ee1e002afcfd37063d1355fc755d0293d27ba0ec1c2468acfaf95b7e950e57df275bb32d7a4a3136f8862d2b7"}<br />
+          publishing to <span class="font-semibold text-green-400">relay.damus.io</span>...
+          success.<br />
+          publishing to <span class="font-semibold text-red-400">nostr.wine</span>... msg:
+          restricted: not an active paid member<br />
+          publishing to <span class="font-semibold text-green-400">nostr.mom</span>... success.<br />
+        </div>
+      </div>
+
+      <!-- Screenshot -->
+      <video
+        autoplay
+        loop
+        class="hidden sm:block max-w-xl md:max-w-3xl absolute left-0 top-5 rounded-xl shadow-lg transition duration-500 opacity-90 hover:opacity-100 hover:z-20"
+        src="/screenshots/alphaama.webm"
+      ></video>
+
+      <!-- Screenshot -->
+      <img
+        class="hidden sm:block max-w-2xl md:max-w-3xl absolute left-10 top-25 rounded-xl shadow-lg transition duration-500 opacity-90 hover:opacity-100 hover:z-20"
+        src="/screenshots/coracle.png"
+      />
+
+      <!-- Screenshot -->
+      <img
+        class="hidden sm:block max-w-xl md:max-w-2xl absolute left-20 top-45 rounded-xl shadow-lg transition duration-500 opacity-90 hover:opacity-100 hover:z-20"
+        src="/screenshots/jumble.png"
+      />
+
+      <!-- Screenshot -->
+      <img
+        class="h-120 absolute right-0 top-0 rounded-xl transition duration-500 opacity-90 hover:opacity-100 hover:z-20"
+        src="/screenshots/amethyst.png"
+      />
+
+      <!-- Screenshot -->
+      <img
+        class="h-120 absolute right-20 top-10 rounded-xl transition duration-500 opacity-90 hover:opacity-100 hover:z-20"
+        src="/screenshots/yakihonne2.png"
+      />
+
+      <!-- Screenshot -->
+      <img
+        class="h-120 absolute right-40 top-20 rounded-xl transition duration-500 opacity-90 hover:opacity-100 hover:z-20"
+        src="/screenshots/nostur.png"
+      />
+    </section>
+
+    <!-- Integration Subtitle -->
+    <section class="mx-auto my-4 text-center mb-16 max-w-2xl scroll-reveal">
+      <span
+        class="inline-flex items-center bg-grayish text-primarytextlighter text-xs font-medium px-3 py-1 rounded-full mb-3"
+      >
+        All Kinds of Stuff
+      </span>
+      <h2 class="text-2xl md:text-3xl font-bold mb-2">
+        Like the internet itself: open and chaotic
+      </h2>
+      <p class="text-primarytextlighter text-base">
+        Nostr embraces the chaos of the early internet—multiple kinds of data, diverse forms of user
+        interaction and different clients providing their own perspectives over the same underlying
+        information.
+      </p>
+    </section>
+
+    <!-- First Feature Card -->
+    <section class="px-6 max-w-5xl mx-auto mb-24 scroll-reveal">
+      <div class="flex flex-col md:flex-row justify-between gap-8 items-center">
+        <div class="flex items-start gap-3">
+          <div class="w-8 h-8 bg-grayish rounded-full flex items-center justify-center">
+            <span class="text-xs font-medium">N</span>
+          </div>
+          <div>
+            <h3 class="font-semibold text-lg mb-1">A new paradigm for communication</h3>
+            <p class="text-sm text-primarytextlighter max-w-md">
+              In Nostr, every message carries a digital signature that proves its authorship and
+              authenticity without any need for any third-party authority or external checks. It's
+              this foundation of trust that enables the decentralized transport and broadcasting of
+              information.
+            </p>
+          </div>
+        </div>
+        <a
+          href="https://archive.is/fBBOl"
+          target="_blank"
+          class="inline-flex items-center bg-secondary text-white font-medium px-4 py-2 rounded-full text-sm transition hover:opacity-90"
+        >
+          Read a short, human-friendly explanation
+          <span class="ml-1 text-lg">›</span>
+        </a>
+      </div>
+    </section>
+
+    <!-- Features Grid -->
+    <section class="px-6 max-w-6xl mx-auto mb-24">
+      <div class="grid md:grid-cols-3 gap-10 text-center">
+        <div class="flex flex-col items-center scroll-reveal-stagger">
+          <img src="/robots/gmnotes.png" class="h-52 mb-4 rounded" />
+          <h3 class="font-semibold mb-2">Cryptographically signed notes</h3>
+          <p class="text-sm text-primarytextlighter">
+            Nostr's single unit of information is a cryptographically signed note, these are created
+            by users in their client software and published to one or more relays.
+          </p>
+          <!--Learn more <span class="ml-1">›</span>-->
+        </div>
+        <div class="flex flex-col items-center scroll-reveal-stagger">
+          <img src="/robots/client.jpg" class="h-52 mb-4 rounded" />
+          <h3 class="font-semibold mb-2">Smart clients as user agents</h3>
+          <p class="text-sm text-primarytextlighter">
+            Clients are smart and act as agents for the users who install them. They decide which
+            relays to connect to and when and what data to request according to the circumstance and
+            user preferences.
+          </p>
+          <a href="#" class="text-sm font-medium text-primarytext inline-flex items-center mt-2">
+            <!--Learn more <span class="ml-1">›</span>-->
+          </a>
+        </div>
+        <div class="flex flex-col items-center scroll-reveal-stagger">
+          <img src="/robots/relayflasks.png" class="h-52 mb-4 rounded" />
+          <h3 class="font-semibold mb-2">Relays as distribution centres</h3>
+          <p class="text-sm text-primarytextlighter">
+            These are the servers that notes are published to and read from. They cannot change the
+            contents of notes (that would invalidate the signature), but they can decide what to
+            store and for how long.
+          </p>
+          <a href="#" class="text-sm font-medium text-primarytext inline-flex items-center mt-2">
+            <!--Learn more <span class="ml-1">›</span>-->
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pro-censorship Section -->
+    <section class="px-6 max-w-6xl mx-auto mb-24 scroll-reveal">
+      <div class="grid md:grid-cols-2 gap-10 items-center">
+        <div>
+          <span
+            class="inline-flex items-center bg-grayish text-primarytextlighter text-xs font-medium px-3 py-1 rounded-full mb-3"
+          >
+            🛡️ Pro-censorship
+          </span>
+          <h2 class="text-2xl md:text-3xl font-bold mb-4">
+            The protocol is ownerless, relays are not
+          </h2>
+          <p class="text-primarytextlighter mb-4 text-sm">
+            Nostr doesn't subscribe to political ideals of "free speech" — it simply recognizes that
+            different people have different morals and preferences and each server, being privately
+            owned, can follow their own criteria for rejecting content as they please and users are
+            free to choose what to read and from where.
+          </p>
+          <div class="flex flex-col sm:flex-row gap-4 mb-4">
+            <a
+              href="https://njump.me/naddr1qqfxzttkd9ekjmmw94nx7u3ddehhxarjqy2hwumn8ghj7un9d3shjtnyv9kh2uewd9hj7q3qjlrs53pkdfjnts29kveljul2sm0actt6n8dxrrzqcersttvcuv3qxpqqqp65w0nuxzl#:~:text=Instead,%20relays%20should%20differentiate,%20both%20in%20terms%20of%20function%20and%20membership.%20In%20the%20future%20(and%20even%20now)%20there%20will%20be%20closed%20archival%20relays%20that%20scrape%20the%20network%20and%20provide%20a%20backup%20of%20user%20data%20for%20a%20fee;%20public-read,%20private-write%20relays%20that%20allow%20members%20to%20participate%20in%20an%20exclusive%20group%20with%20greater%20reach;%20private-read,%20private-write%20closed%20community%20relays;%20public%20&#34;town%20square&#34;%20relays,%20paid%20relays%20that%20provide%20indexes,%20full-text%20search,%20or%20content%20recommendations%20for%20the%20wider%20network%20(or%20a%20relevant%20subset%20of%20it);%20and%20relays%20that%20provide%20oracles%20for%20data%20external%20to%20nostr."
+              class="inline-flex items-center border border-secondary text-primarytext text-sm font-medium px-4 py-2 rounded-full transition hover:bg-grayish"
+              target="_blank"
+            >
+              Read about relay differentiation
+            </a>
+          </div>
+          <div class="flex flex-col sm:flex-row gap-6 text-sm">
+            <div class="text-xs">
+              <div class="text-primarytext font-semibold mb-1">
+                <div class="block text-secondary font-medium mb-2">🤝</div>
+                Freedom of association
+              </div>
+              <p class="my-2 text-xs text-primarytextlighter">
+                When the network effect is not tied to a single organization a group of users cannot
+                harm others.
+              </p>
+              <a
+                href="https://www.youtube.com/watch?v=K5oXaW1EqbE"
+                class="inline-flex items-center text-primarytext font-medium"
+                target="_blank"
+              >
+                Watch <span class="ml-1">›</span>
+              </a>
+            </div>
+            <div class="text-xs">
+              <div class="text-primarytext font-semibold mb-1">
+                <div class="block text-secondary font-medium mb-2">⚡</div>
+                Your own piece of Nostr
+              </div>
+              <p class="mb-2 text-xs text-primarytextlighter">
+                If you are a programmer or know how to run servers it is trivial to run your own
+                relay with your own rules.
+              </p>
+              <a
+                href="https://khatru.nostr.technology"
+                class="inline-flex items-center text-primarytext font-medium"
+                target="_blank"
+              >
+                Write code <span class="ml-1">›</span>
+              </a>
+            </div>
+          </div>
+        </div>
+        <img src="/robots/relayselection.png" class="mb-4" />
+      </div>
+    </section>
+
+    <!-- Subprotocols Section -->
+    <section class="px-6 max-w-6xl mx-auto mb-24 scroll-reveal">
+      <div class="grid md:grid-cols-2 gap-10 items-center">
+        <img src="/robots/feed.png" class="mb-4" />
+        <div>
+          <span
+            class="inline-flex items-center bg-grayish text-primarytext text-xs font-medium px-3 py-1 rounded-full mb-3"
+          >
+            🧠 New Ideas
+          </span>
+          <h2 class="text-2xl md:text-3xl font-bold mb-4">Exploring a new paradigm</h2>
+          <p class="text-primarytextlighter mb-4 text-sm">
+            Besides being a natural medium for a Twitter-like microblogging social network, Nostr
+            can also be used for other purposes. And not only similar things like sharing
+            <i>videos</i>, longform <i>articles</i>, <i>pictures</i> or <i>voice notes</i>. There
+            are initiatives on Nostr for the construction of sub-protocols that power
+            <b>closed groups</b>, <b>decentralized wikipedia</b>, <b>couchsurfing</b>,
+            <b>geocaching</b> or <b>web annotations</b>; as well as protocols that don't use Nostr
+            for the core data but as a coordination and discovery mechanism, such as
+            <b>decentralized code collaboration using git</b>, <b>file hosting</b>,
+            <b>torrent sharing</b> and <b>video livestreaming</b>.
+          </p>
+          <a
+            href="https://github.com/nostr-protocol/nips"
+            target="_blank"
+            class="inline-flex items-center border border-secondary text-primarytext text-sm font-medium px-4 py-2 rounded-full transition hover:bg-grayish"
+          >
+            Explore the NIPs
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Under Construction section -->
+    <section class="px-6 max-w-6xl mx-auto mb-32 scroll-reveal">
+      <div class="grid md:grid-cols-2 gap-10 items-center">
+        <div>
+          <span
+            class="inline-flex items-center bg-grayish text-primarytextlighter text-xs font-medium px-3 py-1 rounded-full mb-3"
+          >
+            🌐 Ecosystem
+          </span>
+          <h2 class="text-2xl md:text-3xl font-bold mb-4">Still under construction</h2>
+          <p class="text-primarytextlighter mb-4 text-sm">
+            Nostr is an idea with a lot of open-source software around it and a large userbase, but
+            not a finished, polished product that you can buy without stress. We're still pretty
+            much in the phase where new programmers and early adopters are needed to help us refine
+            the protocol flows and the user experience.
+          </p>
+          <div class="flex flex-col sm:flex-row gap-4 mb-4">
+            <a
+              href="https://github.com/topics/nostr?o=desc&s=updated"
+              class="inline-flex items-center border border-secondary text-primarytext text-sm font-medium px-4 py-2 rounded-full transition hover:bg-grayish"
+              target="_blank"
+            >
+              List of Nostr repositories on GitHub
+            </a>
+          </div>
+
+          <div class="grid sm:grid-cols-2 gap-6 text-sm">
+            <div class="text-xs">
+              <div class="text-primarytext font-semibold mb-1">
+                <div class="block text-secondary font-medium mb-2">📱</div>
+                Microblogging
+              </div>
+              <p class="my-2 text-xs text-primarytextlighter">
+                The so-called "outbox model" is the canonical way of implementing a
+                censorship-resistant client, but its parameters are fluid.
+              </p>
+              <a
+                href="https://mikedilger.com/gossip-model/"
+                class="inline-flex items-center text-primarytext font-medium"
+                target="_blank"
+              >
+                Read about it <span class="ml-1">›</span>
+              </a>
+            </div>
+
+            <div class="text-xs">
+              <div class="text-primarytext font-semibold mb-1">
+                <div class="block text-secondary font-medium mb-2">👥</div>
+                Relay-based groups
+              </div>
+              <p class="my-2 text-xs text-primarytextlighter">
+                NIP-29 describes a way to do closed groups for forums or chat that can be very
+                efficient by relying on a relay but are still censorship-resistant.
+              </p>
+              <a
+                href="https://njump.me/nevent1qvzqqqr4gupzp978pfzrv6n9xhq5tvenl9e74pklmskh4xw6vxxyp3j8qkke3cezqy2hwumn8ghj7un9d3shjtnyv9kh2uewd9hj7qgewaehxw309a5xyu3wvdhhyctrd3jjuum0vd5kzmp0qy88wumn8ghj7mn0wvhxcmmv9uqzqnfvr95xvapd508uayrcsk56yztcf7ry74gncr92mnslqa6hw3rxzudcv9"
+                class="inline-flex items-center text-primarytext font-medium"
+                target="_blank"
+              >
+                Read the guide <span class="ml-1">›</span>
+              </a>
+            </div>
+          </div>
+        </div>
+        <img src="/robots/underconstruction.png" class="mb-4" />
+      </div>
+    </section>
+
+    <!-- How Nostr Works -->
+    <section class="px-6 max-w-6xl mx-auto mb-24 text-center scroll-reveal">
+      <span
+        class="inline-flex items-center bg-grayish text-primarytextlighter text-xs font-medium px-3 py-1 rounded-full mb-3"
+      >
+        👆 Follow Me
+      </span>
+      <h2 class="text-2xl md:text-3xl font-bold mb-2">How Nostr works</h2>
+      <p class="text-primarytextlighter max-w-xl mx-auto text-sm mb-10">
+        Nostr enables true freedom by allowing users to stay connected to their audience even in
+        adverse scenarios.
+      </p>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
+        <!-- Item 1 -->
+        <div
+          class="border-2 shadow-lg border-secondary rounded-xl p-5 md:col-span-2 scroll-reveal-stagger"
+        >
+          <img src="/robots/sendmenotes.png" class="mb-4" />
+          <h3 class="font-semibold mb-2">User chooses their outbox relays</h3>
+          <p class="text-sm text-primarytextlighter">
+            Patricia publishes a special event announcing which servers she will use as her "outbox
+            relay" for publishing notes. She then starts sending all her posts to these chosen
+            relays, creating a predictable place where others can find her content.
+          </p>
+          <div class="text-sm text-primarytextlighter mt-2">
+            Because servers are interchangeable any will suffice.
+          </div>
+        </div>
+
+        <!-- Item 2 -->
+        <div class="border-2 shadow-lg border-secondary rounded-xl p-5 scroll-reveal-stagger">
+          <img src="/robots/shakeread.png" class="mb-4 h-70 block mx-auto" />
+          <h3 class="font-semibold mb-2">Someone starts following</h3>
+          <p class="text-sm text-primarytextlighter">
+            When Flora wants to read Patricia's posts, his client looks up her announcement and
+            connects directly to her announced outbox relays.
+          </p>
+          <p class="text-sm text-primarytextlighter mt-2">
+            This targeted approach is simple and efficient.
+          </p>
+        </div>
+
+        <!-- Item 3 -->
+        <div class="border-2 shadow-lg border-secondary rounded-xl p-5 scroll-reveal-stagger">
+          <img src="/robots/relays.png" class="mb-4 h-70 block mx-auto" />
+          <h3 class="font-semibold mb-2">Users can switch relays when needed</h3>
+          <p class="text-sm text-primarytextlighter">
+            If Patricia's current relay bans her or shuts down, she can easily switch to different
+            relays — perhaps some run by friends, a paid service, or her own server.
+          </p>
+          <p class="mt-2 text-sm text-primarytextlighter">
+            She simply publishes a new announcement and continues to post without losing her
+            audience.
+          </p>
+        </div>
+
+        <!-- Item 4 -->
+        <div class="border-2 shadow-lg border-secondary rounded-xl p-5 scroll-reveal-stagger">
+          <img src="/robots/clients.png" class="mb-4 h-70 block mx-auto" />
+          <h3 class="font-semibold mb-2">Clients track relay changes</h3>
+          <p class="text-sm text-primarytextlighter">
+            Flora's client continuously monitors for updates to Patricia's relay list.
+          </p>
+          <p class="text-sm text-primarytextlighter mt-2">
+            When she switches relays, his client eventually starts querying her new locations,
+            ensuring he never misses her posts even as the network topology changes.
+          </p>
+        </div>
+
+        <!-- Item 5 -->
+        <div class="border-2 shadow-lg border-secondary rounded-xl p-5 scroll-reveal-stagger">
+          <img src="/robots/collection.png" class="mb-4 h-70 block mx-auto" />
+          <h3 class="font-semibold mb-2">Smart clients manage everything</h3>
+          <p class="text-sm text-primarytextlighter">
+            From the publisher side to the follower side clients behave smartly, keeping a local
+            state and reacting to new information in order to ensure that the flow of information
+            continues.
+          </p>
+          <p class="mt-2 text-sm text-primarytextlighter">
+            After all, these notes are important, it would be sad to miss too many of them.
+          </p>
+        </div>
+      </div>
+
+      <div class="mt-8">
+        <a
+          href="https://how-nostr-works.pages.dev/#/outbox"
+          target="_blank"
+          class="text-sm font-medium text-primarytext inline-flex items-center"
+        >
+          See a visual interactive explanation <span class="ml-1">›</span>
+        </a>
+      </div>
+    </section>
+
+    <!-- FAQ Heading -->
+    <section class="text-center px-6 mb-16 scroll-reveal">
+      <span
+        class="inline-flex items-center bg-grayish text-primarytextlighter text-xs font-medium px-3 py-1 rounded-full mb-3"
+      >
+        ❓ FAQ
+      </span>
+      <h2 class="text-2xl md:text-3xl font-bold mb-2">I've got some questions!</h2>
+      <p class="text-primarytextlighter text-base max-w-xl mx-auto">
+        It may sound like Nostr is very good, but what about these hard issues?
+      </p>
+    </section>
+
+    <!-- FAQ Items -->
+    <section class="px-6 max-w-3xl mx-auto mb-32">
+      <div class="space-y-4 text-sm">
+        <!-- FAQ Item -->
+        <details class="border-2 shadow border-secondary rounded-xl p-4 scroll-reveal-stagger">
+          <summary class="flex justify-between w-full font-bold cursor-pointer">
+            How does Nostr handle spam and unwanted content?
+          </summary>
+          <div class="text-gray-700 leading-relaxed space-y-2 mt-2">
+            <p>
+              Nostr itself, as a protocol, does not have built-in spam filtering or moderation
+              because it is designed to be censorship-resistant and decentralized. Instead, spam
+              control is delegated to users and relay operators, creating a distributed approach to
+              content management.
+            </p>
+            <p>
+              Users can choose which relays to connect to based on their spam policies, and relays
+              can implement their own filtering rules to block or limit spammy content.
+              Additionally, users can block or ignore public keys that send spam. This decentralized
+              approach means spam management is distributed and customizable but requires active
+              participation by users and relay operators.
+            </p>
+          </div>
+        </details>
+
+        <!-- FAQ Item -->
+        <details class="border-2 shadow border-secondary rounded-xl p-4 scroll-reveal-stagger">
+          <summary class="flex justify-between w-full font-bold cursor-pointer">
+            Will Nostr scale effectively with massive user adoption?
+          </summary>
+          <div class="text-gray-700 leading-relaxed space-y-2 mt-2">
+            <p>
+              While the protocol is designed to be horizontally scalable via multiple relays, the
+              practical limits of relay network size, data synchronization, and latency under heavy
+              load remain uncertain. The distributed nature should theoretically allow for better
+              scaling than centralized platforms.
+            </p>
+            <p>
+              However, challenges include ensuring data consistency across relays, managing
+              bandwidth costs for relay operators, and maintaining performance as the network grows.
+              The success of scaling will largely depend on the development of efficient relay
+              implementations and economic incentives for operators to maintain high-quality
+              infrastructure.
+            </p>
+          </div>
+        </details>
+
+        <!-- FAQ Item -->
+        <details class="border-2 shadow border-secondary rounded-xl p-4 scroll-reveal-stagger">
+          <summary class="flex justify-between w-full font-bold cursor-pointer">
+            What protections does Nostr offer against online harassment?
+          </summary>
+          <div class="text-gray-700 leading-relaxed space-y-2 mt-2">
+            <p>
+              Since Nostr identities are just public keys without centralized control, preventing
+              harassment is challenging. There is no central authority to ban or suspend users,
+              which means traditional moderation approaches don't apply.
+            </p>
+            <p>
+              Instead, users must rely on personal blocking and muting of offending public keys.
+              Relay operators can also choose to block or filter abusive content on their servers.
+              The decentralized nature means harassment cannot be universally prevented, but users
+              can curate their own experience by selecting trusted relays and blocking harassers.
+              This model emphasizes user control but requires vigilance and community cooperation.
+            </p>
+          </div>
+        </details>
+
+        <!-- FAQ Item -->
+        <details class="border-2 shadow border-secondary rounded-xl p-4 scroll-reveal-stagger">
+          <summary class="flex justify-between w-full font-bold cursor-pointer">
+            Why not just use Mastodon?
+          </summary>
+          <div class="text-gray-700 leading-relaxed space-y-2 mt-2">
+            <p>
+              Nostr eliminates the server dependency issues that plague Mastodon's federation model.
+              In Mastodon, if your server goes down or the admin decides to shut it down, you lose
+              your identity, followers, and content. With Nostr, your identity is cryptographic and
+              portable - you can switch relays without losing anything.
+            </p>
+            <p>Additional advantages over Mastodon include:</p>
+            <ul class="list-disc list-inside space-y-1 ml-4">
+              <li>No need to choose a server or worry about server politics</li>
+              <li>Built-in micropayments and monetization through Bitcoin integration</li>
+              <li>Simpler protocol without complex federation rules</li>
+              <li>Resistance to defederation and server-level censorship</li>
+              <li>Lower barrier to entry for running infrastructure</li>
+            </ul>
+            <p>
+              Mastodon currently has better moderation tools, a more mature ecosystem, and
+              established communities. However, Nostr's architecture provides stronger guarantees
+              against censorship and platform lock-in, making it more resilient for long-term use.
+            </p>
+          </div>
+        </details>
+
+        <!-- FAQ Item -->
+        <details class="border-2 shadow border-secondary rounded-xl p-4 scroll-reveal-stagger">
+          <summary class="flex justify-between w-full font-bold cursor-pointer">
+            Why not just use Bluesky?
+          </summary>
+          <div class="text-gray-700 leading-relaxed space-y-2 mt-2">
+            <p>
+              Nostr offers true decentralization compared to Bluesky's more controlled federation
+              model. While Bluesky uses the AT Protocol which still relies on centralized components
+              like identity servers and relies heavily on a single company's infrastructure, Nostr
+              has no central points of failure or control. Users can switch relays instantly without
+              losing their identity or social connections.
+            </p>
+            <p>Key advantages include:</p>
+            <ul class="list-disc list-inside space-y-1 ml-4">
+              <li>No corporate control or potential for platform capture</li>
+              <li>Simpler protocol that's easier to implement and understand</li>
+              <li>Direct integration with Bitcoin and Lightning Network</li>
+              <li>
+                True data portability - your identity and data aren't tied to any specific service
+              </li>
+            </ul>
+            <p>
+              However, Bluesky currently offers better user experience, more polished clients, and
+              easier onboarding for mainstream users. The trade-off is between Nostr's radical
+              decentralization and Bluesky's more user-friendly but centralized approach.
+            </p>
+          </div>
+        </details>
+
+        <!-- FAQ Item -->
+        <details class="border-2 shadow border-secondary rounded-xl p-4 scroll-reveal-stagger">
+          <summary class="flex justify-between w-full font-bold cursor-pointer">
+            Are economic incentives aligned to keep relays operational?
+          </summary>
+          <div class="text-gray-700 leading-relaxed space-y-2 mt-2">
+            <p>
+              <a
+                target="_blank"
+                href="https://njump.me/nevent1qqsxstdgkge3k9mtezv4z4lpp88p3lnqta9k0k6n8hex0a4zv62pdmqzyqalp33lewf5vdq847t6te0wvnags0gs0mu72kz8938tn24wlfze6pfalk0"
+              ></a>
+            </p>
+            <p></p>
+          </div>
+        </details>
+
+        <!-- FAQ Item -->
+        <details class="border-2 shadow border-secondary rounded-xl p-4 scroll-reveal-stagger">
+          <summary class="flex justify-between w-full font-bold cursor-pointer">
+            How will content discovery and search work without centralized indexing?
+          </summary>
+          <div class="text-gray-700 leading-relaxed space-y-2 mt-2">
+            <p>
+              Without centralized search engines, content discovery relies on specialized relays
+              that provide indexing services, client-side search capabilities, and social signals
+              like recommendations from followed users. This creates a more fragmented but
+              potentially more diverse discovery landscape.
+            </p>
+            <p>
+              Comprehensive search across the entire network remains a significant challenge, as it
+              requires either massive indexing efforts by individual relays or new protocols for
+              distributed search. Users may need to rely more on social discovery, hashtags, and
+              curated lists rather than algorithmic recommendations.
+            </p>
+          </div>
+        </details>
+
+        <!-- FAQ Item -->
+        <details class="border-2 shadow border-secondary rounded-xl p-4 scroll-reveal-stagger">
+          <summary class="flex justify-between w-full font-bold cursor-pointer">
+            Is Nostr related to Bitcoin?
+          </summary>
+          <div class="text-gray-700 leading-relaxed space-y-2 mt-2">
+            <p>
+              Nostr and Bitcoin share fundamental design principles and are deeply complementary.
+              Both use cryptographic keys for identity, prioritize decentralization and censorship
+              resistance, and were created by pseudonymous developers who stepped back from direct
+              control. Nostr uses the same secp256k1 elliptic curve cryptography as Bitcoin, making
+              it natural to integrate Bitcoin wallets and Lightning Network payments directly into
+              social applications.
+            </p>
+            <p>The relationship manifests in several ways:</p>
+            <ul class="list-disc list-inside space-y-1 ml-4">
+              <li>Native Lightning Network integration for instant micropayments and tips</li>
+              <li>Bitcoin wallet compatibility for identity management</li>
+              <li>Shared cryptographic standards and security models</li>
+              <li>Similar ethos of individual sovereignty and resistance to censorship</li>
+              <li>Complementary technologies - Bitcoin for money, Nostr for communication</li>
+            </ul>
+            <p>
+              Many see Nostr as the social layer that Bitcoin was missing, enabling value transfer
+              and communication to work together seamlessly. This creates new possibilities for
+              creator monetization, micropayments for content, and building economic relationships
+              directly into social interactions without intermediaries taking cuts or controlling
+              the flow of information and money.
+            </p>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <!-- Email CTA -->
+    <section class="px-6 max-w-5xl mx-auto mb-24 font-lnbits scroll-reveal">
+      <div class="rounded-xl p-10 bg-lnbits-dark/85 shadow-lg">
+        <h2 class="text-xl md:text-2xl font-bold mb-2 text-lnbits-light">
+          A note from our sponsors
+        </h2>
+        <p class="text-white text-sm mb-2">
+          Remember when we said Nostr didn't have any owners or organizations that controlled it?
+          This website is also not an "official" website of the protocol. It's ran by
+          <a
+            href="https://lnbits.com/"
+            target="_blank"
+            class="hover:underline text-[#ff1ee6] font-bold text-lg"
+            >LNbits</a
+          >
+          and we're proud supporters, pioneers and enthusiasts of Nostr.
+        </p>
+        <p class="text-white text-sm mb-6">And we're selling stuff!</p>
+        <div class="flex flex-col sm:flex-row items-center gap-3">
+          <a
+            href="https://my.nostr.com/"
+            class="bg-lnbits-light/90 text-lnbits-dark font-medium px-5 py-2 rounded-full transition hover:bg-lnbits-light"
+            target="_blank"
+          >
+            Buy a @nostr.com username
+          </a>
+          <a
+            href="https://shop.lnbits.com/product-category/nostr"
+            class="text-sm font-medium text-lnbits-light transition hover:underline"
+            target="_blank"
+          >
+            Shop physical tools and Nostr merch
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Quotations -->
+    <section class="px-6 max-w-6xl mx-auto mb-24 scroll-reveal">
+      <div class="text-center mb-12">
+        <span
+          class="inline-flex items-center bg-grayish text-primarytext text-xs font-medium px-3 py-1 rounded-full mb-3"
+        >
+          💬 Criticism
+        </span>
+        <h2 class="text-2xl md:text-3xl font-bold mb-2">What people are saying</h2>
+        <p class="text-primarytextlighter text-base max-w-xl mx-auto">
+          Quotes from those who know better and decided to like Nostr.
+        </p>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-8">
+        <div
+          class="bg-white rounded-xl p-6 shadow-lg border-l-4 border-secondary flex flex-col justify-between scroll-reveal-stagger"
+        >
+          <div class="text-4xl text-secondary mb-4">"</div>
+          <blockquote class="text-primarytextlighter leading-relaxed mb-4">
+            No one owns Nostr, no one can own Nostr, it's an open-source protocol. No one can build
+            a fence to stop the flow of information.
+          </blockquote>
+          <cite class="text-xs text-grayish font-medium">
+            —
+            <a
+              href="https://www.youtube.com/watch?v=MaxXvcr181c"
+              target="_blank"
+              class="text-secondary hover:underline"
+              >Uncle Bob</a
+            >
+          </cite>
+        </div>
+
+        <div
+          class="bg-white rounded-xl p-6 shadow-lg border-l-4 border-secondary flex flex-col justify-between scroll-reveal-stagger"
+        >
+          <div class="text-4xl text-secondary mb-4">"</div>
+          <blockquote class="text-primarytextlighter leading-relaxed mb-4">
+            Nostr is an open protocol.
+            <div class="mt-2">
+              If a platform is a silo, a protocol is a river: no one owns it, and everyone is free
+              to swim.
+            </div>
+          </blockquote>
+          <cite class="text-xs text-grayish font-medium">
+            —
+            <a
+              href="https://x.com/Snowden/status/1620789340199882752"
+              target="_blank"
+              class="text-secondary hover:underline"
+              >Edward Snowden</a
+            >
+          </cite>
+        </div>
+
+        <div
+          class="bg-white rounded-xl p-6 shadow-lg border-l-4 border-secondary flex flex-col justify-between scroll-reveal-stagger"
+        >
+          <div class="text-4xl text-secondary mb-4">"</div>
+          <blockquote class="text-primarytextlighter leading-relaxed mb-4">
+            I want to claim that Nostr has discovered a new fundamental architecture for distributed
+            protocols. Not federated, not P2P.
+          </blockquote>
+          <cite class="text-xs text-grayish font-medium">
+            —
+            <a
+              href="https://newsletter.squishy.computer/p/natures-many-attempts-to-evolve-a"
+              target="_blank"
+              class="text-secondary hover:underline"
+              >Gordon Brander</a
+            >
+          </cite>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="px-6 max-w-6xl mx-auto mt-20 text-sm text-primarytextlighter">
+      <div class="flex justify-between gap-10 mb-10 mx-4">
+        <div>
+          <span class="font-bold text-primarytext text-xl">nostr</span>
+        </div>
+        <div>
+          <h4 class="text-primarytext font-medium mb-2">Resources</h4>
+          <ul class="space-y-1">
+            <li>
+              <a target="_blank" href="https://nstart.me" class="hover:underline">Get Started</a>
+            </li>
+            <li>
+              <a target="_blank" href="https://nostrapps.com" class="hover:underline"
+                >Apps Directory</a
+              >
+            </li>
+            <li>
+              <a target="_blank" href="https://nostr.dev" class="hover:underline"
+                >Developer Guide</a
+              >
+            </li>
+            <li>
+              <a href="https://nostr.watch" target="_blank">Relays</a>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div
+        class="border-t border-secondary py-2 flex flex-col md:flex-row justify-between items-center text-xs"
+      >
+        <p>
+          Made with <span class="text-red-500">❤️</span> by the
+          <a href="https://lnbits.com/" target="_blank" class="hover:underline text-[#7b54c4]"
+            >LNbits</a
+          >
+          team.
+        </p>
+        <div class="flex space-x-4 mt-2 md:mt-0">
+          <a
+            href="https://npub.world/npub10efcj7x65z2ak6vd69xr8f2hvqwuaqrhlygl3yqa4y63hfvc02mqwzaeh3"
+            target="_blank"
+            class="hover:font-bold hover:text-[#7b54c4]"
+            >🦩</a
+          >
+        </div>
+      </div>
+    </footer>
+
+    <script>
+      // scroll reveal animation
+      function initScrollReveal() {
+        const observerOptions = {
+          threshold: 0.1,
+          rootMargin: "0px 0px -50px 0px"
+        }
+
+        const observer = new IntersectionObserver(entries => {
+          entries.forEach(entry => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add("revealed")
+            }
+          })
+        }, observerOptions)
+
+        // observe all elements with scroll reveal classes
+        document
+          .querySelectorAll(".scroll-reveal, .scroll-reveal-slow, .scroll-reveal-stagger")
+          .forEach(el => {
+            observer.observe(el)
+          })
+      }
+
+      // initialize when DOM is loaded
+      document.addEventListener("DOMContentLoaded", initScrollReveal)
+    </script>
+  </body>
+</html>
