@@ -28,7 +28,11 @@ details[open] summary ~ * {
   }
 }
 
-/* Scroll reveal animations */
+html {
+  scroll-behavior: smooth;
+}
+
+/* scroll reveal animations */
 .scroll-reveal {
   opacity: 0;
   transform: translateY(60px);
@@ -77,6 +81,15 @@ details[open] summary ~ * {
 }
 .scroll-reveal-stagger:nth-child(5) {
   transition-delay: 0.5s;
+}
+.scroll-reveal-stagger:nth-child(6) {
+  transition-delay: 0.6s;
+}
+.scroll-reveal-stagger:nth-child(7) {
+  transition-delay: 0.7s;
+}
+.scroll-reveal-stagger:nth-child(8) {
+  transition-delay: 0.8s;
 }
 
 /* screenshots fade-out effect */

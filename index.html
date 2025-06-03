@@ -13,10 +13,22 @@
         <div class="text-xl font-bold tracking-tight">
           <span class="text-primarytext">nostr</span>
         </div>
-        <nav class="hidden md:flex gap-6 text-sm text-primarytext">
-          <a href="https://nostrapps.com/" target="_blank">Apps</a>
-          <a href="https://nostr.band" target="_blank">Explore</a>
-          <a href="https://github.com/nostr-protocol/nips" target="_blank">NIPs</a>
+        <nav class="flex gap-6 text-sm text-primarytext">
+          <a
+            href="#/.com-services"
+            class="text-lnbits-light brightness-[80%] font-semibold hover:font-bold"
+            >Support</a
+          >
+          <a href="https://nostrapps.com/" target="_blank" class="hover:font-bold">Apps</a>
+          <a href="https://nostr.band" target="_blank" class="hidden md:block hover:font-bold"
+            >Explore</a
+          >
+          <a
+            href="https://github.com/nostr-protocol/nips"
+            target="_blank"
+            class="hidden md:block hover:font-bold"
+            >NIPs</a
+          >
         </nav>
       </div>
     </header>
@@ -29,7 +41,7 @@
       <p class="text-base md:text-lg max-w-2xl mx-auto text-primarytextlighter mb-8 scroll-reveal">
         Nostr doesn't have owners or organizations that control it — it's just a simple standard
         that allows a scalable architecture of clients and servers to interact. Combining old
-        reliable technology with a new a many-to-many approach is the main innovation.
+        reliable technology with a new a multi-master approach is the main innovation.
       </p>
       <div class="flex flex-col sm:flex-row justify-center gap-4 scroll-reveal">
         <a
@@ -53,7 +65,7 @@
 
     <!-- Screenshots -->
     <section
-      class="screenshots-container px-4 mb-20 px-16 sm:px-4 h-150 md:h-180 overflow max-w-xl sm:max-w-3xl md:max-w-5xl mx-auto relative scroll-reveal-stagger"
+      class="screenshots-container px-4 mb-20 px-16 sm:px-4 h-140 sm:h-180 overflow max-w-xl sm:max-w-3xl md:max-w-5xl mx-auto relative scroll-reveal-stagger"
     >
       <!-- Terminal Mock -->
       <div
@@ -99,7 +111,7 @@
 
       <!-- iframe -->
       <iframe
-        class="hidden sm:block w-xl md:w-2xl h-130 absolute left-20 top-45 rounded-xl shadow-lg transition duration-500 opacity-90 hover:opacity-100 hover:z-20"
+        class="hidden sm:block w-xl md:w-3xl h-130 absolute left-20 top-45 rounded-xl shadow-lg transition duration-500 opacity-90 hover:opacity-100 hover:z-20"
         src="https://jumble.social/?r=pyramid.fiatjaf.com"
         title="the Jumble client"
       >
@@ -144,8 +156,77 @@
       </p>
     </section>
 
-    <!-- First Feature Card -->
+    <!-- Innovation Card -->
     <section class="px-6 max-w-5xl mx-auto mb-24 scroll-reveal">
+      <div class="flex flex-col md:flex-row justify-between gap-8 items-center">
+        <div class="flex items-start gap-3">
+          <div class="w-8 h-8 bg-grayish rounded-full flex items-center justify-center">
+            <span class="text-xs font-medium">N</span>
+          </div>
+          <div>
+            <h3 class="font-semibold text-lg mb-1">Many clients, many servers</h3>
+            <p class="text-sm text-primarytextlighter max-w-md">
+              The client is the app that is running on your computer or phone, the server is
+              whatever is running on a cloud somewhere with a domain name. In centralized platforms
+              and other protocols, one client talks to a single server. In Nostr clients connect to
+              many.
+            </p>
+          </div>
+        </div>
+        <a
+          href="https://newsletter.squishy.computer/p/natures-many-attempts-to-evolve-a"
+          target="_blank"
+          class="inline-flex items-center bg-secondary text-white font-medium px-4 py-2 rounded-full text-sm transition hover:opacity-90"
+        >
+          Learn how Nostr is different
+          <span class="ml-1 text-lg">›</span>
+        </a>
+      </div>
+    </section>
+
+    <!-- Features Grid -->
+    <section class="px-6 max-w-6xl mx-auto mb-24">
+      <div class="grid md:grid-cols-3 gap-10 text-center">
+        <div class="flex flex-col items-center scroll-reveal-stagger">
+          <img src="/robots/gmnotes.png" class="h-52 mb-4 rounded" />
+          <h3 class="font-semibold mb-2">Cryptographically signed notes</h3>
+          <p class="text-sm text-primarytextlighter max-w-lg">
+            Nostr's single unit of information is a cryptographically signed note, these are created
+            by users in their client software and published to one or more relays.
+          </p>
+          <!--<a href="#" class="text-sm font-medium text-primarytext inline-flex items-center mt-2">
+            Learn more <span class="ml-1">›</span>
+          </a>-->
+        </div>
+        <div class="flex flex-col items-center scroll-reveal-stagger">
+          <img src="/robots/client.jpg" class="h-52 mb-4 rounded" />
+          <h3 class="font-semibold mb-2">Smart clients as user agents</h3>
+          <p class="text-sm text-primarytextlighter max-w-lg">
+            Clients are smart and act as agents for the users who install them. They decide which
+            relays to connect to and when and what data to request according to the circumstance and
+            user preferences.
+          </p>
+          <!--<a href="#" class="text-sm font-medium text-primarytext inline-flex items-center mt-2">
+            Learn more <span class="ml-1">›</span>
+          </a>-->
+        </div>
+        <div class="flex flex-col items-center scroll-reveal-stagger">
+          <img src="/robots/relayflasks.png" class="h-52 mb-4 rounded" />
+          <h3 class="font-semibold mb-2">Relays as distribution centres</h3>
+          <p class="text-sm text-primarytextlighter max-w-lg">
+            These are the servers that notes are published to and read from. They cannot change the
+            contents of notes (that would invalidate the signature), but they can decide what to
+            store and for how long.
+          </p>
+          <!--<a href="#" class="text-sm font-medium text-primarytext inline-flex items-center mt-2">
+            Learn more <span class="ml-1">›</span>
+          </a>-->
+        </div>
+      </div>
+    </section>
+
+    <!-- Cryptography Card -->
+    <section class="md:hidden px-6 max-w-5xl mx-auto mb-24 scroll-reveal">
       <div class="flex flex-col md:flex-row justify-between gap-8 items-center">
         <div class="flex items-start gap-3">
           <div class="w-8 h-8 bg-grayish rounded-full flex items-center justify-center">
@@ -172,48 +253,10 @@
       </div>
     </section>
 
-    <!-- Features Grid -->
-    <section class="px-6 max-w-6xl mx-auto mb-24">
-      <div class="grid md:grid-cols-3 gap-10 text-center">
-        <div class="flex flex-col items-center scroll-reveal-stagger">
-          <img src="/robots/gmnotes.png" class="h-52 mb-4 rounded" />
-          <h3 class="font-semibold mb-2">Cryptographically signed notes</h3>
-          <p class="text-sm text-primarytextlighter">
-            Nostr's single unit of information is a cryptographically signed note, these are created
-            by users in their client software and published to one or more relays.
-          </p>
-          <!--Learn more <span class="ml-1">›</span>-->
-        </div>
-        <div class="flex flex-col items-center scroll-reveal-stagger">
-          <img src="/robots/client.jpg" class="h-52 mb-4 rounded" />
-          <h3 class="font-semibold mb-2">Smart clients as user agents</h3>
-          <p class="text-sm text-primarytextlighter">
-            Clients are smart and act as agents for the users who install them. They decide which
-            relays to connect to and when and what data to request according to the circumstance and
-            user preferences.
-          </p>
-          <a href="#" class="text-sm font-medium text-primarytext inline-flex items-center mt-2">
-            <!--Learn more <span class="ml-1">›</span>-->
-          </a>
-        </div>
-        <div class="flex flex-col items-center scroll-reveal-stagger">
-          <img src="/robots/relayflasks.png" class="h-52 mb-4 rounded" />
-          <h3 class="font-semibold mb-2">Relays as distribution centres</h3>
-          <p class="text-sm text-primarytextlighter">
-            These are the servers that notes are published to and read from. They cannot change the
-            contents of notes (that would invalidate the signature), but they can decide what to
-            store and for how long.
-          </p>
-          <a href="#" class="text-sm font-medium text-primarytext inline-flex items-center mt-2">
-            <!--Learn more <span class="ml-1">›</span>-->
-          </a>
-        </div>
-      </div>
-    </section>
-
     <!-- Pro-censorship Section -->
     <section class="px-6 max-w-6xl mx-auto mb-24 scroll-reveal">
       <div class="grid md:grid-cols-2 gap-10 items-center">
+        <img src="/robots/relayselection.png" class="mb-4 mx-auto h-100 md:h-auto md:order-2" />
         <div>
           <span
             class="inline-flex items-center bg-grayish text-primarytextlighter text-xs font-medium px-3 py-1 rounded-full mb-3"
@@ -275,21 +318,20 @@
             </div>
           </div>
         </div>
-        <img src="/robots/relayselection.png" class="mb-4" />
       </div>
     </section>
 
     <!-- Subprotocols Section -->
     <section class="px-6 max-w-6xl mx-auto mb-24 scroll-reveal">
       <div class="grid md:grid-cols-2 gap-10 items-center">
-        <img src="/robots/feed.png" class="mb-4" />
+        <img src="/robots/feed.png" class="mx-auto h-100 md:h-auto mb-4" />
         <div>
           <span
             class="inline-flex items-center bg-grayish text-primarytext text-xs font-medium px-3 py-1 rounded-full mb-3"
           >
             🧠 New Ideas
           </span>
-          <h2 class="text-2xl md:text-3xl font-bold mb-4">Exploring a new paradigm</h2>
+          <h2 class="text-2xl md:text-3xl font-bold mb-4">Exploring the commons</h2>
           <p class="text-primarytextlighter mb-4 text-sm">
             Besides being a natural medium for a Twitter-like microblogging social network, Nostr
             can also be used for other purposes. And not only similar things like sharing
@@ -315,6 +357,7 @@
     <!-- Under Construction section -->
     <section class="px-6 max-w-6xl mx-auto mb-32 scroll-reveal">
       <div class="grid md:grid-cols-2 gap-10 items-center">
+        <img src="/robots/underconstruction.png" class="mx-auto h-100 md:h-auto mb-4 md:order-2" />
         <div>
           <span
             class="inline-flex items-center bg-grayish text-primarytextlighter text-xs font-medium px-3 py-1 rounded-full mb-3"
@@ -376,7 +419,6 @@
             </div>
           </div>
         </div>
-        <img src="/robots/underconstruction.png" class="mb-4" />
       </div>
     </section>
 
@@ -385,7 +427,7 @@
       <span
         class="inline-flex items-center bg-grayish text-primarytextlighter text-xs font-medium px-3 py-1 rounded-full mb-3"
       >
-        ➡️ Follow Me On
+        ➡️ Following
       </span>
       <h2 class="text-2xl md:text-3xl font-bold mb-2">How Nostr works</h2>
       <p class="text-primarytextlighter max-w-xl mx-auto text-sm mb-10">
@@ -398,7 +440,7 @@
         <div
           class="border-2 shadow-lg border-secondary rounded-xl p-5 md:col-span-2 scroll-reveal-stagger"
         >
-          <img src="/robots/sendmenotes.png" class="mb-4" />
+          <img src="/robots/sendmenotes.png" class="mb-4 h-70 md:h-auto block mx-auto" />
           <h3 class="font-semibold mb-2">User chooses their outbox relays</h3>
           <p class="text-sm text-primarytextlighter">
             Patricia publishes a special event announcing which servers she will use as her "outbox
@@ -412,10 +454,10 @@
 
         <!-- Item 2 -->
         <div class="border-2 shadow-lg border-secondary rounded-xl p-5 scroll-reveal-stagger">
-          <img src="/robots/shakeread.png" class="mb-4 h-70 block mx-auto" />
+          <img src="/robots/shakeread.png" class="mb-4 h-70 md:h-auto block mx-auto" />
           <h3 class="font-semibold mb-2">Someone starts following</h3>
           <p class="text-sm text-primarytextlighter">
-            When Flora wants to read Patricia's posts, his client looks up her announcement and
+            When Florian wants to read Patricia's posts, his client looks up her announcement and
             connects directly to her announced outbox relays.
           </p>
           <p class="text-sm text-primarytextlighter mt-2">
@@ -442,7 +484,7 @@
           <img src="/robots/clients.png" class="mb-4 h-70 block mx-auto" />
           <h3 class="font-semibold mb-2">Clients track relay changes</h3>
           <p class="text-sm text-primarytextlighter">
-            Flora's client continuously monitors for updates to Patricia's relay list.
+            Florian's client continuously monitors for updates to Patricia's relay list.
           </p>
           <p class="text-sm text-primarytextlighter mt-2">
             When she switches relays, his client eventually starts querying her new locations,
@@ -686,19 +728,27 @@
       </div>
     </section>
 
+    <div id="/.com-services" class="-translate-y-8"></div>
+
     <!-- Email CTA -->
     <section class="px-6 max-w-5xl mx-auto mb-24 font-lnbits scroll-reveal">
       <div class="rounded-xl p-10 bg-lnbits-dark/85 shadow-lg">
-        <h2 class="text-xl md:text-2xl font-bold mb-2 text-lnbits-light">
-          A note from our sponsors
+        <h2 class="text-xl md:text-2xl font-bold mb-6 text-lnbits-light">
+          <a
+            href="https://my.nostr.com/"
+            target="_blank"
+            class="inline-block border-lnbits-light border-b-4 hover:brightness-[150%] transition"
+            >nostr.com</a
+          >
+          paid services
         </h2>
         <p class="text-white text-sm mb-2">
           Remember when we said Nostr didn't have any owners or organizations that controlled it?
-          This website is also not an "official" website of the protocol. It's ran by
+          This is also not an "official" website of the protocol. It's ran by
           <a
             href="https://lnbits.com/"
             target="_blank"
-            class="hover:underline text-[#ff1ee6] font-bold text-lg"
+            class="border-b-2 border-transparent hover:border-[#ff1ee6] hover:brightness-[250%] transition text-[#ff1ee6] font-bold text-lg inline-block"
             >LNbits</a
           >
           and we're proud supporters, pioneers and enthusiasts of Nostr.
@@ -729,7 +779,7 @@
         <span
           class="inline-flex items-center bg-grayish text-primarytext text-xs font-medium px-3 py-1 rounded-full mb-3"
         >
-          💬 Criticism
+          💬 Opinion
         </span>
         <h2 class="text-2xl md:text-3xl font-bold mb-2">What people are saying</h2>
         <p class="text-primarytextlighter text-base max-w-xl mx-auto">
@@ -829,9 +879,7 @@
         </div>
       </div>
 
-      <div
-        class="border-t border-secondary py-2 flex flex-col md:flex-row justify-between items-center text-xs"
-      >
+      <div class="border-t border-secondary py-2 flex justify-between items-center text-xs">
         <p>
           Made with <span class="text-red-500">❤️</span> by the
           <a href="https://lnbits.com/" target="_blank" class="hover:underline text-[#7b54c4]"
