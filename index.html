@@ -207,7 +207,7 @@
           </a>-->
         </div>
         <div class="flex flex-col items-center scroll-reveal-stagger">
-          <img src="/robots/client.jpg" class="h-52 mb-4 rounded" />
+          <img src="/robots/client.png" class="h-52 mb-4 rounded" />
           <h3 class="font-semibold mb-2">Smart clients as user agents</h3>
           <p class="text-sm text-primarytextlighter max-w-lg">
             Clients are smart and act as agents for the users who install them. They decide which
@@ -448,7 +448,11 @@
         <div
           class="border-2 shadow-lg border-secondary rounded-xl p-5 md:col-span-2 scroll-reveal-stagger"
         >
-          <img src="/robots/sendmenotes.png" class="mb-4 h-70 md:h-auto block mx-auto" />
+        <img
+        id="sendMeNotesImg"
+        src="/robots/sendmenotes.png"
+        class="mb-4 h-70 md:h-auto block mx-auto"
+      />
           <h3 class="font-semibold mb-2">User chooses their outbox relays</h3>
           <p class="text-sm text-primarytextlighter">
             Patricia publishes a special event announcing which servers she will use as her "outbox
@@ -462,7 +466,11 @@
 
         <!-- Item 2 -->
         <div class="border-2 shadow-lg border-secondary rounded-xl p-5 scroll-reveal-stagger">
-          <img src="/robots/shakeread.png" class="mb-4 h-70 md:h-auto block mx-auto" />
+          <img
+  id="shakeReadImg"
+  src="/robots/shakeread.png"
+  class="mb-4 h-70 md:h-auto block mx-auto"
+/>
           <h3 class="font-semibold mb-2">Someone starts following</h3>
           <p class="text-sm text-primarytextlighter">
             When Florian wants to read Patricia's posts, his client looks up her announcement and
@@ -797,7 +805,7 @@
 
       <div class="grid md:grid-cols-3 gap-8">
         <div
-          class="bg-white rounded-xl p-6 shadow-lg border-l-4 border-secondary flex flex-col justify-between scroll-reveal-stagger"
+          class="rounded-xl p-6 shadow-lg border-l-4 border-secondary flex flex-col justify-between scroll-reveal-stagger"
         >
           <div class="text-4xl text-secondary mb-4">"</div>
           <blockquote class="text-primarytextlighter leading-relaxed mb-4">
@@ -816,7 +824,7 @@
         </div>
 
         <div
-          class="bg-white rounded-xl p-6 shadow-lg border-l-4 border-secondary flex flex-col justify-between scroll-reveal-stagger"
+          class="rounded-xl p-6 shadow-lg border-l-4 border-secondary flex flex-col justify-between scroll-reveal-stagger"
         >
           <div class="text-4xl text-secondary mb-4">"</div>
           <blockquote class="text-primarytextlighter leading-relaxed mb-4">
@@ -838,7 +846,7 @@
         </div>
 
         <div
-          class="bg-white rounded-xl p-6 shadow-lg border-l-4 border-secondary flex flex-col justify-between scroll-reveal-stagger"
+          class="rounded-xl p-6 shadow-lg border-l-4 border-secondary flex flex-col justify-between scroll-reveal-stagger"
         >
           <div class="text-4xl text-secondary mb-4">"</div>
           <blockquote class="text-primarytextlighter leading-relaxed mb-4">
@@ -909,6 +917,8 @@
     <script>
 const toggleButton = document.getElementById("darkModeToggle")
 const root = document.documentElement
+const img = document.getElementById("sendMeNotesImg")
+const shakeImg = document.getElementById("shakeReadImg")
 
 toggleButton.addEventListener("click", () => {
   const body = document.body
@@ -921,7 +931,10 @@ toggleButton.addEventListener("click", () => {
 
     root.style.setProperty("--color-secondary", "#7dd3fc")
     root.style.setProperty("--color-primarytext", "#ffffff")
-    root.style.setProperty("--color-primarytext-inverted", "#1a181b")
+    root.style.setProperty("--color-text-primarytext-inverted", "#1a181b")
+
+    img.src = "/robots/sendmenotes-dark.png"
+    shakeImg.src = "/robots/shakeread-dark.png"
   } else {
     body.classList.add("bg-background-light", "text-primarytext")
     body.classList.remove("bg-lnbits-dark", "text-white")
@@ -929,9 +942,14 @@ toggleButton.addEventListener("click", () => {
 
     root.style.setProperty("--color-secondary", "#0f172a")
     root.style.setProperty("--color-primarytext", "#1a181b")
-    root.style.setProperty("--color-primarytext-inverted", "#ffffff")
+    root.style.setProperty("--color-text-primarytext-inverted", "#ffffff")
+
+    img.src = "/robots/sendmenotes.png"
+    shakeImg.src = "/robots/shakeread.png"
   }
 })
+
+
 
 
       // scroll reveal animation
