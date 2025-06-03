@@ -41,7 +41,7 @@
       <p class="text-base md:text-lg max-w-2xl mx-auto text-primarytextlighter mb-8 scroll-reveal">
         Nostr doesn't have owners or organizations that control it — it's just a simple standard
         that allows a scalable architecture of clients and servers to interact. Combining old
-        reliable technology with a new a multi-master approach is the main innovation.
+        reliable technology with a new multi-master approach is the main innovation.
       </p>
       <div class="flex flex-col sm:flex-row justify-center gap-4 scroll-reveal">
         <a
@@ -65,7 +65,7 @@
 
     <!-- Screenshots -->
     <section
-      class="screenshots-container px-4 mb-20 px-16 sm:px-4 h-140 sm:h-180 overflow max-w-xl sm:max-w-3xl md:max-w-5xl mx-auto relative scroll-reveal-stagger"
+      class="screenshots-container px-4 mb-20 px-16 sm:px-4 h-140 sm:h-180 overflow-hidden max-w-xl sm:max-w-3xl md:max-w-5xl mx-auto relative scroll-reveal-stagger"
     >
       <!-- Terminal Mock -->
       <div
@@ -336,7 +336,7 @@
             Besides being a natural medium for a Twitter-like microblogging social network, Nostr
             can also be used for other purposes. And not only similar things like sharing
             <i>videos</i>, longform <i>articles</i>, <i>pictures</i> or <i>voice notes</i>. There
-            are initiatives on Nostr for the construction of sub-protocols that power
+            are initiatives on Nostr for the development of sub-protocols that power
             <b>closed groups</b>, <b>decentralized wikipedia</b>, <b>couchsurfing</b>,
             <b>marketplaces</b> or <b>web annotations</b>; as well as protocols that don't use Nostr
             for the core data but as a coordination and discovery mechanism, such as
@@ -564,7 +564,7 @@
               into you.
             </p>
             <p>
-              it's trickier when you want to see, for example, replies to your posts, in that case a
+              It's trickier when you want to see, for example, replies to your posts, in that case a
               client might be programmed to fetch anything that <i>claims</i> to be a reply
               <i>from anyone</i>, which might include spam.
             </p>
@@ -578,7 +578,7 @@
             </p>
             <p>
               There are no perfect solutions. But these do not exist anywhere, centralized platforms
-              are also full of spam. Nostr at least isn't naïve and tries to build relisiency from
+              are also full of spam. Nostr at least isn't naïve and tries to build resiliency from
               the start.
             </p>
           </div>
@@ -593,7 +593,7 @@
             <p>
               Yes, Nostr is just a basic client-server architecture. And the fact that users can
               naturally spread among hundreds of different relays while clients can query dozens of
-              relays that they're interested in to at the same time means the network has a natural
+              relays that they're interested in at the same time means the network has a natural
               load balancer (which doesn't prevent a single relay from having its own internal load
               balancer either).
             </p>
@@ -606,8 +606,8 @@
               hundreds of WebSocket connections simultaneously (as they will be getting very few
               data in each of those). For web apps that isn't so hard, but we can still go up to a
               few hundreds without big problems. Regardless of any of that, in any complete enough
-              app that wants to display a "following feed" it's already necessary to events in a
-              local database, and that will make all these issues easy to deal with as you can do
+              app that wants to display a "following feed" it's already necessary to store events in
+              a local database, and that will make all these issues easy to deal with as you can do
               the event requests in batches instead of all at once.
             </p>
           </div>
@@ -644,11 +644,11 @@
           </summary>
           <div class="text-gray-700 leading-relaxed space-y-2 mt-2">
             <p>
-              There are many problems with Mastodon, mostly due to the fact that because it doesn't
-              rely on any cryptography. Because it cannot do the multi-master approach of Nostr due
-              to lack of cryptography, identities are assumed to be "owned" by the server, which is
-              fully trusted by its tenants. Mastodon server owners can do all the harm centralized
-              platforms can do to its underlings, which are completely helpless in case of
+              There are many problems with Mastodon, mostly due to the fact that it doesn't rely on
+              any cryptography. Because it cannot do the multi-master approach of Nostr due to lack
+              of cryptography, identities are assumed to be "owned" by the server, which is fully
+              trusted by its tenants. Mastodon server owners can do all the harm centralized
+              platforms can do to their underlings, which are completely helpless in case of
               misbehavior or even in the normal case where a server owner loses their server or
               decides to shut down for whatever reason.
             </p>
@@ -703,21 +703,12 @@
               to source their data from a single <code>Relay</code>, and here you have room for the
               same effect.
             </p>
-            <!--<p>
-              In fact Bluesky has to come with built-in censorship from the start because their
-              single-server architecture cannot work if anyone is able to write, it would get
-              flooded with spam, so they're forced to make that single <code>Relay</code> reach out
-              from a pool of whitelisted <code>PDSes</code> (i.e. those who have registered their
-              accounts on the official website ran by the corporation that owns the entire thing) in
-              order to only get posts from those, and anyone else wanting to use Bluesky has to beg
-              to be added to that list.
-            </p>-->
             <p>
-              One could argue that Bluesky <code>Clients</code> could become smart and start
+              You could argue that Bluesky <code>Clients</code> could become smart and start
               sourcing data from multiple <code>AppViews</code>, or from multiple Relays, or that
               the <code>AppViews</code> could rely on multiple <code>Relays</code>, or that the
               <code>Clients</code> could talk directly to the <code>PDSes</code> — and all of that
-              is possible and would indeed bring solutions, but notice that those things started
+              is possible and would indeed bring solutions, but notice that if those things started
               happening Bluesky would end up becoming Nostr, except with more steps.
             </p>
           </div>
@@ -754,7 +745,7 @@
         <!-- FAQ Item -->
         <details class="border-2 shadow border-secondary rounded-xl p-4 scroll-reveal-stagger">
           <summary class="flex justify-between w-full font-bold cursor-pointer">
-            If content is spreaded in multiple relays how can I be sure I'm seeing everything?
+            If content is spread across multiple relays how can I be sure I'm seeing everything?
           </summary>
           <div class="text-gray-700 leading-relaxed space-y-2 mt-2">
             <p>
@@ -762,13 +753,6 @@
               happening everywhere at all times. Nostr inherits that property from the world, making
               it so that you can only see what you focus your attention on (and you're allowed to
               see by the relay that hosts that information).
-            </p>
-            <p>
-              Traditional centralized social platforms give the impression that they're showing
-              "all" about something, "all replies", "all posts from someone" etc. But the fact is
-              that Instagram cannot show you what is being said about that same topic on Tiktok, and
-              vice-versa. In the same way, a Nostr relay is like one localized "centralized"
-              platform and it only has the notes it has, and vice-versa.
             </p>
           </div>
         </details>
@@ -788,20 +772,20 @@
               websites to index.
             </p>
             <p>
-              On the other hard, it's surprisingly doable for clients to store all the posts from
-              people a user follows, or all the posts a user has seen or interacted with over time
-              (since it's just text, a huge amount of notes can fit in the same space that would
-              otherwise be required to store a single photo, for example) then provide local search
-              over that. That kind of search will be sufficient for most of the cases one would
-              reach out for a search bar in a centralized platform (which is to search for things
-              that they have seen before), and perhaps even more useful since it would naturally
-              filter out all the unrelated garbage.
+              On the other hand, it's surprisingly doable for clients to store all the posts from
+              people you follow, or all the posts you have seen or interacted with over time (since
+              it's just text, a huge amount of notes can fit in the same space that would otherwise
+              be required to store a single photo, for example) then provide local search over that.
+              That kind of search will be sufficient for most of the cases you would reach out for a
+              search bar in a centralized platform (which is to search for things that you have seen
+              before), and perhaps even more useful since it would naturally filter out all the
+              unrelated garbage.
             </p>
             <p>
               Last, niche or community-oriented relays can also provide very useful search
-              capabilities by just indexing the notes have stored locally, already filtered and
+              capabilities by just indexing the notes they have stored locally, already filtered and
               scoped to that relay's topic or cohort (imagine searching over a Discord, Slack or
-              Telegram groups, for example).
+              Telegram group, for example).
             </p>
           </div>
         </details>
@@ -821,12 +805,12 @@
             <p>
               But also it's not true that Nostr doesn't have algorithms. Nostr can have algorithms
               of all kinds: manual, automatic, AI-powered or rule-based. Some of these algorithms
-              can be easily entirely locally on clients (for example, surfacing posts from the times
-              when the user was not online, or from people that make fewer posts), while other
+              can be run entirely locally on clients (for example, surfacing posts from the times
+              when you were not online, or from people that make fewer posts), while other
               algorithms can be provided by all sorts of relays, either by naturally surfacing posts
               from a community of people you don't follow or by dedicated relays that have the
               stated purpose of curating content desirable for a target audience or even by
-              targetting specific users.
+              targeting specific users.
             </p>
           </div>
         </details>
@@ -841,13 +825,13 @@
               Nostr uses the same cryptographic principles of Bitcoin and was kickstarted mostly by
               a community of Bitcoiners, so it has disproportionately attracted the attention of
               Bitcoiners at the start, but aside from that it doesn't have any relationship with
-              Bitcoin. It doesn't depend on Bitcoin for anything and one doesn't have to know or
-              have or care about any Bitcoin in order to use Nostr.
+              Bitcoin. It doesn't depend on Bitcoin for anything and you don't have to know or have
+              or care about any Bitcoin in order to use Nostr.
             </p>
             <p>
-              What about "zaps"? Zaps are standard for tipping Nostr content using Bitcoin that is
-              implemented by some Nostr clients, but it's fully and completely optional and one that
-              doesn't care about Bitcoin doesn't have to bother about it.
+              What about "zaps"? Zaps are a standard for tipping Nostr content using Bitcoin that is
+              implemented by some Nostr clients, but it's fully and completely optional and if you
+              don't care about Bitcoin you don't have to bother about it.
             </p>
           </div>
         </details>
