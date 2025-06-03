@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Nostr - Notes and Other Stuff Transmitted by Relays</title>
     <link href="/base.css" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
   </head>
   <body class="bg-background-light text-primarytext font-sans">
     <!-- Header -->
@@ -29,6 +30,13 @@
             class="hidden md:block hover:font-bold"
             >NIPs</a
           >
+          <button
+          id="darkModeToggle"
+          aria-label="Toggle dark mode"
+          class="hidden md:block ml-4 text-2xl hover:opacity-80 transition material-symbols-outlined"
+        >
+          dark_mode
+        </button>
         </nav>
       </div>
     </header>
@@ -899,6 +907,22 @@
     </footer>
 
     <script>
+const toggleButton = document.getElementById("darkModeToggle")
+
+toggleButton.addEventListener("click", () => {
+  const body = document.body
+  const isDark = body.classList.toggle("dark-mode")
+
+  if (isDark) {
+    body.classList.remove("bg-background-light", "text-primarytext")
+    body.classList.add("bg-lnbits-dark", "text-white")
+    toggleButton.textContent = "light_mode"
+  } else {
+    body.classList.add("bg-background-light", "text-primarytext")
+    body.classList.remove("bg-lnbits-dark", "text-white")
+    toggleButton.textContent = "dark_mode"
+  }
+})
       // scroll reveal animation
       function initScrollReveal() {
         const observerOptions = {

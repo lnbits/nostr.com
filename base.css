@@ -6,7 +6,7 @@
   --color-background-light: #fff; /* weird beige that is in the images */
   --color-primarytext: #1a181b; /* black */
   --color-primarytextlighter: #3a363b; /* slightly less black */
-  --color-secondary: #0f766e; /* a dark mold green */
+  --color-secondary: #0f172a; /* a dark mold green */
   --color-grayish: #b8bbac; /* gray somewhat green */
   --default-transition-duration: 500ms;
 
@@ -31,7 +31,19 @@ details[open] summary ~ * {
 html {
   scroll-behavior: smooth;
 }
-
+.material-symbols-outlined {
+  font-variation-settings:
+    'FILL' 0,
+    'wght' 400,
+    'GRAD' 0,
+    'opsz' 24;
+}
+.dark-mode .text-primarytextlighter {
+  color: #bbb;
+}
+.dark-mode .bg-grayish {
+  background-color: #2f2f2f;
+}
 /* scroll reveal animations */
 .scroll-reveal {
   opacity: 0;
@@ -104,7 +116,7 @@ html {
   left: 0;
   right: 0;
   height: 40%;
-  background: linear-gradient(to top, #fff 0%, rgba(255, 255, 255, 0.8) 40%, transparent 100%);
+  background: linear-gradient(to top, #fff 0%, rgba(255, 255, 255, 0.95) 40%, transparent 100%);
   pointer-events: none;
   z-index: 90;
 }
