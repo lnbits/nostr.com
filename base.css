@@ -3,10 +3,10 @@
 
 @theme {
   --font-sans: "Jost", sans-serif;
-  --color-background-light: #fcefdc; /* weird beige that is in the images */
+  --color-background-light: #fff; /* weird beige that is in the images */
   --color-primarytext: #1a181b; /* black */
   --color-primarytextlighter: #3a363b; /* slightly less black */
-  --color-secondary: #73877b; /* a dark mold green */
+  --color-secondary: #0f766e; /* a dark mold green */
   --color-grayish: #b8bbac; /* gray somewhat green */
   --default-transition-duration: 500ms;
 
@@ -104,7 +104,7 @@ html {
   left: 0;
   right: 0;
   height: 40%;
-  background: linear-gradient(to top, #fcefdc 0%, rgba(252, 239, 220, 0.8) 40%, transparent 100%);
+  background: linear-gradient(to top, #fff 0%, rgba(255, 255, 255, 0.8) 40%, transparent 100%);
   pointer-events: none;
   z-index: 90;
 }
