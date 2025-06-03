@@ -62,7 +62,7 @@ details[open] summary ~ * {
   transform: translateY(0);
 }
 
-/* Stagger delays for multiple elements */
+/* stagger delays for multiple elements */
 .scroll-reveal-stagger:nth-child(1) {
   transition-delay: 0.1s;
 }
@@ -77,4 +77,21 @@ details[open] summary ~ * {
 }
 .scroll-reveal-stagger:nth-child(5) {
   transition-delay: 0.5s;
+}
+
+/* screenshots fade-out effect */
+.screenshots-container {
+  position: relative;
+}
+
+.screenshots-container::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 40%;
+  background: linear-gradient(to top, #fcefdc 0%, rgba(252, 239, 220, 0.8) 40%, transparent 100%);
+  pointer-events: none;
+  z-index: 90;
 }
