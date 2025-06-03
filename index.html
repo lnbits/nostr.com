@@ -28,7 +28,7 @@
             href="https://github.com/nostr-protocol/nips"
             target="_blank"
             class="hidden md:block hover:font-bold"
-            >NIPs</a
+            >Spec</a
           >
           <button
           id="darkModeToggle"
@@ -55,7 +55,7 @@
         <a
           href="https://nstart.me"
           target="_blank"
-          class="inline-flex items-center bg-secondary text-white font-medium px-6 py-2.5 rounded-full text-sm transition hover:opacity-90"
+          class="inline-flex items-center bg-secondary text-primarytext-inverted font-medium px-6 py-2.5 rounded-full text-sm transition hover:opacity-90"
         >
           Join Nostr
           <span class="ml-1 text-lg">›</span>
@@ -184,7 +184,7 @@
         <a
           href="https://newsletter.squishy.computer/p/natures-many-attempts-to-evolve-a"
           target="_blank"
-          class="inline-flex items-center bg-secondary text-white font-medium px-4 py-2 rounded-full text-sm transition hover:opacity-90"
+          class="inline-flex items-center bg-secondary text-primarytext-inverted font-medium px-4 py-2 rounded-full text-sm transition hover:opacity-90"
         >
           Learn how Nostr is different
           <span class="ml-1 text-lg">›</span>
@@ -908,6 +908,7 @@
 
     <script>
 const toggleButton = document.getElementById("darkModeToggle")
+const root = document.documentElement
 
 toggleButton.addEventListener("click", () => {
   const body = document.body
@@ -917,12 +918,22 @@ toggleButton.addEventListener("click", () => {
     body.classList.remove("bg-background-light", "text-primarytext")
     body.classList.add("bg-lnbits-dark", "text-white")
     toggleButton.textContent = "light_mode"
+
+    root.style.setProperty("--color-secondary", "#7dd3fc")
+    root.style.setProperty("--color-primarytext", "#ffffff")
+    root.style.setProperty("--color-primarytext-inverted", "#1a181b")
   } else {
     body.classList.add("bg-background-light", "text-primarytext")
     body.classList.remove("bg-lnbits-dark", "text-white")
     toggleButton.textContent = "dark_mode"
+
+    root.style.setProperty("--color-secondary", "#0f172a")
+    root.style.setProperty("--color-primarytext", "#1a181b")
+    root.style.setProperty("--color-primarytext-inverted", "#ffffff")
   }
 })
+
+
       // scroll reveal animation
       function initScrollReveal() {
         const observerOptions = {
