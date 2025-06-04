@@ -9,9 +9,20 @@
       href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined"
       rel="stylesheet"
     />
+    <script type="importmap">
+      {
+        "imports": {
+          "nostr-tools/pure": "https://esm.sh/nostr-tools@2.10.2/pure",
+          "nostr-tools/nip19": "https://esm.sh/nostr-tools@2.10.2/nip19"
+        }
+      }
+    </script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   </head>
-  <body class="font-sans bg-background-light dark:bg-dotcom-dark text-primary dark:text-white">
+  <body
+    class="font-sans bg-background-light dark:bg-dotcom-dark text-primary dark:text-white"
+    x-data="{ showKeyModal: false }"
+  >
     <!-- Header -->
     <header class="border-b">
       <div class="max-w-7xl mx-auto flex justify-between items-center px-4 py-4">
@@ -50,18 +61,17 @@
         reliable technology with a new multi-master approach is the main innovation.
       </p>
       <div class="flex flex-col sm:flex-row justify-center gap-4 scroll-reveal">
-        <a
-          href="https://nstart.me"
-          target="_blank"
-          class="inline-flex items-center bg-secondary dark:bg-dotcom-light text-white dark:text-dotcom-dark font-medium px-8 md:px-6 py-2.5 rounded-full text-sm transition hover:opacity-90"
+        <button
+          @click="showKeyModal = true"
+          class="cursor-pointer inline-flex items-center mx-auto sm:mx-0 max-w-lg bg-secondary dark:bg-dotcom-light text-white dark:text-dotcom-dark font-medium px-8 md:px-6 py-2.5 rounded-full text-sm transition hover:opacity-90"
         >
           Join Nostr
           <span class="ml-1 text-lg">›</span>
-        </a>
+        </button>
         <a
           href="https://www.youtube.com/watch?v=Tbt3jL1Ms0w"
           target="_blank"
-          class="inline-flex items-center border border-secondary dark:border-dotcom-light text-primary dark:text-white font-medium px-8 md:px-6 py-2.5 rounded-full text-sm transition hover:bg-grayish dark:hover:bg-gray-700"
+          class="cursor-pointer inline-flex items-center mx-auto sm:mx-0 max-w-lg border border-secondary dark:border-dotcom-light text-primary dark:text-white font-medium px-8 md:px-6 py-2.5 rounded-full text-sm transition hover:bg-grayish dark:hover:bg-gray-700"
         >
           Watch a presentation
           <span class="ml-1 text-lg">›</span>
@@ -169,7 +179,7 @@
           <div
             class="w-8 h-8 bg-grayish dark:bg-gray-700 rounded-full flex items-center justify-center"
           >
-            <span class="text-xs font-medium material-symbols-outlined mr-1">rebase</span>
+            <span class="text-xs font-medium material-symbols-outlined">rebase</span>
           </div>
           <div>
             <h3 class="font-semibold text-lg mb-1">Many clients, many servers</h3>
@@ -231,7 +241,7 @@
           <div
             class="w-8 h-8 bg-grayish dark:bg-gray-700 rounded-full flex items-center justify-center"
           >
-            <span class="text-xs font-medium material-symbols-outlined mr-1">signature</span>
+            <span class="text-xs font-medium material-symbols-outlined">signature</span>
           </div>
           <div>
             <h3 class="font-semibold text-lg mb-1">A new paradigm for communication</h3>
@@ -361,7 +371,7 @@
           <a
             href="https://github.com/nostr-protocol/nips"
             target="_blank"
-            class="inline-flex items-center border border-secondary dark:border-dotcom-light text-primary dark:text-white text-sm font-medium px-8 md:px-4 rounded-full transition hover:bg-grayish dark:hover:bg-gray-700"
+            class="inline-flex items-center border border-secondary dark:border-dotcom-light text-primary dark:text-white text-sm font-medium px-8 md:px-4 py-2 rounded-full transition hover:bg-grayish dark:hover:bg-gray-700"
           >
             Browse the NIPs
           </a>
@@ -395,7 +405,7 @@
               class="inline-flex items-center border border-secondary dark:border-dotcom-light text-primary dark:text-white text-sm font-medium px-8 md:px-4 py-2 rounded-full transition hover:bg-grayish dark:hover:bg-gray-700"
               target="_blank"
             >
-              List of Nostr repositories on GitHub
+              List of repositories on GitHub
             </a>
           </div>
 
@@ -436,7 +446,7 @@
                 efficient by relying on a relay but are still censorship-resistant.
               </p>
               <a
-                href="https://njump.me/nevent1qvzqqqr4gupzp978pfzrv6n9xhq5tvenl9e74pklmskh4xw6vxxyp3j8qkke3cezqy2hwumn8ghj7un9d3shjtnyv9kh2uewd9hj7qgewaehxw309a5xyu3wvdhhyctrd3jjuum0vd5kzmp0qy88wumn8ghj7mn0wvhxcmmv9uqzqnfvr95xvapd508uayrcsk56yztcf7ry74gncr92mnslqa6hw3rxzudcv9"
+                href="https://njump.me/nevent1qvzqqqr4gupzp978pfzrv6n9xhq5tvenl9e74pklmskh4xw6vxxyp3j8qkke3cezqy2hwumn8ghj7mn0wvhxcmmv9uqzqnfvr95xvapd508uayrcsk56yztcf7ry74gncr92mnslqa6hw3rxzudcv9"
                 class="inline-flex items-center text-primary dark:text-white font-medium"
                 target="_blank"
               >
@@ -453,7 +463,8 @@
       <span
         class="inline-flex items-center bg-grayish dark:bg-gray-700 text-primary-lighter dark:text-gray-300 text-xs font-medium px-3 py-1 rounded-full mb-3"
       >
-        ➡️ Following
+        <span class="material-symbols-outlined mr-1">account_circle</span>
+        Following
       </span>
       <h2 class="text-2xl md:text-3xl font-bold mb-2">How Nostr works</h2>
       <p class="text-primary-lighter dark:text-gray-300 max-w-xl mx-auto text-sm mb-10">
@@ -563,7 +574,8 @@
       <span
         class="inline-flex items-center bg-grayish dark:bg-gray-700 text-primary-lighter dark:text-gray-300 text-xs font-medium px-3 py-1 rounded-full mb-3"
       >
-        ❓ FAQ
+        <span class="material-symbols-outlined mr-1">contact_support</span>
+        FAQ
       </span>
       <h2 class="text-2xl md:text-3xl font-bold mb-2">I've got some questions!</h2>
       <p class="text-primary-lighter dark:text-gray-300 text-base max-w-xl mx-auto">
@@ -951,7 +963,8 @@
         <span
           class="inline-flex items-center bg-grayish dark:bg-gray-700 text-primary dark:text-white text-xs font-medium px-3 py-1 rounded-full mb-3"
         >
-          💬 Opinion
+          <span class="material-symbols-outlined mr-1">speaker_notes</span>
+          Opinion
         </span>
         <h2 class="text-2xl md:text-3xl font-bold mb-2">What people are saying</h2>
         <p class="text-primary-lighter dark:text-gray-300 text-base max-w-xl mx-auto">
@@ -1029,10 +1042,10 @@
           <span class="font-bold text-primary dark:text-white text-xl">nostr</span>
         </div>
         <div>
-          <h4 class="text-primary dark:text-white font-medium mb-2">Resources</h4>
+          <h4 class="text-primary dark:text-white font-semibold mb-2">Resources</h4>
           <ul class="space-y-1">
             <li>
-              <a target="_blank" href="https://nstart.me" class="hover:underline">Get Started</a>
+              <a @click="showKeyModal = true" class="cursor-pointer hover:underline"></a>
             </li>
             <li>
               <a target="_blank" href="https://nostrapps.com" class="hover:underline"
@@ -1094,6 +1107,49 @@
         }
       }
 
+      function keyGenerator() {
+        return {
+          nsec: "",
+          npub: "",
+          copyMessage: "",
+
+          async init() {
+            await this.generateNewKeys()
+          },
+
+          async generateNewKeys() {
+            try {
+              const { generateSecretKey, getPublicKey } = await import("nostr-tools/pure")
+              const { nsecEncode, npubEncode } = await import("nostr-tools/nip19")
+
+              const secretKey = generateSecretKey()
+              const publicKey = getPublicKey(secretKey)
+
+              this.nsec = nsecEncode(secretKey)
+              this.npub = npubEncode(publicKey)
+            } catch (error) {
+              console.error("Error generating keys:", error)
+            }
+          },
+
+          async copyToClipboard(text, type) {
+            try {
+              await navigator.clipboard.writeText(text)
+              this.copyMessage = `${type} copied to clipboard!`
+              setTimeout(() => {
+                this.copyMessage = ""
+              }, 2000)
+            } catch (error) {
+              console.error("Failed to copy:", error)
+              this.copyMessage = "Failed to copy to clipboard"
+              setTimeout(() => {
+                this.copyMessage = ""
+              }, 2000)
+            }
+          }
+        }
+      }
+
       // scroll reveal animation
       function initScrollReveal() {
         const observerOptions = {
@@ -1120,5 +1176,121 @@
       // initialize when DOM is loaded
       document.addEventListener("DOMContentLoaded", initScrollReveal)
     </script>
+
+    <!-- Key Generation Modal -->
+    <div
+      class="fixed flex items-center justify-center inset-0 w-full h-full transition-opacity bg-grayish/80 items-center justify-center min-h-screen text-center z-40"
+      x-show="showKeyModal"
+      x-transition:enter="transition ease-out duration-300"
+      x-transition:enter-start="opacity-0"
+      x-transition:enter-end="opacity-100"
+      x-transition:leave="transition ease-in duration-200"
+      x-transition:leave-start="opacity-100"
+      x-transition:leave-end="opacity-0"
+      @click="if ($event.target === $event.currentTarget) showKeyModal = false"
+    >
+      <button
+        @click="showKeyModal = false"
+        class="cursor-pointer absolute top-4 right-4 p-2 text-primary-lighter dark:text-gray-400 hover:text-primary dark:hover:text-gray-200 transition hover:bg-gray-100/80 dark:hover:bg-gray-800/80"
+      >
+        <span class="material-symbols-outlined text-lg">close</span>
+      </button>
+
+      <div
+        class="w-full h-full sm:max-w-md sm:h-auto mx-auto p-8 bg-background-light dark:bg-dotcom-dark shadow-xl sm:rounded-3xl border border-grayish"
+      >
+        <div class="text-center mb-8">
+          <div
+            class="w-16 h-16 bg-gradient-to-br from-secondary/80 to-secondary/60 dark:from-dotcom-light/80 dark:to-dotcom-light/60 rounded-2xl mx-auto mb-4 flex items-center justify-center"
+          >
+            <span class="material-symbols-outlined text-white dark:text-dotcom-dark text-2xl"
+              >vpn_key</span
+            >
+          </div>
+          <h3 class="text-xl font-bold text-primary dark:text-white mb-2">Your Nostr Account</h3>
+          <p class="text-sm text-primary-lighter dark:text-gray-300">
+            You can just use this <code>nsec</code> and it will be your account, or you can create
+            another key later. Just don't lose it and don't show it to anyone.
+          </p>
+        </div>
+
+        <div class="space-y-5" x-data="keyGenerator()">
+          <div>
+            <label class="block text-xs font-semibold text-primary dark:text-gray-200 mb-2">
+              Secret Key (nsec)
+            </label>
+            <div class="flex items-center justify-center gap-2">
+              <input
+                x-model="nsec"
+                readonly
+                class="flex-1 h-10 px-3 text-xs bg-white dark:bg-primary-lighter border border-secondary dark:border-dotcom-light rounded-xl font-mono text-primary dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-secondary/20 dark:focus:ring-dotcom-light/20 focus:border-secondary dark:focus:border-dotcom-light transition"
+                placeholder="Generating..."
+              />
+              <button
+                @click="copyToClipboard(nsec, 'Secret key')"
+                class="cursor-pointer h-10 w-10 flex items-center justify-center bg-secondary dark:bg-dotcom-light text-white dark:text-dotcom-dark border border-secondary dark:border-dotcom-light hover:opacity-90 rounded-xl transition"
+                title="Copy to clipboard"
+              >
+                <span class="material-symbols-outlined text-sm">content_copy</span>
+              </button>
+            </div>
+            <p class="text-xs text-primary-lighter dark:text-gray-400 mt-1">
+              Keep this secret and secure.
+            </p>
+          </div>
+
+          <div>
+            <label
+              class="block text-xs font-semibold text-primary dark:text-gray-200 mb-2 uppercase tracking-wide"
+            >
+              Public Key (npub)
+            </label>
+            <div class="flex gap-2">
+              <input
+                x-model="npub"
+                readonly
+                class="flex-1 px-3 py-3 text-xs bg-white dark:bg-primary-lighter border border-secondary dark:border-dotcom-light rounded-xl font-mono text-primary dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-secondary/20 dark:focus:ring-dotcom-light/20 focus:border-secondary dark:focus:border-dotcom-light transition"
+                placeholder="Generating..."
+              />
+              <button
+                @click="copyToClipboard(npub, 'Public key')"
+                class="h-10 w-10 flex items-center justify-center bg-secondary dark:bg-dotcom-light text-white dark:text-dotcom-dark border border-secondary dark:border-dotcom-light hover:opacity-90 rounded-xl transition"
+                title="Copy to clipboard"
+              >
+                <span class="material-symbols-outlined text-sm">content_copy</span>
+              </button>
+            </div>
+            <p class="text-xs text-primary-lighter dark:text-gray-400 mt-1">
+              This is your user id you can share with anyone.
+            </p>
+          </div>
+
+          <div class="flex flex-col space-y-3 pt-2">
+            <button
+              @click="generateNewKeys()"
+              class="w-full inline-flex items-center justify-center px-4 py-3 text-sm font-medium text-primary dark:text-gray-200 bg-background-light dark:bg-dotcom-dark border border-secondary dark:border-dotcom-light rounded-xl hover:bg-secondary/10 dark:hover:bg-dotcom-light/10 transition"
+            >
+              <span class="material-symbols-outlined mr-2 text-lg">refresh</span>
+              Generate New Keys
+            </button>
+            <a
+              href="https://nstart.me"
+              target="_blank"
+              class="w-full inline-flex items-center justify-center px-4 py-3 text-sm font-medium text-white dark:text-dotcom-dark bg-secondary dark:bg-dotcom-light rounded-xl hover:opacity-90 transition shadow-sm"
+            >
+              Get Started with Nostr
+              <span class="ml-2 text-lg">→</span>
+            </a>
+          </div>
+
+          <div
+            x-show="copyMessage"
+            x-transition
+            class="text-center text-xs font-medium text-secondary dark:text-dotcom-light bg-secondary/10 dark:bg-dotcom-light/10 rounded-lg py-2"
+            x-text="copyMessage"
+          ></div>
+        </div>
+      </div>
+    </div>
   </body>
 </html>
