@@ -53,7 +53,7 @@
         <a
           href="https://nstart.me"
           target="_blank"
-          class="inline-flex items-center bg-secondary dark:bg-dotcom-light text-white dark:text-dotcom-dark font-medium px-6 py-2.5 rounded-full text-sm transition hover:opacity-90"
+          class="inline-flex items-center bg-secondary dark:bg-dotcom-light text-white dark:text-dotcom-dark font-medium px-8 md:px-6 py-2.5 rounded-full text-sm transition hover:opacity-90"
         >
           Join Nostr
           <span class="ml-1 text-lg">›</span>
@@ -61,7 +61,7 @@
         <a
           href="https://www.youtube.com/watch?v=Tbt3jL1Ms0w"
           target="_blank"
-          class="inline-flex items-center border border-secondary dark:border-dotcom-light text-primary dark:text-white font-medium px-6 py-2.5 rounded-full text-sm transition hover:bg-grayish dark:hover:bg-gray-700"
+          class="inline-flex items-center border border-secondary dark:border-dotcom-light text-primary dark:text-white font-medium px-8 md:px-6 py-2.5 rounded-full text-sm transition hover:bg-grayish dark:hover:bg-gray-700"
         >
           Watch a presentation
           <span class="ml-1 text-lg">›</span>
@@ -169,7 +169,7 @@
           <div
             class="w-8 h-8 bg-grayish dark:bg-gray-700 rounded-full flex items-center justify-center"
           >
-            <span class="text-xs font-medium">N</span>
+            <span class="text-xs font-medium material-symbols-outlined mr-1">rebase</span>
           </div>
           <div>
             <h3 class="font-semibold text-lg mb-1">Many clients, many servers</h3>
@@ -184,7 +184,7 @@
         <a
           href="https://newsletter.squishy.computer/p/natures-many-attempts-to-evolve-a"
           target="_blank"
-          class="inline-flex items-center bg-secondary dark:bg-dotcom-light text-white dark:text-dotcom-dark font-medium px-4 py-2 rounded-full text-sm transition hover:opacity-90"
+          class="inline-flex items-center bg-secondary dark:bg-dotcom-light text-white dark:text-dotcom-dark font-medium px-8 md:px-4 py-2 rounded-full text-sm transition hover:opacity-90"
         >
           Learn how Nostr is different
           <span class="ml-1 text-lg">›</span>
@@ -231,7 +231,7 @@
           <div
             class="w-8 h-8 bg-grayish dark:bg-gray-700 rounded-full flex items-center justify-center"
           >
-            <span class="text-xs font-medium">N</span>
+            <span class="text-xs font-medium material-symbols-outlined mr-1">signature</span>
           </div>
           <div>
             <h3 class="font-semibold text-lg mb-1">A new paradigm for communication</h3>
@@ -246,7 +246,7 @@
         <a
           href="https://archive.is/fBBOl"
           target="_blank"
-          class="inline-flex items-center bg-secondary dark:bg-dotcom-light text-white dark:text-dotcom-dark font-medium px-4 py-2 rounded-full text-sm transition hover:opacity-90"
+          class="inline-flex items-center bg-secondary dark:bg-dotcom-light text-white dark:text-dotcom-dark font-medium px-8 md:px-4 py-2 rounded-full text-sm transition hover:opacity-90"
         >
           Read a short, human-friendly explanation
           <span class="ml-1 text-lg">›</span>
@@ -265,7 +265,7 @@
           <span
             class="inline-flex items-center bg-grayish dark:bg-gray-700 text-primary-lighter dark:text-gray-300 text-xs font-medium px-3 py-1 rounded-full mb-3"
           >
-            🛡️ Pro-censorship
+            <span class="material-symbols-outlined mr-1">shield</span> Pro-censorship
           </span>
           <h2 class="text-2xl md:text-3xl font-bold mb-4">
             The protocol is ownerless, relays are not
@@ -279,7 +279,7 @@
           <div class="flex flex-col sm:flex-row gap-4 mb-4">
             <a
               href="https://njump.me/naddr1qqfxzttkd9ekjmmw94nx7u3ddehhxarjqy2hwumn8ghj7un9d3shjtnyv9kh2uewd9hj7q3qjlrs53pkdfjnts29kveljul2sm0actt6n8dxrrzqcersttvcuv3qxpqqqp65w0nuxzl#:~:text=Instead,%20relays%20should%20differentiate,%20both%20in%20terms%20of%20function%20and%20membership.%20In%20the%20future%20(and%20even%20now)%20there%20will%20be%20closed%20archival%20relays%20that%20scrape%20the%20network%20and%20provide%20a%20backup%20of%20user%20data%20for%20a%20fee;%20public-read,%20private-write%20relays%20that%20allow%20members%20to%20participate%20in%20an%20exclusive%20group%20with%20greater%20reach;%20private-read,%20private-write%20closed%20community%20relays;%20public%20&#34;town%20square&#34;%20relays,%20paid%20relays%20that%20provide%20indexes,%20full-text%20search,%20or%20content%20recommendations%20for%20the%20wider%20network%20(or%20a%20relevant%20subset%20of%20it);%20and%20relays%20that%20provide%20oracles%20for%20data%20external%20to%20nostr."
-              class="inline-flex items-center border border-secondary dark:border-dotcom-light text-primary dark:text-white text-sm font-medium px-4 py-2 rounded-full transition hover:bg-grayish dark:hover:bg-gray-700"
+              class="inline-flex items-center border border-secondary dark:border-dotcom-light text-primary dark:text-white text-sm font-medium px-8 md:px-4 py-2 rounded-full transition hover:bg-grayish dark:hover:bg-gray-700"
               target="_blank"
             >
               Read about relay differentiation
@@ -287,8 +287,12 @@
           </div>
           <div class="flex flex-col sm:flex-row gap-6 text-sm">
             <div class="text-xs">
-              <div class="text-primary dark:text-white font-semibold mb-1">
-                <div class="block text-secondary dark:text-dotcom-light font-medium mb-2">🤝</div>
+              <div class="text-primary dark:text-white font-semibold flex flex-col">
+                <div
+                  class="block text-secondary dark:text-dotcom-light font-medium material-symbols-outlined mb-2"
+                >
+                  handshake
+                </div>
                 Freedom of association
               </div>
               <p class="my-2 text-xs text-primary-lighter dark:text-gray-300">
@@ -304,8 +308,12 @@
               </a>
             </div>
             <div class="text-xs">
-              <div class="text-primary dark:text-white font-semibold mb-1">
-                <div class="block text-secondary dark:text-dotcom-light font-medium mb-2">⚡</div>
+              <div class="text-primary dark:text-white font-semibold flex flex-col">
+                <div
+                  class="block text-secondary dark:text-dotcom-light font-medium material-symbols-outlined mb-2"
+                >
+                  landscape_2
+                </div>
                 Your own piece of Nostr
               </div>
               <p class="mb-2 text-xs text-primary-lighter dark:text-gray-300">
@@ -336,7 +344,7 @@
           <span
             class="inline-flex items-center bg-grayish dark:bg-gray-700 text-primary dark:text-white text-xs font-medium px-3 py-1 rounded-full mb-3"
           >
-            🧠 New Ideas
+            <span class="material-symbols-outlined mr-1">lightbulb_2</span> New Ideas
           </span>
           <h2 class="text-2xl md:text-3xl font-bold mb-4">Exploring the commons</h2>
           <p class="text-primary-lighter dark:text-gray-300 mb-4 text-sm">
@@ -353,7 +361,7 @@
           <a
             href="https://github.com/nostr-protocol/nips"
             target="_blank"
-            class="inline-flex items-center border border-secondary dark:border-dotcom-light text-primary dark:text-white text-sm font-medium px-4 py-2 rounded-full transition hover:bg-grayish dark:hover:bg-gray-700"
+            class="inline-flex items-center border border-secondary dark:border-dotcom-light text-primary dark:text-white text-sm font-medium px-8 md:px-4 rounded-full transition hover:bg-grayish dark:hover:bg-gray-700"
           >
             Browse the NIPs
           </a>
@@ -372,7 +380,7 @@
           <span
             class="inline-flex items-center bg-grayish dark:bg-gray-700 text-primary-lighter dark:text-gray-300 text-xs font-medium px-3 py-1 rounded-full mb-3"
           >
-            🌐 Ecosystem
+            <span class="material-symbols-outlined mr-1">grass</span> Ecosystem
           </span>
           <h2 class="text-2xl md:text-3xl font-bold mb-4">Still under construction</h2>
           <p class="text-primary-lighter dark:text-gray-300 mb-4 text-sm">
@@ -384,7 +392,7 @@
           <div class="flex flex-col sm:flex-row gap-4 mb-4">
             <a
               href="https://github.com/topics/nostr?o=desc&s=updated"
-              class="inline-flex items-center border border-secondary dark:border-dotcom-light text-primary dark:text-white text-sm font-medium px-4 py-2 rounded-full transition hover:bg-grayish dark:hover:bg-gray-700"
+              class="inline-flex items-center border border-secondary dark:border-dotcom-light text-primary dark:text-white text-sm font-medium px-8 md:px-4 py-2 rounded-full transition hover:bg-grayish dark:hover:bg-gray-700"
               target="_blank"
             >
               List of Nostr repositories on GitHub
@@ -393,8 +401,12 @@
 
           <div class="grid sm:grid-cols-2 gap-6 text-sm">
             <div class="text-xs">
-              <div class="text-primary dark:text-white font-semibold mb-1">
-                <div class="block text-secondary dark:text-dotcom-light font-medium mb-2">📱</div>
+              <div class="text-primary dark:text-white font-semibold flex flex-col">
+                <div
+                  class="block text-secondary dark:text-dotcom-light font-medium material-symbols-outlined mb-2"
+                >
+                  comment
+                </div>
                 Microblogging
               </div>
               <p class="my-2 text-xs text-primary-lighter dark:text-gray-300">
@@ -411,8 +423,12 @@
             </div>
 
             <div class="text-xs">
-              <div class="text-primary dark:text-white font-semibold mb-1">
-                <div class="block text-secondary dark:text-dotcom-light font-medium mb-2">👥</div>
+              <div class="text-primary dark:text-white font-semibold flex flex-col">
+                <div
+                  class="block text-secondary dark:text-dotcom-light font-medium material-symbols-outlined mb-2"
+                >
+                  hub
+                </div>
                 Relay-based groups
               </div>
               <p class="my-2 text-xs text-primary-lighter dark:text-gray-300">
@@ -913,7 +929,7 @@
         <div class="flex flex-col sm:flex-row items-center gap-3">
           <a
             href="https://my.nostr.com/"
-            class="bg-dotcom-light/90 text-dotcom-dark font-medium px-5 py-2 rounded-full transition hover:bg-lnbits-light"
+            class="bg-dotcom-light/90 text-dotcom-dark font-medium px-5 py-2 rounded-full transition hover:bg-dotcom-light"
             target="_blank"
           >
             Buy a @nostr.com username
