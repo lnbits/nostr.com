@@ -3,7 +3,7 @@
 
 @theme {
   --font-sans: "Jost", sans-serif;
-  --color-background-light: #fff; /* weird beige that is in the images */
+  --color-background-light: #f5f1e6; /* weird beige that is in the images */
   --color-primarytext: #1a181b; /* black */
   --color-primarytext-inverted: #ffffff; /* white */
   --color-primarytextlighter: #3a363b; /* slightly less black */
@@ -130,7 +130,7 @@ html {
   left: 0;
   right: 0;
   height: 40%;
-  background: linear-gradient(to top, #fff 0%, rgba(255, 255, 255, 0.95) 40%, transparent 100%);
+  background: linear-gradient(to top, #f5f1e6 0%, rgba(245, 241, 230, 0.95) 40%, transparent 100%);
   pointer-events: none;
   z-index: 90;
 }
