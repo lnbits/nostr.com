@@ -5,9 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Nostr - Notes and Other Stuff Transmitted by Relays</title>
     <link href="/base.css" rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined"
+      rel="stylesheet"
+    />
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   </head>
-  <body class="bg-background-light text-primarytext font-sans">
+  <body
+    x-data="darkMode()"
+    :class="isDark ? 'bg-lnbits-dark text-white dark-mode' : 'bg-background-light text-primarytext'"
+    class="font-sans"
+  >
     <!-- Header -->
     <header class="border-b">
       <div class="max-w-7xl mx-auto flex justify-between items-center px-4 py-4">
@@ -31,12 +39,11 @@
             >Spec</a
           >
           <button
-          id="darkModeToggle"
-          aria-label="Toggle dark mode"
-          class="hidden md:block ml-4 text-2xl hover:opacity-80 transition material-symbols-outlined"
-        >
-          dark_mode
-        </button>
+            @click="toggle()"
+            aria-label="Toggle dark mode"
+            class="hidden md:block ml-4 text-2xl hover:opacity-80 transition material-symbols-outlined"
+            x-text="isDark ? 'light_mode' : 'dark_mode'"
+          ></button>
         </nav>
       </div>
     </header>
@@ -265,10 +272,9 @@
     <section class="px-6 max-w-6xl mx-auto mb-24 scroll-reveal">
       <div class="grid md:grid-cols-2 gap-10 items-center">
         <img
-  id="relaySelectionImg"
-  src="/robots/relayselection.png"
-  class="mb-4 mx-auto h-100 md:h-auto md:order-2"
-/>
+          :src="isDark ? '/robots/relayselection-dark.png' : '/robots/relayselection.png'"
+          class="mb-4 mx-auto h-100 md:h-auto md:order-2"
+        />
         <div>
           <span
             class="inline-flex items-center bg-grayish text-primarytextlighter text-xs font-medium px-3 py-1 rounded-full mb-3"
@@ -337,10 +343,9 @@
     <section class="px-6 max-w-6xl mx-auto mb-24 scroll-reveal">
       <div class="grid md:grid-cols-2 gap-10 items-center">
         <img
-  id="feedImg"
-  src="/robots/feed.png"
-  class="mx-auto h-100 md:h-auto mb-4"
-/>
+          :src="isDark ? '/robots/feed-dark.png' : '/robots/feed.png'"
+          class="mx-auto h-100 md:h-auto mb-4"
+        />
         <div>
           <span
             class="inline-flex items-center bg-grayish text-primarytext text-xs font-medium px-3 py-1 rounded-full mb-3"
@@ -374,10 +379,9 @@
     <section class="px-6 max-w-6xl mx-auto mb-32 scroll-reveal">
       <div class="grid md:grid-cols-2 gap-10 items-center">
         <img
-  id="underConstructionImg"
-  src="/robots/underconstruction.png"
-  class="mx-auto h-100 md:h-auto mb-4 md:order-2"
-/>
+          :src="isDark ? '/robots/underconstruction-dark.png' : '/robots/underconstruction.png'"
+          class="mx-auto h-100 md:h-auto mb-4 md:order-2"
+        />
         <div>
           <span
             class="inline-flex items-center bg-grayish text-primarytextlighter text-xs font-medium px-3 py-1 rounded-full mb-3"
@@ -460,11 +464,10 @@
         <div
           class="border-2 shadow-lg border-secondary rounded-xl p-5 md:col-span-2 scroll-reveal-stagger"
         >
-        <img
-        id="sendMeNotesImg"
-        src="/robots/sendmenotes.png"
-        class="mb-4 h-70 md:h-auto block mx-auto"
-      />
+          <img
+            :src="isDark ? '/robots/sendmenotes-dark.png' : '/robots/sendmenotes.png'"
+            class="mb-4 h-70 md:h-auto block mx-auto"
+          />
           <h3 class="font-semibold mb-2">User chooses their outbox relays</h3>
           <p class="text-sm text-primarytextlighter">
             Patricia publishes a special event announcing which servers she will use as her "outbox
@@ -479,10 +482,9 @@
         <!-- Item 2 -->
         <div class="border-2 shadow-lg border-secondary rounded-xl p-5 scroll-reveal-stagger">
           <img
-  id="shakeReadImg"
-  src="/robots/shakeread.png"
-  class="mb-4 h-70 md:h-auto block mx-auto"
-/>
+            :src="isDark ? '/robots/shakeread-dark.png' : '/robots/shakeread.png'"
+            class="mb-4 h-70 md:h-auto block mx-auto"
+          />
           <h3 class="font-semibold mb-2">Someone starts following</h3>
           <p class="text-sm text-primarytextlighter">
             When Florian wants to read Patricia's posts, his client looks up her announcement and
@@ -1037,65 +1039,41 @@
     </footer>
 
     <script>
-const toggleButton = document.getElementById("darkModeToggle")
-const root = document.documentElement
-const img = document.getElementById("sendMeNotesImg")
-const shakeImg = document.getElementById("shakeReadImg")
-const relayImg = document.getElementById("relaySelectionImg")
-const underImg = document.getElementById("underConstructionImg")
-const feedImg = document.getElementById("feedImg")
+      function darkMode() {
+        return {
+          isDark: false,
 
-function applyDarkMode(isDark) {
-  const body = document.body
+          init() {
+            // check system preference and saved preference
+            const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches
+            const savedTheme = localStorage.getItem("theme")
+            this.isDark = savedTheme ? savedTheme === "dark" : systemPrefersDark
 
-  if (isDark) {
-    body.classList.add("dark-mode")
-    body.classList.remove("bg-background-light", "text-primarytext")
-    body.classList.add("bg-lnbits-dark", "text-white")
-    toggleButton.textContent = "light_mode"
+            // apply initial theme
+            this.applyTheme()
+          },
 
-    root.style.setProperty("--color-secondary", "#7dd3fc")
-    root.style.setProperty("--color-primarytext", "#ffffff")
-    root.style.setProperty("--color-primarytext-inverted", "#1a181b")
+          toggle() {
+            this.isDark = !this.isDark
+            this.applyTheme()
+            localStorage.setItem("theme", this.isDark ? "dark" : "light")
+          },
 
-    img.src = "/robots/sendmenotes-dark.png"
-    shakeImg.src = "/robots/shakeread-dark.png"
-    relayImg.src = "/robots/relayselection-dark.png"
-    underImg.src = "/robots/underconstruction-dark.png"
-    feedImg.src = "/robots/feed-dark.png"
-  } else {
-    body.classList.remove("dark-mode")
-    body.classList.add("bg-background-light", "text-primarytext")
-    body.classList.remove("bg-lnbits-dark", "text-white")
-    toggleButton.textContent = "dark_mode"
+          applyTheme() {
+            const root = document.documentElement
 
-    root.style.setProperty("--color-secondary", "#0f172a")
-    root.style.setProperty("--color-primarytext", "#1a181b")
-    root.style.setProperty("--color-primarytext-inverted", "#ffffff")
-
-    img.src = "/robots/sendmenotes.png"
-    shakeImg.src = "/robots/shakeread.png"
-    relayImg.src = "/robots/relayselection.png"
-    underImg.src = "/robots/underconstruction.png"
-    feedImg.src = "/robots/feed.png"
-  }
-
-  localStorage.setItem("theme", isDark ? "dark" : "light")
-}
-
-const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches
-const savedTheme = localStorage.getItem("theme")
-const startInDarkMode = savedTheme ? savedTheme === "dark" : systemPrefersDark
-
-applyDarkMode(startInDarkMode)
-
-toggleButton.addEventListener("click", () => {
-  const isDark = !document.body.classList.contains("dark-mode")
-  applyDarkMode(isDark)
-})
-
-
-
+            if (this.isDark) {
+              root.style.setProperty("--color-secondary", "#7dd3fc")
+              root.style.setProperty("--color-primarytext", "#ffffff")
+              root.style.setProperty("--color-primarytext-inverted", "#1a181b")
+            } else {
+              root.style.setProperty("--color-secondary", "#0f172a")
+              root.style.setProperty("--color-primarytext", "#1a181b")
+              root.style.setProperty("--color-primarytext-inverted", "#ffffff")
+            }
+          }
+        }
+      }
 
       // scroll reveal animation
       function initScrollReveal() {
