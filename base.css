@@ -5,6 +5,8 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
+  --breakpoint-xs: 30rem;
+
   --font-sans: "Libre Franklin", sans-serif;
   --color-background-light: #f5f1e6; /* ivory */
   --color-primary: #1a181b; /* black */
@@ -14,8 +16,10 @@
   --default-transition-duration: 500ms;
 
   --font-lnbits: "Lexend", sans-serif;
-  --color-lnbits-dark: #0f172a; /* dark blue */
-  --color-lnbits-light: #7dd3fc; /* light blue */
+  --color-lnbits-dark: #7b54c4; /* purple */
+  --color-lnbits-light: #ff1ee6; /* pink */
+  --color-dotcom-dark: #0f172a; /* dark blue */
+  --color-dotcom-light: #7dd3fc; /* light blue */
 }
 
 details[open] summary ~ * {

@@ -11,7 +11,7 @@
     />
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   </head>
-  <body class="font-sans bg-background-light dark:bg-lnbits-dark text-primary dark:text-white">
+  <body class="font-sans bg-background-light dark:bg-dotcom-dark text-primary dark:text-white">
     <!-- Header -->
     <header class="border-b">
       <div class="max-w-7xl mx-auto flex justify-between items-center px-4 py-4">
@@ -19,25 +19,18 @@
           <span class="text-primary dark:text-white">nostr</span>
         </div>
         <nav class="flex gap-6 text-sm text-primary dark:text-white">
-          <a
-            href="#/.com-services"
-            class="text-lnbits-light brightness-[80%] font-semibold hover:font-bold"
+          <a href="#/.com-services" class="text-dotcom-light brightness-[80%] font-semibold"
             >Support</a
           >
-          <a href="https://nostrapps.com/" target="_blank" class="hover:font-bold">Apps</a>
-          <a href="https://nostr.band" target="_blank" class="hidden md:block hover:font-bold"
-            >Explore</a
-          >
-          <a
-            href="https://github.com/nostr-protocol/nips"
-            target="_blank"
-            class="hidden md:block hover:font-bold"
+          <a href="https://nostrapps.com/" target="_blank">Apps</a>
+          <a href="https://nostr.band" target="_blank" class="hidden md:block">Explore</a>
+          <a href="https://github.com/nostr-protocol/nips" target="_blank" class="hidden md:block"
             >Spec</a
           >
           <button
             @click="toggle()"
             aria-label="Toggle dark mode"
-            class="hidden md:block ml-4 text-2xl hover:opacity-80 transition material-symbols-outlined"
+            class="cursor-pointer ml-4 text-2xl transition material-symbols-outlined"
             x-text="isDark ? 'light_mode' : 'dark_mode'"
           ></button>
         </nav>
@@ -60,7 +53,7 @@
         <a
           href="https://nstart.me"
           target="_blank"
-          class="inline-flex items-center bg-secondary dark:bg-lnbits-light text-white dark:text-lnbits-dark font-medium px-6 py-2.5 rounded-full text-sm transition hover:opacity-90"
+          class="inline-flex items-center bg-secondary dark:bg-dotcom-light text-white dark:text-dotcom-dark font-medium px-6 py-2.5 rounded-full text-sm transition hover:opacity-90"
         >
           Join Nostr
           <span class="ml-1 text-lg">›</span>
@@ -68,7 +61,7 @@
         <a
           href="https://www.youtube.com/watch?v=Tbt3jL1Ms0w"
           target="_blank"
-          class="inline-flex items-center border border-secondary dark:border-lnbits-light text-primary dark:text-white font-medium px-6 py-2.5 rounded-full text-sm transition hover:bg-grayish dark:hover:bg-gray-700"
+          class="inline-flex items-center border border-secondary dark:border-dotcom-light text-primary dark:text-white font-medium px-6 py-2.5 rounded-full text-sm transition hover:bg-grayish dark:hover:bg-gray-700"
         >
           Watch a presentation
           <span class="ml-1 text-lg">›</span>
@@ -78,7 +71,7 @@
 
     <!-- Screenshots -->
     <section
-      class="screenshots-container px-4 mb-20 px-16 sm:px-4 h-140 sm:h-180 overflow-hidden max-w-xl sm:max-w-3xl md:max-w-5xl mx-auto relative scroll-reveal-stagger"
+      class="screenshots-container px-4 mb-20 px-16 sm:px-4 h-140 sm:h-180 overflow-hidden mx-4 xs:mx-8 sm:mx-auto max-w-xl sm:max-w-3xl md:max-w-5xl relative scroll-reveal-stagger"
     >
       <!-- Terminal Mock -->
       <div
@@ -159,10 +152,10 @@
       >
         All Kinds of Stuff
       </span>
-      <h2 class="text-2xl md:text-3xl font-bold mb-2">
+      <h2 class="text-2xl md:text-3xl font-bold mb-2 mx-1">
         Like the internet itself: open and chaotic
       </h2>
-      <p class="text-primary-lighter dark:text-gray-300 text-base">
+      <p class="text-primary-lighter dark:text-gray-300 text-base mx-4">
         Nostr embraces the chaos of the early internet—multiple kinds of data, diverse forms of user
         interaction and different clients providing their own perspectives over the same underlying
         information.
@@ -191,7 +184,7 @@
         <a
           href="https://newsletter.squishy.computer/p/natures-many-attempts-to-evolve-a"
           target="_blank"
-          class="inline-flex items-center bg-secondary dark:bg-lnbits-light text-white dark:text-lnbits-dark font-medium px-4 py-2 rounded-full text-sm transition hover:opacity-90"
+          class="inline-flex items-center bg-secondary dark:bg-dotcom-light text-white dark:text-dotcom-dark font-medium px-4 py-2 rounded-full text-sm transition hover:opacity-90"
         >
           Learn how Nostr is different
           <span class="ml-1 text-lg">›</span>
@@ -253,7 +246,7 @@
         <a
           href="https://archive.is/fBBOl"
           target="_blank"
-          class="inline-flex items-center bg-secondary dark:bg-lnbits-light text-white dark:text-lnbits-dark font-medium px-4 py-2 rounded-full text-sm transition hover:opacity-90"
+          class="inline-flex items-center bg-secondary dark:bg-dotcom-light text-white dark:text-dotcom-dark font-medium px-4 py-2 rounded-full text-sm transition hover:opacity-90"
         >
           Read a short, human-friendly explanation
           <span class="ml-1 text-lg">›</span>
@@ -286,7 +279,7 @@
           <div class="flex flex-col sm:flex-row gap-4 mb-4">
             <a
               href="https://njump.me/naddr1qqfxzttkd9ekjmmw94nx7u3ddehhxarjqy2hwumn8ghj7un9d3shjtnyv9kh2uewd9hj7q3qjlrs53pkdfjnts29kveljul2sm0actt6n8dxrrzqcersttvcuv3qxpqqqp65w0nuxzl#:~:text=Instead,%20relays%20should%20differentiate,%20both%20in%20terms%20of%20function%20and%20membership.%20In%20the%20future%20(and%20even%20now)%20there%20will%20be%20closed%20archival%20relays%20that%20scrape%20the%20network%20and%20provide%20a%20backup%20of%20user%20data%20for%20a%20fee;%20public-read,%20private-write%20relays%20that%20allow%20members%20to%20participate%20in%20an%20exclusive%20group%20with%20greater%20reach;%20private-read,%20private-write%20closed%20community%20relays;%20public%20&#34;town%20square&#34;%20relays,%20paid%20relays%20that%20provide%20indexes,%20full-text%20search,%20or%20content%20recommendations%20for%20the%20wider%20network%20(or%20a%20relevant%20subset%20of%20it);%20and%20relays%20that%20provide%20oracles%20for%20data%20external%20to%20nostr."
-              class="inline-flex items-center border border-secondary dark:border-lnbits-light text-primary dark:text-white text-sm font-medium px-4 py-2 rounded-full transition hover:bg-grayish dark:hover:bg-gray-700"
+              class="inline-flex items-center border border-secondary dark:border-dotcom-light text-primary dark:text-white text-sm font-medium px-4 py-2 rounded-full transition hover:bg-grayish dark:hover:bg-gray-700"
               target="_blank"
             >
               Read about relay differentiation
@@ -295,7 +288,7 @@
           <div class="flex flex-col sm:flex-row gap-6 text-sm">
             <div class="text-xs">
               <div class="text-primary dark:text-white font-semibold mb-1">
-                <div class="block text-secondary dark:text-lnbits-light font-medium mb-2">🤝</div>
+                <div class="block text-secondary dark:text-dotcom-light font-medium mb-2">🤝</div>
                 Freedom of association
               </div>
               <p class="my-2 text-xs text-primary-lighter dark:text-gray-300">
@@ -312,7 +305,7 @@
             </div>
             <div class="text-xs">
               <div class="text-primary dark:text-white font-semibold mb-1">
-                <div class="block text-secondary dark:text-lnbits-light font-medium mb-2">⚡</div>
+                <div class="block text-secondary dark:text-dotcom-light font-medium mb-2">⚡</div>
                 Your own piece of Nostr
               </div>
               <p class="mb-2 text-xs text-primary-lighter dark:text-gray-300">
@@ -360,7 +353,7 @@
           <a
             href="https://github.com/nostr-protocol/nips"
             target="_blank"
-            class="inline-flex items-center border border-secondary dark:border-lnbits-light text-primary dark:text-white text-sm font-medium px-4 py-2 rounded-full transition hover:bg-grayish dark:hover:bg-gray-700"
+            class="inline-flex items-center border border-secondary dark:border-dotcom-light text-primary dark:text-white text-sm font-medium px-4 py-2 rounded-full transition hover:bg-grayish dark:hover:bg-gray-700"
           >
             Browse the NIPs
           </a>
@@ -391,7 +384,7 @@
           <div class="flex flex-col sm:flex-row gap-4 mb-4">
             <a
               href="https://github.com/topics/nostr?o=desc&s=updated"
-              class="inline-flex items-center border border-secondary dark:border-lnbits-light text-primary dark:text-white text-sm font-medium px-4 py-2 rounded-full transition hover:bg-grayish dark:hover:bg-gray-700"
+              class="inline-flex items-center border border-secondary dark:border-dotcom-light text-primary dark:text-white text-sm font-medium px-4 py-2 rounded-full transition hover:bg-grayish dark:hover:bg-gray-700"
               target="_blank"
             >
               List of Nostr repositories on GitHub
@@ -401,7 +394,7 @@
           <div class="grid sm:grid-cols-2 gap-6 text-sm">
             <div class="text-xs">
               <div class="text-primary dark:text-white font-semibold mb-1">
-                <div class="block text-secondary dark:text-lnbits-light font-medium mb-2">📱</div>
+                <div class="block text-secondary dark:text-dotcom-light font-medium mb-2">📱</div>
                 Microblogging
               </div>
               <p class="my-2 text-xs text-primary-lighter dark:text-gray-300">
@@ -419,7 +412,7 @@
 
             <div class="text-xs">
               <div class="text-primary dark:text-white font-semibold mb-1">
-                <div class="block text-secondary dark:text-lnbits-light font-medium mb-2">👥</div>
+                <div class="block text-secondary dark:text-dotcom-light font-medium mb-2">👥</div>
                 Relay-based groups
               </div>
               <p class="my-2 text-xs text-primary-lighter dark:text-gray-300">
@@ -455,7 +448,7 @@
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
         <!-- Item 1 -->
         <div
-          class="border-2 shadow-lg border-secondary dark:border-lnbits-light rounded-xl p-5 md:col-span-2 scroll-reveal-stagger"
+          class="border-2 shadow-lg border-secondary dark:border-dotcom-light rounded-xl p-5 md:col-span-2 scroll-reveal-stagger"
         >
           <img
             :src="isDark ? '/robots/sendmenotes-dark.png' : '/robots/sendmenotes.png'"
@@ -474,7 +467,7 @@
 
         <!-- Item 2 -->
         <div
-          class="border-2 shadow-lg border-secondary dark:border-lnbits-light rounded-xl p-5 scroll-reveal-stagger"
+          class="border-2 shadow-lg border-secondary dark:border-dotcom-light rounded-xl p-5 scroll-reveal-stagger"
         >
           <img
             :src="isDark ? '/robots/shakeread-dark.png' : '/robots/shakeread.png'"
@@ -492,7 +485,7 @@
 
         <!-- Item 3 -->
         <div
-          class="border-2 shadow-lg border-secondary dark:border-lnbits-light rounded-xl p-5 scroll-reveal-stagger"
+          class="border-2 shadow-lg border-secondary dark:border-dotcom-light rounded-xl p-5 scroll-reveal-stagger"
         >
           <img src="/robots/relays.png" class="mb-4 h-70 block mx-auto" />
           <h3 class="font-semibold mb-2">Users can switch relays when needed</h3>
@@ -508,7 +501,7 @@
 
         <!-- Item 4 -->
         <div
-          class="border-2 shadow-lg border-secondary dark:border-lnbits-light rounded-xl p-5 scroll-reveal-stagger"
+          class="border-2 shadow-lg border-secondary dark:border-dotcom-light rounded-xl p-5 scroll-reveal-stagger"
         >
           <img src="/robots/clients.png" class="mb-4 h-70 block mx-auto" />
           <h3 class="font-semibold mb-2">Clients track relay changes</h3>
@@ -523,7 +516,7 @@
 
         <!-- Item 5 -->
         <div
-          class="border-2 shadow-lg border-secondary dark:border-lnbits-light rounded-xl p-5 scroll-reveal-stagger"
+          class="border-2 shadow-lg border-secondary dark:border-dotcom-light rounded-xl p-5 scroll-reveal-stagger"
         >
           <img src="/robots/collection.png" class="mb-4 h-70 block mx-auto" />
           <h3 class="font-semibold mb-2">Smart clients manage everything</h3>
@@ -567,7 +560,7 @@
       <div class="space-y-4 text-sm">
         <!-- FAQ Item -->
         <details
-          class="border-2 shadow border-secondary dark:border-lnbits-light rounded-xl p-4 scroll-reveal-stagger"
+          class="border-2 shadow border-secondary dark:border-dotcom-light rounded-xl p-4 scroll-reveal-stagger"
         >
           <summary class="flex justify-between w-full font-bold cursor-pointer">
             What is a "protocol"?
@@ -587,7 +580,7 @@
 
         <!-- FAQ Item -->
         <details
-          class="border-2 shadow border-secondary dark:border-lnbits-light rounded-xl p-4 scroll-reveal-stagger"
+          class="border-2 shadow border-secondary dark:border-dotcom-light rounded-xl p-4 scroll-reveal-stagger"
         >
           <summary class="flex justify-between w-full font-bold cursor-pointer">
             How does Nostr handle spam and unwanted content?
@@ -621,7 +614,7 @@
 
         <!-- FAQ Item -->
         <details
-          class="border-2 shadow border-secondary dark:border-lnbits-light rounded-xl p-4 scroll-reveal-stagger"
+          class="border-2 shadow border-secondary dark:border-dotcom-light rounded-xl p-4 scroll-reveal-stagger"
         >
           <summary class="flex justify-between w-full font-bold cursor-pointer">
             Will Nostr scale effectively with massive user adoption?
@@ -652,7 +645,7 @@
 
         <!-- FAQ Item -->
         <details
-          class="border-2 shadow border-secondary dark:border-lnbits-light rounded-xl p-4 scroll-reveal-stagger"
+          class="border-2 shadow border-secondary dark:border-dotcom-light rounded-xl p-4 scroll-reveal-stagger"
         >
           <summary class="flex justify-between w-full font-bold cursor-pointer">
             What protections does Nostr offer against online harassment?
@@ -678,7 +671,7 @@
 
         <!-- FAQ Item -->
         <details
-          class="border-2 shadow border-secondary dark:border-lnbits-light rounded-xl p-4 scroll-reveal-stagger"
+          class="border-2 shadow border-secondary dark:border-dotcom-light rounded-xl p-4 scroll-reveal-stagger"
         >
           <summary class="flex justify-between w-full font-bold cursor-pointer">
             Why not just use Mastodon/Fediverse?
@@ -719,7 +712,7 @@
 
         <!-- FAQ Item -->
         <details
-          class="border-2 shadow border-secondary dark:border-lnbits-light rounded-xl p-4 scroll-reveal-stagger"
+          class="border-2 shadow border-secondary dark:border-dotcom-light rounded-xl p-4 scroll-reveal-stagger"
         >
           <summary class="flex justify-between w-full font-bold cursor-pointer">
             Why not just use Bluesky/ATProto?
@@ -759,7 +752,7 @@
 
         <!-- FAQ Item -->
         <details
-          class="border-2 shadow border-secondary dark:border-lnbits-light rounded-xl p-4 scroll-reveal-stagger"
+          class="border-2 shadow border-secondary dark:border-dotcom-light rounded-xl p-4 scroll-reveal-stagger"
         >
           <summary class="flex justify-between w-full font-bold cursor-pointer">
             Are economic incentives aligned to keep relays operational?
@@ -789,7 +782,7 @@
 
         <!-- FAQ Item -->
         <details
-          class="border-2 shadow border-secondary dark:border-lnbits-light rounded-xl p-4 scroll-reveal-stagger"
+          class="border-2 shadow border-secondary dark:border-dotcom-light rounded-xl p-4 scroll-reveal-stagger"
         >
           <summary class="flex justify-between w-full font-bold cursor-pointer">
             If content is spread across multiple relays how can I be sure I'm seeing everything?
@@ -806,7 +799,7 @@
 
         <!-- FAQ Item -->
         <details
-          class="border-2 shadow border-secondary dark:border-lnbits-light rounded-xl p-4 scroll-reveal-stagger"
+          class="border-2 shadow border-secondary dark:border-dotcom-light rounded-xl p-4 scroll-reveal-stagger"
         >
           <summary class="flex justify-between w-full font-bold cursor-pointer">
             How does search work?
@@ -841,7 +834,7 @@
 
         <!-- FAQ Item -->
         <details
-          class="border-2 shadow border-secondary dark:border-lnbits-light rounded-xl p-4 scroll-reveal-stagger"
+          class="border-2 shadow border-secondary dark:border-dotcom-light rounded-xl p-4 scroll-reveal-stagger"
         >
           <summary class="flex justify-between w-full font-bold cursor-pointer">
             How can I discover new content from people I don't already follow if there are no
@@ -868,7 +861,7 @@
 
         <!-- FAQ Item -->
         <details
-          class="border-2 shadow border-secondary dark:border-lnbits-light rounded-xl p-4 scroll-reveal-stagger"
+          class="border-2 shadow border-secondary dark:border-dotcom-light rounded-xl p-4 scroll-reveal-stagger"
         >
           <summary class="flex justify-between w-full font-bold cursor-pointer">
             Is Nostr related to Bitcoin?
@@ -895,12 +888,12 @@
 
     <!-- .com Services -->
     <section class="px-6 max-w-5xl mx-auto mb-24 font-lnbits rounded-xl scroll-reveal">
-      <div class="rounded-xl p-10 bg-lnbits-dark/85 dark:bg-secondary/25 shadow-lg">
-        <h2 class="text-xl md:text-2xl font-bold mb-6 text-lnbits-light">
+      <div class="rounded-xl p-10 bg-dotcom-dark/85 dark:bg-secondary/25 shadow-lg">
+        <h2 class="text-xl md:text-2xl font-bold mb-6 text-dotcom-light">
           <a
             href="https://my.nostr.com/"
             target="_blank"
-            class="inline-block border-lnbits-light border-b-4 hover:brightness-[150%] transition"
+            class="inline-block border-dotcom-light border-b-4 hover:brightness-[150%] transition"
             >nostr.com</a
           >
           paid services
@@ -911,7 +904,7 @@
           <a
             href="https://lnbits.com/"
             target="_blank"
-            class="border-b-2 border-transparent hover:border-[#ff1ee6] hover:brightness-[250%] transition text-[#ff1ee6] font-bold text-lg inline-block"
+            class="border-b-2 border-transparent hover:border-lnbits-light hover:brightness-[250%] transition text-lnbits-light font-bold text-lg inline-block"
             >LNbits</a
           >
           and we're proud supporters, pioneers and enthusiasts of Nostr.
@@ -920,14 +913,14 @@
         <div class="flex flex-col sm:flex-row items-center gap-3">
           <a
             href="https://my.nostr.com/"
-            class="bg-lnbits-light/90 text-lnbits-dark font-medium px-5 py-2 rounded-full transition hover:bg-lnbits-light"
+            class="bg-dotcom-light/90 text-dotcom-dark font-medium px-5 py-2 rounded-full transition hover:bg-lnbits-light"
             target="_blank"
           >
             Buy a @nostr.com username
           </a>
           <a
             href="https://shop.lnbits.com/product-category/nostr"
-            class="text-sm font-medium text-lnbits-light transition hover:underline"
+            class="text-sm font-medium text-dotcom-light transition hover:underline"
             target="_blank"
           >
             Shop physical tools and Nostr merch
@@ -952,9 +945,9 @@
 
       <div class="grid md:grid-cols-3 gap-8">
         <div
-          class="rounded-xl p-6 shadow-lg border-l-4 border-secondary dark:border-lnbits-light flex flex-col justify-between bg-white dark:bg-primary-lighter scroll-reveal-stagger"
+          class="rounded-xl p-6 shadow-lg border-l-4 border-secondary dark:border-dotcom-light flex flex-col justify-between bg-white dark:bg-primary-lighter scroll-reveal-stagger"
         >
-          <div class="text-4xl text-secondary dark:text-lnbits-light mb-4">"</div>
+          <div class="text-4xl text-secondary dark:text-dotcom-light mb-4">"</div>
           <blockquote class="text-primary-lighter dark:text-gray-300 leading-relaxed mb-4">
             No one owns Nostr, no one can own Nostr, it's an open-source protocol. No one can build
             a fence to stop the flow of information.
@@ -964,16 +957,16 @@
             <a
               href="https://www.youtube.com/watch?v=MaxXvcr181c"
               target="_blank"
-              class="text-secondary dark:text-lnbits-light hover:underline"
+              class="text-secondary dark:text-dotcom-light hover:underline"
               >Uncle Bob</a
             >
           </cite>
         </div>
 
         <div
-          class="rounded-xl p-6 shadow-lg border-l-4 border-secondary dark:border-lnbits-light flex flex-col justify-between bg-white dark:bg-primary-lighter scroll-reveal-stagger"
+          class="rounded-xl p-6 shadow-lg border-l-4 border-secondary dark:border-dotcom-light flex flex-col justify-between bg-white dark:bg-primary-lighter scroll-reveal-stagger"
         >
-          <div class="text-4xl text-secondary dark:text-lnbits-light mb-4">"</div>
+          <div class="text-4xl text-secondary dark:text-dotcom-light mb-4">"</div>
           <blockquote class="text-primary-lighter dark:text-gray-300 leading-relaxed mb-4">
             Nostr is an open protocol.
             <div class="mt-2">
@@ -986,16 +979,16 @@
             <a
               href="https://x.com/Snowden/status/1620789340199882752"
               target="_blank"
-              class="text-secondary dark:text-lnbits-light hover:underline"
+              class="text-secondary dark:text-dotcom-light hover:underline"
               >Edward Snowden</a
             >
           </cite>
         </div>
 
         <div
-          class="rounded-xl p-6 shadow-lg border-l-4 border-secondary dark:border-lnbits-light flex flex-col justify-between bg-white dark:bg-primary-lighter scroll-reveal-stagger"
+          class="rounded-xl p-6 shadow-lg border-l-4 border-secondary dark:border-dotcom-light flex flex-col justify-between bg-white dark:bg-primary-lighter scroll-reveal-stagger"
         >
-          <div class="text-4xl text-secondary dark:text-lnbits-light mb-4">"</div>
+          <div class="text-4xl text-secondary dark:text-dotcom-light mb-4">"</div>
           <blockquote class="text-primary-lighter dark:text-gray-300 leading-relaxed mb-4">
             I want to claim that Nostr has discovered a new fundamental architecture for distributed
             protocols. Not federated, not P2P.
@@ -1005,7 +998,7 @@
             <a
               href="https://newsletter.squishy.computer/p/natures-many-attempts-to-evolve-a"
               target="_blank"
-              class="text-secondary dark:text-lnbits-light hover:underline"
+              class="text-secondary dark:text-dotcom-light hover:underline"
               >Gordon Brander</a
             >
           </cite>
@@ -1043,11 +1036,14 @@
       </div>
 
       <div
-        class="border-t border-secondary dark:border-lnbits-light py-2 flex justify-between items-center text-xs"
+        class="border-t border-secondary dark:border-dotcom-light py-2 flex justify-between items-center text-xs"
       >
         <p>
           Made with <span class="text-red-500">❤️</span> by the
-          <a href="https://lnbits.com/" target="_blank" class="hover:underline text-[#7b54c4]"
+          <a
+            href="https://lnbits.com/"
+            target="_blank"
+            class="hover:underline text-lnbits-dark dark:text-lnbits-light dark:font-semibold"
             >LNbits</a
           >
           team.
@@ -1056,8 +1052,8 @@
           <a
             href="https://npub.world/npub10efcj7x65z2ak6vd69xr8f2hvqwuaqrhlygl3yqa4y63hfvc02mqwzaeh3"
             target="_blank"
-            class="hover:font-bold hover:text-[#7b54c4]"
-            >🦩</a
+            class="hover:font-bold hover:text-lnbits-dark material-symbols-outlined"
+            >raven</a
           >
         </div>
       </div>
