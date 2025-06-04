@@ -1,14 +1,16 @@
-@import url("https://fonts.googleapis.com/css2?family=Jost:ital,wght@0,100..900;1,100..900&family=Lexend:wght@100..900&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=family=Lexend:wght@100..900&family=Libre+Franklin:ital,wght@0,100..900;1,100..900&display=swap");
+
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
-  --font-sans: "Jost", sans-serif;
-  --color-background-light: #f5f1e6; /* weird beige that is in the images */
-  --color-primarytext: #1a181b; /* black */
-  --color-primarytext-inverted: #ffffff; /* white */
-  --color-primarytextlighter: #3a363b; /* slightly less black */
-  --color-secondary: #0f172a; /* a dark mold green */
-  --color-grayish: #b8bbac; /* gray somewhat green */
+  --font-sans: "Libre Franklin", sans-serif;
+  --color-background-light: #f5f1e6; /* ivory */
+  --color-primary: #1a181b; /* black */
+  --color-primary-lighter: #3a363b; /* slightly less black */
+  --color-secondary: #6f8695; /* a moldy blue */
+  --color-grayish: #cecfdf; /* gray somewhat blueish */
   --default-transition-duration: 500ms;
 
   --font-lnbits: "Lexend", sans-serif;
@@ -34,17 +36,12 @@ html {
 }
 .material-symbols-outlined {
   font-variation-settings:
-    'FILL' 0,
-    'wght' 400,
-    'GRAD' 0,
-    'opsz' 24;
+    "FILL" 0,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 24;
 }
-.dark-mode .text-primarytextlighter {
-  color: #bbb;
-}
-.dark-mode .bg-grayish {
-  background-color: #2f2f2f;
-}
+
 /* scroll reveal animations */
 .scroll-reveal {
   opacity: 0;
@@ -136,6 +133,6 @@ html {
 }
 
 /* Dark mode override */
-.dark-mode .screenshots-container::after {
+.dark .screenshots-container::after {
   background: linear-gradient(to top, #0f172a 0%, rgba(15, 23, 42, 0.95) 40%, transparent 100%);
 }
