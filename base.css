@@ -104,6 +104,18 @@ html {
 .scroll-reveal-stagger:nth-child(8) {
   transition-delay: 0.8s;
 }
+.scroll-reveal-stagger:nth-child(9) {
+  transition-delay: 0.9s;
+}
+.scroll-reveal-stagger:nth-child(10) {
+  transition-delay: 1s;
+}
+.scroll-reveal-stagger:nth-child(11) {
+  transition-delay: 1.1s;
+}
+.scroll-reveal-stagger:nth-child(12) {
+  transition-delay: 1.2s;
+}
 
 /* screenshots fade-out effect */
 .screenshots-container {

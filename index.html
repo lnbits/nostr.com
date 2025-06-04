@@ -49,7 +49,7 @@
       <p class="text-base md:text-lg max-w-2xl mx-auto text-primarytextlighter mb-8 scroll-reveal">
         Nostr doesn't have owners or organizations that control it — it's just a simple standard
         that allows a scalable architecture of clients and servers to interact. Combining old
-        reliable technology with a new a multi-master approach is the main innovation.
+        reliable technology with a new multi-master approach is the main innovation.
       </p>
       <div class="flex flex-col sm:flex-row justify-center gap-4 scroll-reveal">
         <a
@@ -73,7 +73,7 @@
 
     <!-- Screenshots -->
     <section
-      class="screenshots-container px-4 mb-20 px-16 sm:px-4 h-140 sm:h-180 overflow max-w-xl sm:max-w-3xl md:max-w-5xl mx-auto relative scroll-reveal-stagger"
+      class="screenshots-container px-4 mb-20 px-16 sm:px-4 h-140 sm:h-180 overflow-hidden max-w-xl sm:max-w-3xl md:max-w-5xl mx-auto relative scroll-reveal-stagger"
     >
       <!-- Terminal Mock -->
       <div
@@ -352,9 +352,9 @@
             Besides being a natural medium for a Twitter-like microblogging social network, Nostr
             can also be used for other purposes. And not only similar things like sharing
             <i>videos</i>, longform <i>articles</i>, <i>pictures</i> or <i>voice notes</i>. There
-            are initiatives on Nostr for the construction of sub-protocols that power
+            are initiatives on Nostr for the development of sub-protocols that power
             <b>closed groups</b>, <b>decentralized wikipedia</b>, <b>couchsurfing</b>,
-            <b>geocaching</b> or <b>web annotations</b>; as well as protocols that don't use Nostr
+            <b>marketplaces</b> or <b>web annotations</b>; as well as protocols that don't use Nostr
             for the core data but as a coordination and discovery mechanism, such as
             <b>decentralized code collaboration using git</b>, <b>file hosting</b>,
             <b>torrent sharing</b> and <b>video livestreaming</b>.
@@ -565,21 +565,49 @@
         <!-- FAQ Item -->
         <details class="border-2 shadow border-secondary rounded-xl p-4 scroll-reveal-stagger">
           <summary class="flex justify-between w-full font-bold cursor-pointer">
+            What is a "protocol"?
+          </summary>
+          <div class="text-gray-700 leading-relaxed space-y-2 mt-2">
+            <p>
+              A protocol is like a common language that multiple different software can use to talk
+              to each other, it's like <b>e-mail</b>, <b>HTML</b> or <b>HTTP</b>.
+            </p>
+            <p>
+              When we say "protocol" we mean that there is no need to use a specific app in order to
+              be in Nostr: there are many apps that talk the same language and can be used (mostly)
+              interchangeably — and each has its own take on how to do and display things.
+            </p>
+          </div>
+        </details>
+
+        <!-- FAQ Item -->
+        <details class="border-2 shadow border-secondary rounded-xl p-4 scroll-reveal-stagger">
+          <summary class="flex justify-between w-full font-bold cursor-pointer">
             How does Nostr handle spam and unwanted content?
           </summary>
           <div class="text-gray-700 leading-relaxed space-y-2 mt-2">
             <p>
-              Nostr itself, as a protocol, does not have built-in spam filtering or moderation
-              because it is designed to be censorship-resistant and decentralized. Instead, spam
-              control is delegated to users and relay operators, creating a distributed approach to
-              content management.
+              In the default feed you never see any spam, because clients will only fetch
+              information from people that <i>you</i> follow. In that sense no one can "push" spam
+              into you.
             </p>
             <p>
-              Users can choose which relays to connect to based on their spam policies, and relays
-              can implement their own filtering rules to block or limit spammy content.
-              Additionally, users can block or ignore public keys that send spam. This decentralized
-              approach means spam management is distributed and customizable but requires active
-              participation by users and relay operators.
+              It's trickier when you want to see, for example, replies to your posts, in that case a
+              client might be programmed to fetch anything that <i>claims</i> to be a reply
+              <i>from anyone</i>, which might include spam.
+            </p>
+            <p>
+              The way we can deal with it on Nostr is by restricting our area of contact with the
+              spam: for example, some clients may easily decide to only display replies that come
+              from people followed by people you follow. More refined strategies involve announcing
+              and then only reading notes from relays known to be "safe" according to your criteria
+              (could be relays that require payment, relays that do screening for humans, relays
+              that only accept members of certain communities or political affiliations etc).
+            </p>
+            <p>
+              There are no perfect solutions. But these do not exist anywhere, centralized platforms
+              are also full of spam. Nostr at least isn't naïve and tries to build resiliency from
+              the start.
             </p>
           </div>
         </details>
@@ -591,17 +619,24 @@
           </summary>
           <div class="text-gray-700 leading-relaxed space-y-2 mt-2">
             <p>
-              While the protocol is designed to be horizontally scalable via multiple relays, the
-              practical limits of relay network size, data synchronization, and latency under heavy
-              load remain uncertain. The distributed nature should theoretically allow for better
-              scaling than centralized platforms.
+              Yes, Nostr is just a basic client-server architecture. And the fact that users can
+              naturally spread among hundreds of different relays while clients can query dozens of
+              relays that they're interested in at the same time means the network has a natural
+              load balancer (which doesn't prevent a single relay from having its own internal load
+              balancer either).
             </p>
             <p>
-              However, challenges include ensuring data consistency across relays, managing
-              bandwidth costs for relay operators, and maintaining performance as the network grows.
-              The success of scaling will largely depend on the development of efficient relay
-              implementations and economic incentives for operators to maintain high-quality
-              infrastructure.
+              Another (almost the opposite) concern that may be raised is with problems arising from
+              clients having to connect to too many relays if the profiles being followed for
+              whatever reason decide to spread way too much, but this shouldn't be a problem either
+              because people tend to follow many accounts with similar content and these will tend
+              to share relays. Still, if it happens, it's cheap for native apps to open many
+              hundreds of WebSocket connections simultaneously (as they will be getting very few
+              data in each of those). For web apps that isn't so hard, but we can still go up to a
+              few hundreds without big problems. Regardless of any of that, in any complete enough
+              app that wants to display a "following feed" it's already necessary to store events in
+              a local database, and that will make all these issues easy to deal with as you can do
+              the event requests in batches instead of all at once.
             </p>
           </div>
         </details>
@@ -613,16 +648,19 @@
           </summary>
           <div class="text-gray-700 leading-relaxed space-y-2 mt-2">
             <p>
-              Since Nostr identities are just public keys without centralized control, preventing
-              harassment is challenging. There is no central authority to ban or suspend users,
-              which means traditional moderation approaches don't apply.
+              Harassment is similar to spam in the sense that anyone can still create the undesired
+              content and publish to the relays that accept them. All the techniques mentioned in
+              avoiding spam can also be applied in this case, but if we're talking about specific
+              individuals with a permanent identity and not only an army of bots in this case the
+              problem becomes easier, as those individuals can just be blocked by their target and
+              their content will vanish. Presumably friends of such target will also block, and
+              creative solutions involving shared blocklists can be created such that some people
+              don't even have to click the block button directly.
             </p>
             <p>
-              Instead, users must rely on personal blocking and muting of offending public keys.
-              Relay operators can also choose to block or filter abusive content on their servers.
-              The decentralized nature means harassment cannot be universally prevented, but users
-              can curate their own experience by selecting trusted relays and blocking harassers.
-              This model emphasizes user control but requires vigilance and community cooperation.
+              Other approaches involving, for example, relays with restricted read (that can emulate
+              "protected account"/"only friends" features seen in centralized platforms) can further
+              improve this.
             </p>
           </div>
         </details>
@@ -630,27 +668,38 @@
         <!-- FAQ Item -->
         <details class="border-2 shadow border-secondary rounded-xl p-4 scroll-reveal-stagger">
           <summary class="flex justify-between w-full font-bold cursor-pointer">
-            Why not just use Mastodon?
+            Why not just use Mastodon/Fediverse?
           </summary>
           <div class="text-gray-700 leading-relaxed space-y-2 mt-2">
             <p>
-              Nostr eliminates the server dependency issues that plague Mastodon's federation model.
-              In Mastodon, if your server goes down or the admin decides to shut it down, you lose
-              your identity, followers, and content. With Nostr, your identity is cryptographic and
-              portable - you can switch relays without losing anything.
+              There are many problems with Mastodon, mostly due to the fact that it doesn't rely on
+              any cryptography. Because it cannot do the multi-master approach of Nostr due to lack
+              of cryptography, identities are assumed to be "owned" by the server, which is fully
+              trusted by its tenants. Mastodon server owners can do all the harm centralized
+              platforms can do to their underlings, which are completely helpless in case of
+              misbehavior or even in the normal case where a server owner loses their server or
+              decides to shut down for whatever reason.
             </p>
-            <p>Additional advantages over Mastodon include:</p>
-            <ul class="list-disc list-inside space-y-1 ml-4">
-              <li>No need to choose a server or worry about server politics</li>
-              <li>Built-in micropayments and monetization through Bitcoin integration</li>
-              <li>Simpler protocol without complex federation rules</li>
-              <li>Resistance to defederation and server-level censorship</li>
-              <li>Lower barrier to entry for running infrastructure</li>
-            </ul>
             <p>
-              Mastodon currently has better moderation tools, a more mature ecosystem, and
-              established communities. However, Nostr's architecture provides stronger guarantees
-              against censorship and platform lock-in, making it more resilient for long-term use.
+              Worse than that, for many of its purported features, such as blocking or direct
+              messages, users have to also trust owners of the other servers.
+            </p>
+            <p>
+              There are also problems with reliance on the DNS system, but we don't have to talk
+              about those.
+            </p>
+            <p>
+              The most interesting feature of Mastodon is that by its nature it creates communities
+              with shared values that grow in each of its servers. Or, should I say, that should be
+              a feature if it actually worked like that. In fact these are not really communities,
+              but a mashup of users that may share some interests among each other, but also have
+              other interests and those other interests end up polluting the supposed "community"
+              with things that do not interest the other users.
+            </p>
+            <p>
+              Nostr, on the other hand, can create real communities around relays, specifically
+              because users don't have to fully belong to those relays, but can go to them only for
+              some of their needs and go to other relays for other needs.
             </p>
           </div>
         </details>
@@ -658,29 +707,37 @@
         <!-- FAQ Item -->
         <details class="border-2 shadow border-secondary rounded-xl p-4 scroll-reveal-stagger">
           <summary class="flex justify-between w-full font-bold cursor-pointer">
-            Why not just use Bluesky?
+            Why not just use Bluesky/ATProto?
           </summary>
           <div class="text-gray-700 leading-relaxed space-y-2 mt-2">
-            <p>
-              Nostr offers true decentralization compared to Bluesky's more controlled federation
-              model. While Bluesky uses the AT Protocol which still relies on centralized components
-              like identity servers and relies heavily on a single company's infrastructure, Nostr
-              has no central points of failure or control. Users can switch relays instantly without
-              losing their identity or social connections.
-            </p>
-            <p>Key advantages include:</p>
-            <ul class="list-disc list-inside space-y-1 ml-4">
-              <li>No corporate control or potential for platform capture</li>
-              <li>Simpler protocol that's easier to implement and understand</li>
-              <li>Direct integration with Bitcoin and Lightning Network</li>
+            <p>Bluesky has many problems, the two most pronounced are:</p>
+            <ol class="list-inside list-disc" role="list">
               <li>
-                True data portability - your identity and data aren't tied to any specific service
+                Identity centralization: all accounts belong to <b>PLC</b>, a database ran by a
+                central entity that can censor at will — or, alternatively, they can belong to a DNS
+                domain, which is cumbersome, also censorable, risky and is not expected to be used
+                by many anyway;
               </li>
-            </ul>
+              <li>
+                Data centralization: because the <code>Relay-AppView-Client</code> flow assumes only
+                one canonical source of data at each step (unlike Nostr multi-master architecture)
+                that source is always a server that has power to censor, shadowban, reorder data and
+                so on.
+              </li>
+            </ol>
             <p>
-              However, Bluesky currently offers better user experience, more polished clients, and
-              easier onboarding for mainstream users. The trade-off is between Nostr's radical
-              decentralization and Bluesky's more user-friendly but centralized approach.
+              <code>Clients</code> are assumed to be dumb and trust the <code>AppView</code>, and
+              here you have room for all sorts of undesired shenanigans. Then AppViews also assume
+              to source their data from a single <code>Relay</code>, and here you have room for the
+              same effect.
+            </p>
+            <p>
+              You could argue that Bluesky <code>Clients</code> could become smart and start
+              sourcing data from multiple <code>AppViews</code>, or from multiple Relays, or that
+              the <code>AppViews</code> could rely on multiple <code>Relays</code>, or that the
+              <code>Clients</code> could talk directly to the <code>PDSes</code> — and all of that
+              is possible and would indeed bring solutions, but notice that if those things started
+              happening Bluesky would end up becoming Nostr, except with more steps.
             </p>
           </div>
         </details>
@@ -692,32 +749,96 @@
           </summary>
           <div class="text-gray-700 leading-relaxed space-y-2 mt-2">
             <p>
+              Yes,
               <a
                 target="_blank"
+                class="underline hover:brightness-[80%]"
                 href="https://njump.me/nevent1qqsxstdgkge3k9mtezv4z4lpp88p3lnqta9k0k6n8hex0a4zv62pdmqzyqalp33lewf5vdq847t6te0wvnags0gs0mu72kz8938tn24wlfze6pfalk0"
-              ></a>
+                >this clip</a
+              >
+              answers it well.
             </p>
-            <p></p>
+            <p>
+              But basically the answer is the same as the question about scale: if users can go to
+              whatever relay they want we'll see relays ran by all sorts of people and entities.
+              Running servers is very cheap, and a relay can run on a $5/mo server and house at
+              least a few thousand users. It's not hard to imagine relays ran by communities,
+              individuals who just want to be useful to others, big organizations wanting to gain
+              good will with some parts of the public, but also companies, client makers, and, of
+              course, dedicated entities who sell relay hosting for very cheap.
+            </p>
           </div>
         </details>
 
         <!-- FAQ Item -->
         <details class="border-2 shadow border-secondary rounded-xl p-4 scroll-reveal-stagger">
           <summary class="flex justify-between w-full font-bold cursor-pointer">
-            How will content discovery and search work without centralized indexing?
+            If content is spread across multiple relays how can I be sure I'm seeing everything?
           </summary>
           <div class="text-gray-700 leading-relaxed space-y-2 mt-2">
             <p>
-              Without centralized search engines, content discovery relies on specialized relays
-              that provide indexing services, client-side search capabilities, and social signals
-              like recommendations from followed users. This creates a more fragmented but
-              potentially more diverse discovery landscape.
+              It's not a feature of the world at large to be able to see or hear everything that is
+              happening everywhere at all times. Nostr inherits that property from the world, making
+              it so that you can only see what you focus your attention on (and you're allowed to
+              see by the relay that hosts that information).
+            </p>
+          </div>
+        </details>
+
+        <!-- FAQ Item -->
+        <details class="border-2 shadow border-secondary rounded-xl p-4 scroll-reveal-stagger">
+          <summary class="flex justify-between w-full font-bold cursor-pointer">
+            How does search work?
+          </summary>
+          <div class="text-gray-700 leading-relaxed space-y-2 mt-2">
+            <p>
+              It's only possible to search on what you have seen, so search engines will always have
+              to crawl some parts of the network they chose to and index those to enable public
+              search. The word "chose" is employed because, as we know, there can't be a "global"
+              view of the network (and no one would want such a thing anyway as it would be full of
+              spam), so indexers have to choose. This is not different from Google deciding what
+              websites to index.
             </p>
             <p>
-              Comprehensive search across the entire network remains a significant challenge, as it
-              requires either massive indexing efforts by individual relays or new protocols for
-              distributed search. Users may need to rely more on social discovery, hashtags, and
-              curated lists rather than algorithmic recommendations.
+              On the other hand, it's surprisingly doable for clients to store all the posts from
+              people you follow, or all the posts you have seen or interacted with over time (since
+              it's just text, a huge amount of notes can fit in the same space that would otherwise
+              be required to store a single photo, for example) then provide local search over that.
+              That kind of search will be sufficient for most of the cases you would reach out for a
+              search bar in a centralized platform (which is to search for things that you have seen
+              before), and perhaps even more useful since it would naturally filter out all the
+              unrelated garbage.
+            </p>
+            <p>
+              Last, niche or community-oriented relays can also provide very useful search
+              capabilities by just indexing the notes they have stored locally, already filtered and
+              scoped to that relay's topic or cohort (imagine searching over a Discord, Slack or
+              Telegram group, for example).
+            </p>
+          </div>
+        </details>
+
+        <!-- FAQ Item -->
+        <details class="border-2 shadow border-secondary rounded-xl p-4 scroll-reveal-stagger">
+          <summary class="flex justify-between w-full font-bold cursor-pointer">
+            How can I discover new content from people I don't already follow if there are no
+            algorithms?
+          </summary>
+          <div class="text-gray-700 leading-relaxed space-y-2 mt-2">
+            <p>
+              The most basic way to do that is by following the natural habits used by most
+              centralized social platforms users since a long time ago: by looking at the people you
+              follow and whom they're interacting with.
+            </p>
+            <p>
+              But also it's not true that Nostr doesn't have algorithms. Nostr can have algorithms
+              of all kinds: manual, automatic, AI-powered or rule-based. Some of these algorithms
+              can be run entirely locally on clients (for example, surfacing posts from the times
+              when you were not online, or from people that make fewer posts), while other
+              algorithms can be provided by all sorts of relays, either by naturally surfacing posts
+              from a community of people you don't follow or by dedicated relays that have the
+              stated purpose of curating content desirable for a target audience or even by
+              targeting specific users.
             </p>
           </div>
         </details>
@@ -729,27 +850,16 @@
           </summary>
           <div class="text-gray-700 leading-relaxed space-y-2 mt-2">
             <p>
-              Nostr and Bitcoin share fundamental design principles and are deeply complementary.
-              Both use cryptographic keys for identity, prioritize decentralization and censorship
-              resistance, and were created by pseudonymous developers who stepped back from direct
-              control. Nostr uses the same secp256k1 elliptic curve cryptography as Bitcoin, making
-              it natural to integrate Bitcoin wallets and Lightning Network payments directly into
-              social applications.
+              Nostr uses the same cryptographic principles of Bitcoin and was kickstarted mostly by
+              a community of Bitcoiners, so it has disproportionately attracted the attention of
+              Bitcoiners at the start, but aside from that it doesn't have any relationship with
+              Bitcoin. It doesn't depend on Bitcoin for anything and you don't have to know or have
+              or care about any Bitcoin in order to use Nostr.
             </p>
-            <p>The relationship manifests in several ways:</p>
-            <ul class="list-disc list-inside space-y-1 ml-4">
-              <li>Native Lightning Network integration for instant micropayments and tips</li>
-              <li>Bitcoin wallet compatibility for identity management</li>
-              <li>Shared cryptographic standards and security models</li>
-              <li>Similar ethos of individual sovereignty and resistance to censorship</li>
-              <li>Complementary technologies - Bitcoin for money, Nostr for communication</li>
-            </ul>
             <p>
-              Many see Nostr as the social layer that Bitcoin was missing, enabling value transfer
-              and communication to work together seamlessly. This creates new possibilities for
-              creator monetization, micropayments for content, and building economic relationships
-              directly into social interactions without intermediaries taking cuts or controlling
-              the flow of information and money.
+              What about "zaps"? Zaps are a standard for tipping Nostr content using Bitcoin that is
+              implemented by some Nostr clients, but it's fully and completely optional and if you
+              don't care about Bitcoin you don't have to bother about it.
             </p>
           </div>
         </details>
