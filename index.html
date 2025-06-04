@@ -264,7 +264,11 @@
     <!-- Pro-censorship Section -->
     <section class="px-6 max-w-6xl mx-auto mb-24 scroll-reveal">
       <div class="grid md:grid-cols-2 gap-10 items-center">
-        <img src="/robots/relayselection.png" class="mb-4 mx-auto h-100 md:h-auto md:order-2" />
+        <img
+  id="relaySelectionImg"
+  src="/robots/relayselection.png"
+  class="mb-4 mx-auto h-100 md:h-auto md:order-2"
+/>
         <div>
           <span
             class="inline-flex items-center bg-grayish text-primarytextlighter text-xs font-medium px-3 py-1 rounded-full mb-3"
@@ -332,7 +336,11 @@
     <!-- Subprotocols Section -->
     <section class="px-6 max-w-6xl mx-auto mb-24 scroll-reveal">
       <div class="grid md:grid-cols-2 gap-10 items-center">
-        <img src="/robots/feed.png" class="mx-auto h-100 md:h-auto mb-4" />
+        <img
+  id="feedImg"
+  src="/robots/feed.png"
+  class="mx-auto h-100 md:h-auto mb-4"
+/>
         <div>
           <span
             class="inline-flex items-center bg-grayish text-primarytext text-xs font-medium px-3 py-1 rounded-full mb-3"
@@ -365,7 +373,11 @@
     <!-- Under Construction section -->
     <section class="px-6 max-w-6xl mx-auto mb-32 scroll-reveal">
       <div class="grid md:grid-cols-2 gap-10 items-center">
-        <img src="/robots/underconstruction.png" class="mx-auto h-100 md:h-auto mb-4 md:order-2" />
+        <img
+  id="underConstructionImg"
+  src="/robots/underconstruction.png"
+  class="mx-auto h-100 md:h-auto mb-4 md:order-2"
+/>
         <div>
           <span
             class="inline-flex items-center bg-grayish text-primarytextlighter text-xs font-medium px-3 py-1 rounded-full mb-3"
@@ -919,6 +931,9 @@ const toggleButton = document.getElementById("darkModeToggle")
 const root = document.documentElement
 const img = document.getElementById("sendMeNotesImg")
 const shakeImg = document.getElementById("shakeReadImg")
+const relayImg = document.getElementById("relaySelectionImg")
+const underImg = document.getElementById("underConstructionImg")
+const feedImg = document.getElementById("feedImg")
 
 toggleButton.addEventListener("click", () => {
   const body = document.body
@@ -935,6 +950,9 @@ toggleButton.addEventListener("click", () => {
 
     img.src = "/robots/sendmenotes-dark.png"
     shakeImg.src = "/robots/shakeread-dark.png"
+    relayImg.src = "/robots/relayselection-dark.png"
+    underImg.src = "/robots/underconstruction-dark.png"
+    feedImg.src = "/robots/feed-dark.png"
   } else {
     body.classList.add("bg-background-light", "text-primarytext")
     body.classList.remove("bg-lnbits-dark", "text-white")
@@ -946,10 +964,11 @@ toggleButton.addEventListener("click", () => {
 
     img.src = "/robots/sendmenotes.png"
     shakeImg.src = "/robots/shakeread.png"
+    relayImg.src = "/robots/relayselection.png"
+    underImg.src = "/robots/underconstruction.png"
+    feedImg.src = "/robots/feed.png"
   }
 })
-
-
 
 
       // scroll reveal animation
