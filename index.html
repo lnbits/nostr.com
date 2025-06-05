@@ -1112,6 +1112,7 @@
           nsec: "",
           npub: "",
           copyMessage: "",
+          showNextStepsPanel: false,
 
           async init() {
             await this.generateNewKeys()
@@ -1167,6 +1168,10 @@ Generated on: ${new Date().toLocaleString()} on https://nostr.com/
             }, 2000)
           },
 
+          showNextSteps() {
+            this.showNextStepsPanel = true
+          },
+
           async copyToClipboard(text, type) {
             try {
               await navigator.clipboard.writeText(text)
@@ -1214,7 +1219,7 @@ Generated on: ${new Date().toLocaleString()} on https://nostr.com/
 
     <!-- Key Generation Modal -->
     <div
-      class="fixed flex items-center justify-center inset-0 w-full h-full transition-opacity bg-grayish/80 items-center justify-center min-h-screen z-40"
+      class="fixed flex items-center justify-center inset-0 w-full transition-opacity bg-grayish/80 items-center justify-center min-h-screen z-40"
       x-show="showKeyModal"
       x-transition:enter="transition ease-out duration-300"
       x-transition:enter-start="opacity-0"
@@ -1226,102 +1231,230 @@ Generated on: ${new Date().toLocaleString()} on https://nostr.com/
     >
       <button
         @click="showKeyModal = false"
-        class="cursor-pointer absolute top-4 right-4 p-2 text-primary-lighter dark:text-gray-400 hover:text-primary dark:hover:text-gray-200 transition hover:bg-gray-100/80 dark:hover:bg-gray-800/80"
+        class="cursor-pointer absolute top-4 right-4 p-2 text-primary-lighter dark:text-gray-400 hover:text-primary dark:hover:text-gray-200 transition hover:bg-gray-100/80 dark:hover:bg-gray-800/80 z-50"
       >
         <span class="material-symbols-outlined text-lg">close</span>
       </button>
 
       <div
-        class="w-full h-full sm:max-w-md sm:h-auto mx-auto p-8 bg-background-light dark:bg-dotcom-dark shadow-xl sm:rounded-3xl border border-grayish"
+        class="w-full min-h-full mx-auto p-8 bg-background-light dark:bg-dotcom-dark shadow-xl border border-grayish transition-all duration-300"
+        :class="showNextStepsPanel ? 'sm:max-w-5xl sm:h-auto sm:rounded-3xl' : 'sm:max-w-md sm:h-auto sm:rounded-3xl'"
+        x-data="keyGenerator()"
       >
-        <div class="mb-8">
+        <div class="flex flex-col md:flex-row gap-8 min-h-full">
+          <!-- Main Panel -->
+          <div class="flex-1 min-w-0">
+            <div class="mb-8">
+              <div
+                class="w-16 h-16 bg-gradient-to-br from-secondary/80 to-secondary/60 dark:from-dotcom-light/80 dark:to-dotcom-light/60 rounded-2xl mx-auto mb-4 flex items-center justify-center"
+              >
+                <span class="material-symbols-outlined text-white dark:text-dotcom-dark text-2xl"
+                  >vpn_key</span
+                >
+              </div>
+              <h3 class="text-xl font-bold text-primary dark:text-white mb-2">
+                Your Nostr Account
+              </h3>
+              <p class="text-sm text-primary-lighter dark:text-gray-300">
+                You can just use this <code>nsec</code> and it will be your account, or you can
+                create another later.
+              </p>
+            </div>
+
+            <div class="space-y-5">
+              <div>
+                <label class="block text-xs font-semibold text-primary dark:text-gray-200 mb-2">
+                  Secret Key (nsec)
+                </label>
+                <div class="flex items-center justify-center gap-2">
+                  <input
+                    x-model="nsec"
+                    readonly
+                    class="flex-1 h-10 px-3 text-xs bg-white dark:bg-primary-lighter border border-secondary dark:border-dotcom-light rounded-xl font-mono text-primary dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-secondary/20 dark:focus:ring-dotcom-light/20 focus:border-secondary dark:focus:border-dotcom-light transition"
+                    placeholder="Generating..."
+                  />
+                  <button
+                    @click="copyToClipboard(nsec, 'Secret key')"
+                    class="cursor-pointer h-10 w-10 flex items-center justify-center bg-secondary dark:bg-dotcom-light text-white dark:text-dotcom-dark border border-secondary dark:border-dotcom-light hover:opacity-90 rounded-xl transition"
+                    title="Copy to clipboard"
+                  >
+                    <span class="material-symbols-outlined text-sm">content_copy</span>
+                  </button>
+                </div>
+                <p class="text-xs text-primary-lighter dark:text-gray-400 mt-1">
+                  Keep this secret and secure.
+                </p>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-primary dark:text-gray-200 mb-2">
+                  Public Key (npub)
+                </label>
+                <div class="flex gap-2">
+                  <input
+                    x-model="npub"
+                    readonly
+                    class="flex-1 px-3 py-3 text-xs bg-white dark:bg-primary-lighter border border-secondary dark:border-dotcom-light rounded-xl font-mono text-primary dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-secondary/20 dark:focus:ring-dotcom-light/20 focus:border-secondary dark:focus:border-dotcom-light transition"
+                    placeholder="Generating..."
+                  />
+                  <button
+                    @click="copyToClipboard(npub, 'Public key')"
+                    class="h-10 w-10 flex items-center justify-center bg-secondary dark:bg-dotcom-light text-white dark:text-dotcom-dark border border-secondary dark:border-dotcom-light hover:opacity-90 rounded-xl transition"
+                    title="Copy to clipboard"
+                  >
+                    <span class="material-symbols-outlined text-sm">content_copy</span>
+                  </button>
+                </div>
+                <p class="text-xs text-primary-lighter dark:text-gray-400 mt-1">
+                  This is your user id you can share with anyone.
+                </p>
+              </div>
+
+              <div class="flex flex-col space-y-3 pt-2">
+                <button
+                  @click="downloadKeys()"
+                  class="cursor-pointer w-full inline-flex items-center justify-center px-4 py-3 text-sm font-medium text-primary dark:text-gray-200 bg-background-light dark:bg-dotcom-dark border border-secondary dark:border-dotcom-light rounded-xl hover:bg-secondary/10 dark:hover:bg-dotcom-light/10 transition"
+                >
+                  <span class="material-symbols-outlined mr-2 text-lg">download</span>
+                  Download Keys
+                </button>
+                <button
+                  @click="showNextSteps()"
+                  class="cursor-pointer w-full inline-flex items-center justify-center px-4 py-3 text-sm font-medium text-white dark:text-dotcom-dark bg-secondary dark:bg-dotcom-light rounded-xl hover:opacity-90 transition shadow-sm"
+                >
+                  Next Steps
+                  <span class="ml-2 text-lg">→</span>
+                </button>
+              </div>
+
+              <div
+                x-show="copyMessage"
+                x-transition
+                class="text-center text-xs font-medium text-secondary dark:text-dotcom-light bg-secondary/10 dark:bg-dotcom-light/10 rounded-lg py-2"
+                x-text="copyMessage"
+              ></div>
+            </div>
+          </div>
+
+          <!-- Next Steps Panel -->
           <div
-            class="w-16 h-16 bg-gradient-to-br from-secondary/80 to-secondary/60 dark:from-dotcom-light/80 dark:to-dotcom-light/60 rounded-2xl mx-auto mb-4 flex items-center justify-center"
+            x-show="showNextStepsPanel"
+            x-transition:enter="transition ease-out duration-300"
+            x-transition:enter-start="opacity-0 transform translate-x-4"
+            x-transition:enter-end="opacity-100 transform translate-x-0"
+            class="flex-1 min-w-0 md:border-l border-secondary dark:border-dotcom-light md:pl-8"
           >
-            <span class="material-symbols-outlined text-white dark:text-dotcom-dark text-2xl"
-              >vpn_key</span
-            >
-          </div>
-          <h3 class="text-xl font-bold text-primary dark:text-white mb-2">Your Nostr Account</h3>
-          <p class="text-sm text-primary-lighter dark:text-gray-300">
-            You can just use this <code>nsec</code> and it will be your account, or you can create
-            another key later.
-          </p>
-        </div>
-
-        <div class="space-y-5" x-data="keyGenerator()">
-          <div>
-            <label class="block text-xs font-semibold text-primary dark:text-gray-200 mb-2">
-              Secret Key (nsec)
-            </label>
-            <div class="flex items-center justify-center gap-2">
-              <input
-                x-model="nsec"
-                readonly
-                class="flex-1 h-10 px-3 text-xs bg-white dark:bg-primary-lighter border border-secondary dark:border-dotcom-light rounded-xl font-mono text-primary dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-secondary/20 dark:focus:ring-dotcom-light/20 focus:border-secondary dark:focus:border-dotcom-light transition"
-                placeholder="Generating..."
-              />
-              <button
-                @click="copyToClipboard(nsec, 'Secret key')"
-                class="cursor-pointer h-10 w-10 flex items-center justify-center bg-secondary dark:bg-dotcom-light text-white dark:text-dotcom-dark border border-secondary dark:border-dotcom-light hover:opacity-90 rounded-xl transition"
-                title="Copy to clipboard"
-              >
-                <span class="material-symbols-outlined text-sm">content_copy</span>
-              </button>
+            <div class="mb-6">
+              <h3 class="text-xl font-bold text-primary dark:text-white mb-2">What to do next</h3>
+              <p class="text-sm text-primary-lighter dark:text-gray-300">
+                Choose how you want to use your Nostr keys safely:
+              </p>
             </div>
-            <p class="text-xs text-primary-lighter dark:text-gray-400 mt-1">
-              Keep this secret and secure.
-            </p>
-          </div>
 
-          <div>
-            <label class="block text-xs font-semibold text-primary dark:text-gray-200 mb-2">
-              Public Key (npub)
-            </label>
-            <div class="flex gap-2">
-              <input
-                x-model="npub"
-                readonly
-                class="flex-1 px-3 py-3 text-xs bg-white dark:bg-primary-lighter border border-secondary dark:border-dotcom-light rounded-xl font-mono text-primary dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-secondary/20 dark:focus:ring-dotcom-light/20 focus:border-secondary dark:focus:border-dotcom-light transition"
-                placeholder="Generating..."
-              />
-              <button
-                @click="copyToClipboard(npub, 'Public key')"
-                class="h-10 w-10 flex items-center justify-center bg-secondary dark:bg-dotcom-light text-white dark:text-dotcom-dark border border-secondary dark:border-dotcom-light hover:opacity-90 rounded-xl transition"
-                title="Copy to clipboard"
-              >
-                <span class="material-symbols-outlined text-sm">content_copy</span>
-              </button>
+            <div class="space-y-6 text-sm">
+              <!-- Option 1: Trusted Apps -->
+              <div class="border border-secondary dark:border-dotcom-light rounded-xl p-4">
+                <h4 class="font-semibold text-primary dark:text-white mb-2 flex items-center">
+                  <span class="material-symbols-outlined mr-2 text-secondary dark:text-dotcom-light"
+                    >apps</span
+                  >
+                  Use in trusted Nostr apps
+                </h4>
+                <p class="text-primary-lighter dark:text-gray-300 mb-3">
+                  Copy your nsec and paste it directly into a Nostr app you trust. These apps will
+                  store your key locally.
+                </p>
+                <div class="flex flex-wrap gap-2">
+                  <a
+                    href="https://jumble.social/"
+                    target="_blank"
+                    class="text-xs bg-secondary/10 dark:bg-dotcom-light/10 text-secondary dark:text-dotcom-light px-2 py-1 rounded hover:bg-secondary/20 dark:hover:bg-dotcom-light/20 transition"
+                    >Jumble</a
+                  >
+                  <a
+                    href="https://chachi.chat/"
+                    target="_blank"
+                    class="text-xs bg-secondary/10 dark:bg-dotcom-light/10 text-secondary dark:text-dotcom-light px-2 py-1 rounded hover:bg-secondary/20 dark:hover:bg-dotcom-light/20 transition"
+                    >Chachi</a
+                  >
+                  <a
+                    href="https://yakihonne.com/yakihonne-mobile-app"
+                    target="_blank"
+                    class="text-xs bg-secondary/10 dark:bg-dotcom-light/10 text-secondary dark:text-dotcom-light px-2 py-1 rounded hover:bg-secondary/20 dark:hover:bg-dotcom-light/20 transition"
+                    >YakiHonne</a
+                  >
+                  <a
+                    href="https://github.com/mikedilger/gossip"
+                    target="_blank"
+                    class="text-xs bg-secondary/10 dark:bg-dotcom-light/10 text-secondary dark:text-dotcom-light px-2 py-1 rounded hover:bg-secondary/20 dark:hover:bg-dotcom-light/20 transition"
+                    >Gossip</a
+                  >
+                  <a
+                    href="https://nostur.com/"
+                    target="_blank"
+                    class="text-xs bg-secondary/10 dark:bg-dotcom-light/10 text-secondary dark:text-dotcom-light px-2 py-1 rounded hover:bg-secondary/20 dark:hover:bg-dotcom-light/20 transition"
+                    >Nostur</a
+                  >
+                </div>
+              </div>
+
+              <!-- Option 2: Browser Extensions -->
+              <div class="border border-secondary dark:border-dotcom-light rounded-xl p-4">
+                <h4 class="font-semibold text-primary dark:text-white mb-2 flex items-center">
+                  <span class="material-symbols-outlined mr-2 text-secondary dark:text-dotcom-light"
+                    >extension</span
+                  >
+                  Use with browser extensions
+                </h4>
+                <p class="text-primary-lighter dark:text-gray-300 mb-3">
+                  Install a browser extension that safely stores your nsec and signs messages for
+                  web apps without exposing your secret key.
+                </p>
+                <div class="flex flex-wrap gap-2">
+                  <a
+                    href="https://github.com/fiatjaf/nos2x"
+                    target="_blank"
+                    class="text-xs bg-secondary/10 dark:bg-dotcom-light/10 text-secondary dark:text-dotcom-light px-2 py-1 rounded hover:bg-secondary/20 dark:hover:bg-dotcom-light/20 transition"
+                    >nos2x</a
+                  >
+                  <a
+                    href="https://getalby.com/products/browser-extension"
+                    target="_blank"
+                    class="text-xs bg-secondary/10 dark:bg-dotcom-light/10 text-secondary dark:text-dotcom-light px-2 py-1 rounded hover:bg-secondary/20 dark:hover:bg-dotcom-light/20 transition"
+                    >Alby</a
+                  >
+                  <a
+                    href="https://apps.apple.com/us/app/nostash/id6744309333"
+                    target="_blank"
+                    class="text-xs bg-secondary/10 dark:bg-dotcom-light/10 text-secondary dark:text-dotcom-light px-2 py-1 rounded hover:bg-secondary/20 dark:hover:bg-dotcom-light/20 transition"
+                    >Nostash</a
+                  >
+                </div>
+              </div>
+
+              <!-- Option 3: Android Signer -->
+              <div class="border border-secondary dark:border-dotcom-light rounded-xl p-4">
+                <h4 class="font-semibold text-primary dark:text-white mb-2 flex items-center">
+                  <span class="material-symbols-outlined mr-2 text-secondary dark:text-dotcom-light"
+                    >phone_android</span
+                  >
+                  Use with Android signer
+                </h4>
+                <p class="text-primary-lighter dark:text-gray-300 mb-3">
+                  Install an Android dedicated signer and bunker provider that securely stores your
+                  nsec and can sign for other Android and web apps.
+                </p>
+                <div class="flex flex-wrap gap-2">
+                  <a
+                    href="https://github.com/greenart7c3/Amber"
+                    target="_blank"
+                    class="text-xs bg-secondary/10 dark:bg-dotcom-light/10 text-secondary dark:text-dotcom-light px-2 py-1 rounded hover:bg-secondary/20 dark:hover:bg-dotcom-light/20 transition"
+                    >Amber</a
+                  >
+                </div>
+              </div>
             </div>
-            <p class="text-xs text-primary-lighter dark:text-gray-400 mt-1">
-              This is your user id you can share with anyone.
-            </p>
           </div>
-
-          <div class="flex flex-col space-y-3 pt-2">
-            <button
-              @click="downloadKeys()"
-              class="cursor-pointer w-full inline-flex items-center justify-center px-4 py-3 text-sm font-medium text-primary dark:text-gray-200 bg-background-light dark:bg-dotcom-dark border border-secondary dark:border-dotcom-light rounded-xl hover:bg-secondary/10 dark:hover:bg-dotcom-light/10 transition"
-            >
-              <span class="material-symbols-outlined mr-2 text-lg">download</span>
-              Download Keys
-            </button>
-            <a
-              href="https://nstart.me"
-              target="_blank"
-              class="w-full inline-flex items-center justify-center px-4 py-3 text-sm font-medium text-white dark:text-dotcom-dark bg-secondary dark:bg-dotcom-light rounded-xl hover:opacity-90 transition shadow-sm"
-            >
-              Next Steps
-              <span class="ml-2 text-lg">→</span>
-            </a>
-          </div>
-
-          <div
-            x-show="copyMessage"
-            x-transition
-            class="text-center text-xs font-medium text-secondary dark:text-dotcom-light bg-secondary/10 dark:bg-dotcom-light/10 rounded-lg py-2"
-            x-text="copyMessage"
-          ></div>
         </div>
       </div>
     </div>
