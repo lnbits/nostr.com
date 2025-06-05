@@ -21,7 +21,14 @@
   </head>
   <body
     class="font-sans bg-background-light dark:bg-dotcom-dark text-primary dark:text-white"
-    x-data="{ showKeyModal: false }"
+    x-data="{ showingModal: false }"
+    x-init="$watch('showingModal', value => {
+      if (value) {
+        document.body.classList.add('overflow-hidden');
+      } else {
+        document.body.classList.remove('overflow-hidden');
+      }
+    })"
   >
     <!-- Header -->
     <header class="border-b">
@@ -58,9 +65,9 @@
       <p
         class="text-base md:text-lg max-w-4xl mx-auto text-primary-lighter dark:text-gray-300 mb-8 scroll-reveal"
       >
-        Nostr has no corporation or government that controls it. It’s simply a standard for building
-        a scalable architecture of clients and servers to enable free and open communication. Nostr
-        is an apolitical communication commons, anyone can build on Nostr and anyone can use it.
+        Nostr is an apolitical communication commons. A simple standard that defines a scalable
+        architecture of clients and servers that can spread notes freely. Anyone can build on Nostr
+        and anyone can use it.
         <img
           src="/robots/nostr-robot.png"
           alt="Friendly robot"
@@ -69,7 +76,7 @@
       </p>
       <div class="flex flex-col sm:flex-row justify-center gap-4 scroll-reveal">
         <button
-          @click="showKeyModal = true"
+          @click="showingModal = true"
           class="cursor-pointer inline-flex items-center mx-auto sm:mx-0 max-w-lg bg-secondary dark:bg-dotcom-light text-white dark:text-dotcom-dark font-medium px-8 md:px-6 py-2.5 rounded-full text-sm transition hover:opacity-90"
         >
           Join Nostr
@@ -1052,7 +1059,7 @@
           <h4 class="text-primary dark:text-white font-semibold mb-2">Resources</h4>
           <ul class="space-y-1">
             <li>
-              <a @click="showKeyModal = true" class="cursor-pointer hover:underline"></a>
+              <a @click="showingModal = true" class="cursor-pointer hover:underline"></a>
             </li>
             <li>
               <a target="_blank" href="https://nostrapps.com" class="hover:underline"
@@ -1119,7 +1126,7 @@
           nsec: "",
           npub: "",
           copyMessage: "",
-          showNextStepsPanel: false,
+          showingNextSteps: false,
 
           async init() {
             await this.generateNewKeys()
@@ -1176,7 +1183,7 @@ Generated on: ${new Date().toLocaleString()} on https://nostr.com/
           },
 
           showNextSteps() {
-            this.showNextStepsPanel = true
+            this.showingNextSteps = true
           },
 
           async copyToClipboard(text, type) {
@@ -1226,32 +1233,32 @@ Generated on: ${new Date().toLocaleString()} on https://nostr.com/
 
     <!-- Key Generation Modal -->
     <div
-      class="fixed flex items-center justify-center inset-0 w-full transition-opacity bg-grayish/80 items-center justify-center min-h-screen z-40"
-      x-show="showKeyModal"
+      class="fixed flex items-center justify-center inset-0 w-full transition-opacity bg-grayish/80 items-center justify-center min-h-screen sm:h-fit z-40"
+      x-show="showingModal"
       x-transition:enter="transition ease-out duration-300"
       x-transition:enter-start="opacity-0"
       x-transition:enter-end="opacity-100"
       x-transition:leave="transition ease-in duration-200"
       x-transition:leave-start="opacity-100"
       x-transition:leave-end="opacity-0"
-      @click="if ($event.target === $event.currentTarget) showKeyModal = false"
+      @click="if ($event.target === $event.currentTarget) showingModal = false"
     >
       <button
-        @click="showKeyModal = false"
+        @click="showingModal = false"
         class="cursor-pointer absolute top-4 right-4 p-2 text-primary-lighter dark:text-gray-400 hover:text-primary dark:hover:text-gray-200 transition hover:bg-gray-100/80 dark:hover:bg-gray-800/80 z-50"
       >
         <span class="material-symbols-outlined text-lg">close</span>
       </button>
 
       <div
-        class="w-full min-h-full mx-auto p-8 bg-background-light dark:bg-dotcom-dark shadow-xl border border-grayish transition-all duration-300"
-        :class="showNextStepsPanel ? 'sm:max-w-5xl sm:h-auto sm:rounded-3xl' : 'sm:max-w-md sm:h-auto sm:rounded-3xl'"
+        class="w-full h-full max-h-screen sm:max-h-screen overflow-y-auto mx-auto p-8 bg-background-light dark:bg-dotcom-dark shadow-xl border border-grayish transition-all duration-300"
+        :class="showingNextSteps ? 'sm:max-w-5xl sm:h-auto sm:rounded-3xl' : 'sm:max-w-md sm:h-auto sm:rounded-3xl'"
         x-data="keyGenerator()"
       >
         <div class="flex flex-col md:flex-row gap-8 min-h-full">
           <!-- Main Panel -->
           <div class="flex-1 min-w-0">
-            <div class="mb-8">
+            <div class="mb-4">
               <div
                 class="w-16 h-16 bg-gradient-to-br from-secondary/80 to-secondary/60 dark:from-dotcom-light/80 dark:to-dotcom-light/60 rounded-2xl mx-auto mb-4 flex items-center justify-center"
               >
@@ -1268,7 +1275,7 @@ Generated on: ${new Date().toLocaleString()} on https://nostr.com/
               </p>
             </div>
 
-            <div class="space-y-5">
+            <div class="space-y-3">
               <div>
                 <label class="block text-xs font-semibold text-primary dark:text-gray-200 mb-2">
                   Secret Key (nsec)
@@ -1326,6 +1333,7 @@ Generated on: ${new Date().toLocaleString()} on https://nostr.com/
                   Download Keys
                 </button>
                 <button
+                  x-show="!showingNextSteps"
                   @click="showNextSteps()"
                   class="cursor-pointer w-full inline-flex items-center justify-center px-4 py-3 text-sm font-medium text-white dark:text-dotcom-dark bg-secondary dark:bg-dotcom-light rounded-xl hover:opacity-90 transition shadow-sm"
                 >
@@ -1345,16 +1353,18 @@ Generated on: ${new Date().toLocaleString()} on https://nostr.com/
 
           <!-- Next Steps Panel -->
           <div
-            x-show="showNextStepsPanel"
+            x-show="showingNextSteps"
             x-transition:enter="transition ease-out duration-300"
             x-transition:enter-start="opacity-0 transform translate-x-4"
             x-transition:enter-end="opacity-100 transform translate-x-0"
             class="flex-1 min-w-0 md:border-l border-secondary dark:border-dotcom-light md:pl-8"
           >
             <div class="mb-6">
-              <h3 class="text-xl font-bold text-primary dark:text-white mb-2">What to do next</h3>
+              <h3 class="text-xl font-bold text-primary dark:text-white mb-2">
+                How to actually use my Nostr account
+              </h3>
               <p class="text-sm text-primary-lighter dark:text-gray-300">
-                Choose how you want to use your Nostr keys safely:
+                Wherever you take your secret key there will be Nostr:
               </p>
             </div>
 
@@ -1414,8 +1424,8 @@ Generated on: ${new Date().toLocaleString()} on https://nostr.com/
                   Use with browser extensions
                 </h4>
                 <p class="text-primary-lighter dark:text-gray-300 mb-3">
-                  Install a browser extension that safely stores your nsec and signs messages for
-                  web apps without exposing your secret key.
+                  Install a browser extension that stores your nsec and signs messages for web apps
+                  without exposing your secret key.
                 </p>
                 <div class="flex flex-wrap gap-2">
                   <a
@@ -1448,8 +1458,8 @@ Generated on: ${new Date().toLocaleString()} on https://nostr.com/
                   Use with Android signer
                 </h4>
                 <p class="text-primary-lighter dark:text-gray-300 mb-3">
-                  Install an Android dedicated signer and bunker provider that securely stores your
-                  nsec and can sign for other Android and web apps.
+                  Install an Android dedicated signer and bunker provider that stores your nsec and
+                  can sign for other Android or web apps.
                 </p>
                 <div class="flex flex-wrap gap-2">
                   <a
