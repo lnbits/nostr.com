@@ -1,7 +1,7 @@
 export PATH := "./node_modules/.bin:" + env_var('PATH')
 
 dev:
-    vite
+  vite --host 0.0.0.0
 
 build:
   vite build
