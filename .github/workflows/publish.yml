@@ -1,0 +1,23 @@
+name: build and publish to cloudflare
+on:
+  push:
+    branches:
+      - robots
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: extractions/setup-just@v3
+      - uses: bahmutov/npm-install@v1
+        with:
+          install-command: "npm install --force"
+          useLockFile: false
+      - run: just build
+      - uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: 60325047cc7d0811c6b337717918cbc1
+          projectName: nostr-com
+          directory: dist
