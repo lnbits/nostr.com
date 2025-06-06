@@ -12,7 +12,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Build
-        run: npm install && npm run build
+        run: |
+          npm install
+          npx vite build
+          mv dist out
       - name: Publish to Cloudflare Pages
         uses: cloudflare/pages-action@v1
         with:
