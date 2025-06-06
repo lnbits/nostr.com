@@ -49,7 +49,14 @@ function App(props: { onClose: () => void }) {
                 showNextSteps={showingNextSteps() ? null : () => setShowingNextSteps(true)}
               />
             </Match>
-            <Match when={true}>generating account...</Match>
+            <Match when={true}>
+              <div class="flex flex-col w-full m-8 items-center justify-center h-full text-primary-lighter dark:text-gray-300">
+                <span class="material-symbols-outlined text-5xl animate-spin">
+                  progress_activity
+                </span>
+                <p class="mt-6">Generating account...</p>
+              </div>
+            </Match>
           </Switch>
           <Show when={showingNextSteps()}>
             <NextSteps npub={npub} />
