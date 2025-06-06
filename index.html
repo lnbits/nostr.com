@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Nostr - Notes and Other Stuff Transmitted by Relays</title>
-    <link href="/base.css" rel="stylesheet" />
+    <link href="/main.css" rel="stylesheet" />
     <link
       href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined"
       rel="stylesheet"
@@ -1144,7 +1144,7 @@
 
             const modal = document.getElementById("modal")
             if (modal.children.length === 0) {
-              const { renderModal } = await import("/src/App.tsx")
+              const { renderModal } = await import("/main.js")
               renderModal(modal, () => {
                 this.hideModal()
               })

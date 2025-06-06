@@ -1,5 +1,4 @@
 import { createMemo, createSignal, Match, onMount, Show, Switch } from "solid-js"
-import { render } from "solid-js/web"
 import { generateSecretKey, getPublicKey, finalizeEvent } from "@nostr/tools/pure"
 import { nsecEncode, npubEncode, neventEncode, NEvent } from "@nostr/tools/nip19"
 import { BlossomClient } from "@nostr/tools/nipb7"
@@ -45,9 +44,11 @@ function App(props: { onClose: () => void }) {
   onMount(async () => {
     try {
       const evt = await pool.get(writeRelays, { kinds: [0], authors: [publicKey], limit: 1 })
-      const { name } = JSON.parse(evt.content)
-      if (name) {
-        setProfilePublishSuccess(true)
+      if (evt) {
+        const { name } = JSON.parse(evt.content)
+        if (name) {
+          setProfilePublishSuccess(true)
+        }
       }
     } catch (err) {
       /***/
@@ -735,6 +736,4 @@ Generated on: ${new Date().toLocaleString()} on https://nostr.com/
   }
 }
 
-export function renderModal(root: HTMLElement, onClose: () => void) {
-  render(() => <App onClose={onClose} />, root)
-}
+export default App
