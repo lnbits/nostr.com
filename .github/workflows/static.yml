@@ -13,7 +13,7 @@ on:
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
-    contents: read
+    contents: write   # this must be write! required for peaceiris/actions-gh-pages
     pages: write
     id-token: write
 
@@ -35,9 +35,8 @@ jobs:
               run: |
                 npm install --legacy-peer-deps
                 npx vite build
-                mv dist out
             - name: Deploy to GitHub Pages
               uses: peaceiris/actions-gh-pages@v3
               with:
                 github_token: ${{ secrets.GITHUB_TOKEN }}
-                publish_dir: ./out
+                publish_dir: ./dist
