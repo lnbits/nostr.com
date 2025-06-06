@@ -1152,7 +1152,9 @@
 
             const modal = document.getElementById("modal")
             if (modal.children.length === 0) {
-              const { renderModal } = await import("/main.js")
+              const renderModal = () => {
+  console.warn('renderModal not implemented')
+}
               renderModal(modal, () => {
                 this.hideModal()
               })
