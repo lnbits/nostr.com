@@ -34,9 +34,9 @@ jobs:
             - name: Build with Vite
               run: |
                 npm install --legacy-peer-deps
-                npx vite build
+                npx vite build --outDir out
             - name: Deploy to GitHub Pages
               uses: peaceiris/actions-gh-pages@v3
               with:
                 github_token: ${{ secrets.GITHUB_TOKEN }}
-                publish_dir: dist
+                publish_dir: out
