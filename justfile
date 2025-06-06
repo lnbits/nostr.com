@@ -9,6 +9,3 @@ build:
   NODE_ENV=production node build.js
   cp index.html dist/
   cp -r public/* dist/
-
-deploy: build
-  netlify deploy dist/ --prod

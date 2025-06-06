@@ -1,8 +1,0 @@
-[build]
-publish = "dist"
-command = "ls dist/"
-
-[[redirects]]
-from = "/*"
-to = "/index.html"
-status = 200
