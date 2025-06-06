@@ -19,4 +19,4 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: 60325047cc7d0811c6b337717918cbc1
           projectName: nostr-com
-          directory: out
+          directory: ./dist
