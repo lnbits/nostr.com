@@ -17,7 +17,6 @@ permissions:
     pages: write
     id-token: write
 
-
 concurrency:
     group: "pages"
     cancel-in-progress: false
@@ -43,7 +42,7 @@ jobs:
             - name: Setup Pages
               uses: actions/configure-pages@v4
             - name: Upload artifact
-              uses: actions/upload-pages-artifact@v2
+              uses: actions/upload-pages-artifact@v2.0.0
               with:
                 path: "out"
             - name: Deploy to GitHub Pages
