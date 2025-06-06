@@ -1152,7 +1152,7 @@
 
             const modal = document.getElementById("modal")
             if (modal.children.length === 0) {
-              const { renderModal } = await import("/main.js")
+              const { renderModal } = await import("./main.js")
               renderModal(modal, () => {
                 this.hideModal()
               })

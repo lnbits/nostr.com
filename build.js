@@ -5,7 +5,7 @@ import { solidPlugin as solid } from "esbuild-plugin-solid"
 
 esbuild
   .build({
-    entryPoints: ["./src/main.tsx"],
+    entryPoints: ["./main.tsx"],
     bundle: true,
     outdir: "./dist",
     plugins: [
