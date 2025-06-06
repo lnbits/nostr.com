@@ -40,11 +40,11 @@ jobs:
                 npx vite build
                 mv dist out
             - name: Setup Pages
-              uses: actions/configure-pages@v4.0.2
+              uses: actions/configure-pages@v4
             - name: Upload artifact
-              uses: actions/upload-pages-artifact@v2.0.1
+              uses: actions/upload-pages-artifact@v2
               with:
                 path: "out"
             - name: Deploy to GitHub Pages
               id: deployment
-              uses: actions/deploy-pages@v3.0.3
+              uses: actions/deploy-pages@v3
