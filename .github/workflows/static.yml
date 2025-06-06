@@ -33,7 +33,7 @@ jobs:
                 node-version: '20.x'
             - name: Build with Vite
               run: |
-                npm install
+                npm install --legacy-peer-deps
                 npx vite build
                 mv dist out
             - name: Deploy to GitHub Pages
