@@ -1,10 +1,22 @@
 {
+  "name": "nostr-com",
+  "version": "1.0.0",
+  "private": true,
   "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build"
+  },
   "dependencies": {
-    "@deanc/esbuild-plugin-postcss": "^1.0.2",
     "@nostr/gadgets": "npm:@jsr/nostr__gadgets@^0.0.28",
     "@nostr/tools": "npm:@jsr/nostr__tools@^2.14.2",
+    "solid-js": "^1.8.15"
+  },
+  "devDependencies": {
     "@tailwindcss/postcss": "^4.1.8",
+    "@tailwindcss/vite": "^4.1.8",
+    "@typescript-eslint/eslint-plugin": "^8.32.1",
+    "@typescript-eslint/parser": "^8.32.1",
     "esbuild": "^0.25.5",
     "esbuild-plugin-solid": "^0.6.0",
     "eslint": "^9.27.0",
@@ -15,10 +27,6 @@
     "postcss": "^8.5.4",
     "prettier": "^3.5.3",
     "tailwindcss": "^4.1.8",
-    "typescript-eslint": "^8.32.1"
-  },
-  "devDependencies": {
-    "@tailwindcss/vite": "^4.1.8",
     "vite": "^6.3.5",
     "vite-plugin-solid": "^2.11.6"
   }
