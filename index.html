@@ -128,7 +128,8 @@
       <!-- iframe -->
       <iframe
         class="hidden sm:block w-xl md:w-2xl h-130 absolute left-10 top-25 rounded-xl shadow-lg transition duration-500 opacity-90 hover:opacity-100 hover:z-20"
-        src="https://chachi.chat/relay/wss%3A%2F%2Fnostr.wine/feed"
+        src=""
+        :src="Math.random() < 0.3 ? 'https://chachi.chat/relay/wss%3A%2F%2Fyabu.me/feed' : 'https://chachi.chat/relay/wss%3A%2F%2Fnostr.wine/feed'"
         title="the chachi client"
       >
       </iframe>
@@ -136,7 +137,7 @@
       <!-- iframe -->
       <iframe
         class="hidden sm:block w-xl md:w-3xl h-130 absolute left-20 top-45 rounded-xl shadow-lg transition duration-500 opacity-90 hover:opacity-100 hover:z-20"
-        src="https://jumble.social/?r=pyramid.fiatjaf.com"
+        :src="Math.random() < 0.5 ? Math.random() < 0.5 ? 'https://jumble.social/?r=relays.land/spatianostra' : 'https://jumble.social/?r=nostr.land' : 'https://jumble.social/?r=pyramid.fiatjaf.com'"
         title="the Jumble client"
       >
       </iframe>
