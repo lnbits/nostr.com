@@ -182,7 +182,7 @@
 
     <!-- Innovation Card -->
     <section class="px-6 max-w-5xl mx-auto mb-24 scroll-reveal">
-      <div class="flex flex-col md:flex-row justify-between gap-8 items-center">
+      <div class="flex flex-col md:flex-row justify-between gap-8 items-center" data-swap="cards">
         <div class="flex items-start gap-3">
           <div
             class="w-8 h-8 bg-grayish dark:bg-gray-700 rounded-full flex items-center justify-center"
@@ -244,7 +244,7 @@
 
     <!-- Cryptography Card -->
     <section class="md:hidden px-6 max-w-5xl mx-auto mb-24 scroll-reveal">
-      <div class="flex flex-col md:flex-row justify-between gap-8 items-center">
+      <div class="flex flex-col md:flex-row justify-between gap-8 items-center" data-swap="cards">
         <div class="flex items-start gap-3">
           <div
             class="w-8 h-8 bg-grayish dark:bg-gray-700 rounded-full flex items-center justify-center"
@@ -254,19 +254,19 @@
           <div>
             <h3 class="font-semibold text-lg mb-1">A new paradigm for communication</h3>
             <p class="text-sm text-primary-lighter dark:text-gray-300 max-w-md">
-              In Nostr, every message carries a digital signature that proves its authorship and
-              authenticity without any need for any third-party authority or external checks. It's
-              this foundation of trust that enables the decentralized transport and broadcasting of
-              information.
+              In Nostr, every user is represented by a secret number called a "key" and every
+              message carries a digital "signature" that proves its authorship authorship and
+              authenticity without the need for any authority to say so. This foundation of trust
+              enables the decentralized broadcasting of information.
             </p>
           </div>
         </div>
         <a
-          href="https://archive.is/fBBOl"
+          href="https://www.youtube.com/watch?v=GLluXpTRbqs&t=169s"
           target="_blank"
           class="inline-flex items-center bg-secondary dark:bg-dotcom-light text-white dark:text-dotcom-dark font-medium px-8 md:px-4 py-2 rounded-full text-sm transition hover:opacity-90"
         >
-          Read a short, human-friendly explanation
+          Watch a human-friendly explanation
           <span class="ml-1 text-lg">›</span>
         </a>
       </div>
@@ -1120,6 +1120,25 @@
             observer.observe(el)
           })
       }
+    </script>
+
+    <script>
+      // swap elements that have the same data-swap attribute, with 50% chance
+      const swappers = {}
+      document.querySelectorAll("[data-swap]").forEach(el => {
+        let id = el.dataset.swap
+
+        if (swappers[id]) {
+          if (Math.random() < 0.5) {
+            const parent1 = swappers[id].parentNode
+            el.parentNode.appendChild(swappers[id])
+            parent1.appendChild(el)
+          }
+          delete swappers[id]
+        } else {
+          swappers[id] = el
+        }
+      })
     </script>
 
     <script>
