@@ -67,8 +67,8 @@ function Account(props: { secretKey: Uint8Array; showNextSteps: null | (() => vo
           </div>
           <h3 class="text-xl font-bold text-primary dark:text-white mb-2">Your Nostr Account</h3>
           <p class="text-sm text-primary-lighter dark:text-gray-300">
-            You can just use this <code>nsec</code> and it will be your account, or you can create
-            another later.
+            This <code class="font-semibold">nsec</code> was generated on your computer and is
+            impossible to guess it. It cannot be recovered if it's lost.
           </p>
         </div>
       </Show>
@@ -153,7 +153,8 @@ function Account(props: { secretKey: Uint8Array; showNextSteps: null | (() => vo
               </Show>
             </div>
             <p class="text-xs text-primary-lighter dark:text-gray-400 mt-1">
-              Keep this secret and secure.
+              This is a permanent "password" that holds your Nostr identity. Store it in a secure
+              location.
             </p>
           </div>
         </Show>
@@ -189,7 +190,7 @@ function Account(props: { secretKey: Uint8Array; showNextSteps: null | (() => vo
             </Show>
           </div>
           <p class="text-xs text-primary-lighter dark:text-gray-400 mt-1">
-            This is your user id you can share with anyone.
+            This is your user id on Nostr. You can (and should!) share it with anyone.
           </p>
         </div>
 
