@@ -367,8 +367,9 @@ function Account(props: { secretKey: Uint8Array; showNextSteps: null | (() => vo
         nostr.com paid services
       </h4>
       <p class="text-sm text-white mb-3">
-        Remember when we said Nostr didn't have any owners or organizations that controlled it?
-        This is NOT an official website of the protocol, but we do sell stuff!
+      You totally don't need to use paid services from nostr.com to access nostr,
+      but we do happen to sell nostr services, like very pretty nostr names (yourname@nostr.com). 
+      Buying one helps support the development of this site, and will impress all your friends.
       </p>
 
       <a
@@ -378,7 +379,7 @@ function Account(props: { secretKey: Uint8Array; showNextSteps: null | (() => vo
         class="cursor-pointer w-full mt-2 inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white dark:text-dotcom-dark bg-secondary dark:bg-dotcom-light rounded-xl hover:opacity-90 transition shadow-sm"
       >
         <span class="material-symbols-outlined mr-2 text-lg">shopping_cart</span>
-        Visit my.nostr.com
+        visit my.nostr.com
       </a>
   
   </div>
