@@ -357,6 +357,35 @@ function Account(props: { secretKey: Uint8Array; showNextSteps: null | (() => vo
             </div>
           </Show>
 
+          {/* Initial Note Section (shown after profile published) */}
+          <Show when={profilePublishSuccess() && !notePublishSuccess()}>
+  <div class="bg-gray-800 p-6 rounded-xl shadow-md space-y-3">
+    
+      <h4
+        class="text-lg font-extrabold text-[#44c8f5] mb-2 inline-block border-b-4 border-[#44c8f5] pb-1"
+      >
+        nostr.com paid services
+      </h4>
+      <p class="text-sm text-white mb-3">
+        Remember when we said Nostr didn't have any owners or organizations that controlled it?
+        This is NOT an official website of the protocol, but we do sell stuff!
+      </p>
+
+      <a
+        href="https://my.nostr.com"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="cursor-pointer w-full mt-2 inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white dark:text-dotcom-dark bg-secondary dark:bg-dotcom-light rounded-xl hover:opacity-90 transition shadow-sm"
+      >
+        <span class="material-symbols-outlined mr-2 text-lg">shopping_cart</span>
+        Visit my.nostr.com
+      </a>
+  
+  </div>
+</Show>
+
+
+
           {/* Next Steps Button (shown before download and not showing next steps) */}
           <Show when={props.showNextSteps !== null}>
             <button
