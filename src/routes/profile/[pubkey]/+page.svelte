@@ -1,10 +1,10 @@
 <script lang="ts">
   import { page } from '$app/stores';
-  import { BellPlus, Check, Copy, Globe2, Save, UserPlus } from '@lucide/svelte';
+  import { BellPlus, Check, Copy, Globe2, Pencil, Save, Upload, UserPlus, X } from '@lucide/svelte';
   import { nip19 } from 'nostr-tools';
   import NoteCard from '$lib/components/NoteCard.svelte';
   import { events, mergeEvents, profiles, relays, saveProfile, session } from '$lib/stores/app';
-  import { fetchProfileEvents, fetchProfiles } from '$lib/nostr/client';
+  import { fetchProfileEvents, fetchProfiles, getNip98AuthorizationHeader } from '$lib/nostr/client';
   import type { Profile } from '$lib/nostr/types';
 
   const emptyProfile = (): Profile => ({
@@ -32,8 +32,13 @@
   let saving = false;
   let copied = false;
   let error = '';
+  let uploadMessage = '';
+  let uploading: 'picture' | 'banner' | '' = '';
+  let editorOpen = false;
   let draft: Profile = emptyProfile();
   let hydratedPubkey = '';
+  let pictureInput: HTMLInputElement;
+  let bannerInput: HTMLInputElement;
 
   $: if (pubkey) draft = { ...emptyProfile(), ...profile, pubkey };
 
@@ -53,6 +58,7 @@
     error = '';
     try {
       await saveProfile(draft);
+      editorOpen = false;
     } catch (err) {
       error = err instanceof Error ? err.message : 'Could not update profile.';
     } finally {
@@ -62,12 +68,84 @@
 
   async function hydrateProfile(nextPubkey: string) {
     const [found, profileEvents] = await Promise.all([
-      fetchProfiles([nextPubkey], $relays).catch(() => []),
+      $profiles[nextPubkey] ? Promise.resolve([]) : fetchProfiles([nextPubkey], $relays).catch(() => []),
       fetchProfileEvents(nextPubkey, $relays).catch(() => [])
     ]);
     const [profile] = found;
     if (profile) profiles.update((existing) => ({ ...existing, [profile.pubkey]: profile }));
     if (profileEvents.length) events.update((existing) => mergeEvents(profileEvents, existing));
+  }
+
+  async function uploadProfileMedia(file: File | undefined, target: 'picture' | 'banner') {
+    if (!file) return;
+    if (!$session) {
+      error = 'Sign in before uploading profile media.';
+      return;
+    }
+    if (!file.type.startsWith('image/')) {
+      error = 'Choose an image file for your profile media.';
+      return;
+    }
+
+    uploading = target;
+    error = '';
+    uploadMessage = '';
+    try {
+      const url = await uploadToNostrBuild(file, target === 'picture' ? 'avatar' : 'banner');
+      draft = { ...draft, [target]: url };
+      uploadMessage = target === 'picture' ? 'Profile image uploaded.' : 'Banner image uploaded.';
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Could not upload image.';
+    } finally {
+      uploading = '';
+    }
+  }
+
+  async function uploadToNostrBuild(file: File, mediaType: 'avatar' | 'banner') {
+    if (!$session) throw new Error('Sign in before uploading profile media.');
+    const uploadUrl = 'https://nostr.build/api/v2/upload/files';
+    const form = new FormData();
+    form.set('file', file);
+    form.set('media_type', mediaType);
+    form.set('content_type', file.type);
+    form.set('size', String(file.size));
+
+    const authorization = await getNip98AuthorizationHeader($session, uploadUrl, 'POST');
+    const response = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: { Authorization: authorization },
+      body: form
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(uploadErrorMessage(data) ?? `Upload failed with ${response.status}.`);
+
+    const url = uploadResponseUrl(data);
+    if (!url) throw new Error('Upload finished but no media URL was returned.');
+    return url;
+  }
+
+  function uploadResponseUrl(data: unknown): string {
+    const tags = uploadResponseTags(data);
+    const urlTag = tags.find((tag) => tag[0] === 'url' && tag[1]);
+    if (urlTag?.[1]) return urlTag[1];
+    if (data && typeof data === 'object' && 'url' in data && typeof data.url === 'string') return data.url;
+    return '';
+  }
+
+  function uploadResponseTags(data: unknown): string[][] {
+    if (Array.isArray(data) && Array.isArray(data[0])) return data as string[][];
+    if (!data || typeof data !== 'object') return [];
+    const record = data as Record<string, unknown>;
+    if (Array.isArray(record.tags)) return record.tags as string[][];
+    if (record.nip94_event && typeof record.nip94_event === 'object' && Array.isArray((record.nip94_event as Record<string, unknown>).tags)) {
+      return (record.nip94_event as { tags: string[][] }).tags;
+    }
+    if (record.data && typeof record.data === 'object') return uploadResponseTags(record.data);
+    return [];
+  }
+
+  function uploadErrorMessage(data: unknown) {
+    return data && typeof data === 'object' && 'message' in data && typeof data.message === 'string' ? data.message : '';
   }
 
   function normalizePubkey(value: string) {
@@ -106,9 +184,16 @@
         {/if}
       </div>
 
-      <button class="npub-pill" on:click={copyNpub} aria-label="Copy public key">
-        {#if copied}<Check size={17} /> Copied{:else}<Copy size={17} /> <span>{npub}</span>{/if}
-      </button>
+      <div class="profile-key-actions">
+        <button class="npub-pill" on:click={copyNpub} aria-label="Copy public key">
+          {#if copied}<Check size={17} /> Copied{:else}<Copy size={17} /> <span>{npub}</span>{/if}
+        </button>
+        {#if isOwnProfile}
+          <button class="icon-button" on:click={() => (editorOpen = true)} aria-label="Edit profile">
+            <Pencil size={18} />
+          </button>
+        {/if}
+      </div>
 
       {#if profile?.about}
         <p class="profile-about">{profile.about}</p>
@@ -122,10 +207,20 @@
     </div>
   </div>
 
-  {#if isOwnProfile}
-    <form class="panel profile-editor" on:submit|preventDefault={submitProfile}>
+  {#if isOwnProfile && editorOpen}
+    <div
+      class="dialog-backdrop"
+      role="presentation"
+      on:click={(event) => {
+        if (event.target === event.currentTarget) editorOpen = false;
+      }}
+    >
+    <form class="dialog-panel profile-editor profile-editor-dialog" on:submit|preventDefault={submitProfile}>
       <div class="editor-head">
         <h2>Edit profile</h2>
+        <button class="icon-button" type="button" on:click={() => (editorOpen = false)} aria-label="Close profile editor">
+          <X size={19} />
+        </button>
       </div>
 
       <div class="profile-edit-grid">
@@ -143,11 +238,19 @@
         </label>
         <label class="wide">
           <span>Profile image URL</span>
-          <input bind:value={draft.picture} placeholder="https://..." />
+          <div class="upload-url-row">
+            <input bind:value={draft.picture} placeholder="https://..." />
+            <input class="visually-hidden" type="file" accept="image/*" bind:this={pictureInput} on:change={(event) => uploadProfileMedia(event.currentTarget.files?.[0], 'picture')} />
+            <button type="button" disabled={uploading !== ''} on:click={() => pictureInput.click()}><Upload size={17} /> {uploading === 'picture' ? 'Uploading' : 'Upload'}</button>
+          </div>
         </label>
         <label class="wide">
           <span>Banner image URL</span>
-          <input bind:value={draft.banner} placeholder="https://..." />
+          <div class="upload-url-row">
+            <input bind:value={draft.banner} placeholder="https://..." />
+            <input class="visually-hidden" type="file" accept="image/*" bind:this={bannerInput} on:change={(event) => uploadProfileMedia(event.currentTarget.files?.[0], 'banner')} />
+            <button type="button" disabled={uploading !== ''} on:click={() => bannerInput.click()}><Upload size={17} /> {uploading === 'banner' ? 'Uploading' : 'Upload'}</button>
+          </div>
         </label>
         <label>
           <span>NIP-05</span>
@@ -167,11 +270,14 @@
         </label>
       </div>
 
+      {#if uploadMessage}<p class="muted-copy">{uploadMessage}</p>{/if}
       {#if error}<p class="error">{error}</p>{/if}
       <div class="dialog-actions">
+        <button type="button" on:click={() => (editorOpen = false)}>Cancel</button>
         <button class="primary" disabled={saving} type="submit"><Save size={18} /> {saving ? 'Saving' : 'Save profile'}</button>
       </div>
     </form>
+    </div>
   {/if}
 </section>
 

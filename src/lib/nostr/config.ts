@@ -14,6 +14,42 @@ export const defaultCustomFeedSettings: CustomFeedSettings = {
 
 export const defaultGuestNip05 = 'benarc@nostr.com';
 
+export const hateSpeechTerms = [
+  '1488',
+  'heil hitler',
+  'white power',
+  'gas the jews',
+  "six million wasn't enough",
+  'race traitor',
+  'nigger',
+  'nigga',
+  'n1gger',
+  'n1gga',
+  'coon',
+  'jigaboo',
+  'porch monkey',
+  'spic',
+  'wetback',
+  'beaner',
+  'chink',
+  'gook',
+  'zipperhead',
+  'kike',
+  'yid',
+  'paki',
+  'raghead',
+  'sand nigger',
+  'towelhead',
+  'gypsy scum',
+  'faggot',
+  'fag',
+  'tranny',
+  'trannie',
+  'shemale',
+  'dyke',
+  'retard'
+];
+
 export const mutedWords = [
   'airdrop',
   'giveaway',
@@ -40,7 +76,8 @@ export const mutedWords = [
   'milf',
   'fetish',
   'bdsm',
-  'teen'
+  'teen',
+  ...hateSpeechTerms
 ];
 
 export const adultDomains = [

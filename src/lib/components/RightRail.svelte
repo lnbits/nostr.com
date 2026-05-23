@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import { ChevronsLeft, ChevronsRight, LogIn, Radio, RefreshCw } from '@lucide/svelte';
+  import { ChevronsLeft, ChevronsRight, LogIn, RefreshCw } from '@lucide/svelte';
   import FeedTabs from './FeedTabs.svelte';
   import { loadingFeed, loginDialogOpen, refreshFeed, relays, session } from '$lib/stores/app';
 
@@ -86,7 +86,6 @@
       {#each $relays.filter((relay) => relay.enabled) as relay}
         <div class="relay-row">
           <span class:online={relayStatus[relay.url] === 'online'} class:offline={relayStatus[relay.url] === 'offline'} class="relay-status" aria-label={`${relay.url} ${relayStatus[relay.url] ?? 'checking'}`}></span>
-          <Radio size={17} />
           <span>{relay.url.replace('wss://', '')}</span>
           <strong>{relay.read && relay.write ? 'read/write' : relay.read ? 'read' : 'write'}</strong>
         </div>

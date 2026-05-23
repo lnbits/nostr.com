@@ -1,8 +1,9 @@
 <script lang="ts">
   import '../styles.css';
   import { onMount } from 'svelte';
-  import { Bell, Home, Info, Settings, UserRound } from '@lucide/svelte';
-  import { bootstrap, session } from '$lib/stores/app';
+  import { page } from '$app/stores';
+  import { Bell, Home, Info, LogIn, Settings, UserRound } from '@lucide/svelte';
+  import { bootstrap, loginDialogOpen, session } from '$lib/stores/app';
   import Composer from '$lib/components/Composer.svelte';
   import LeftNav from '$lib/components/LeftNav.svelte';
   import LoginDialog from '$lib/components/LoginDialog.svelte';
@@ -11,10 +12,13 @@
 
   const rightRailStorageKey = 'nostr-right-rail-collapsed';
   let rightRailCollapsed = false;
+  $: embeddedPage = $page.url.pathname.startsWith('/embed/');
 
   onMount(() => {
-    void bootstrap();
-    rightRailCollapsed = localStorage.getItem(rightRailStorageKey) === 'true';
+    if (!embeddedPage) {
+      void bootstrap();
+      rightRailCollapsed = localStorage.getItem(rightRailStorageKey) === 'true';
+    }
   });
 
   function toggleRightRail() {
@@ -27,8 +31,13 @@
   <title>Nostr</title>
 </svelte:head>
 
-<div class="app-frame">
-  {#if $session}
+{#if embeddedPage}
+  <main class="embed-shell">
+    <slot />
+  </main>
+{:else}
+  <div class="app-frame">
+    {#if $session}
     <div class="authed-shell" class:rail-collapsed={rightRailCollapsed}>
       <LeftNav />
       <main class="authed-main">
@@ -43,7 +52,7 @@
           <strong>Nostr</strong>
           <span>controlled by users, not platforms</span>
         </a>
-        <a class="icon-button info-link" href="https://nostr.org" target="_blank" rel="noreferrer" aria-label="Learn about Nostr">
+        <a class="icon-button info-link" href="/#info" aria-label="Learn about Nostr">
           <Info size={18} />
         </a>
       </div>
@@ -57,13 +66,19 @@
     </main>
   {/if}
 
-  <nav class="tabbar" aria-label="Primary">
-    <a href="/" aria-label="Home"><Home size={22} /></a>
-    <a href="/#notifications" aria-label="Notifications"><Bell size={22} /></a>
-    <a href={$session ? `/profile/${$session.pubkey}` : '/#login'} aria-label="Profile"><UserRound size={22} /></a>
-    <a href="/settings" aria-label="Settings"><Settings size={22} /></a>
+  <nav class="tabbar" class:guest={!$session} aria-label="Primary">
+    {#if $session}
+      <a href="/" aria-label="Home"><Home size={22} /></a>
+      <a href="/#notifications" aria-label="Notifications"><Bell size={22} /></a>
+      <a href={`/profile/${$session.pubkey}`} aria-label="Profile"><UserRound size={22} /></a>
+      <a href="/settings" aria-label="Settings"><Settings size={22} /></a>
+    {:else}
+      <button class="tabbar-signin" on:click={() => loginDialogOpen.set(true)}><LogIn size={19} /> Sign in</button>
+      <a class="tabbar-info" href="/#info" aria-label="Info">i</a>
+    {/if}
   </nav>
 
   <LoginDialog />
   <Composer />
-</div>
+  </div>
+{/if}

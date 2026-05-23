@@ -9,15 +9,24 @@ import {
   fetchFeed,
   fetchEventStats,
   fetchProfiles,
+  fetchRelayInfoDocuments,
+  fetchRelayListMetadata,
+  limitConsecutiveAuthors,
   loginWithBunker,
   loginWithNip07,
   loginWithPrivateKey,
   publishContactList,
   publishNote,
   publishProfile,
-  resolveNip05Profile
+  publishReaction,
+  publishRelayListMetadata,
+  publishReport,
+  publishRepost,
+  resolveNip05Profile,
+  subscribeFeed,
+  topLevelFeedEvents
 } from '$lib/nostr/client';
-import type { CustomFeedSettings, DirectMessage, EventStats, FeedMode, NostrEvent, NotificationItem, Profile, RelayState, Session } from '$lib/nostr/types';
+import type { ContactListItem, CustomFeedSettings, DirectMessage, EventStats, FeedMode, NostrEvent, NotificationItem, Profile, RelayState, Session } from '$lib/nostr/types';
 
 const sessionStorageKey = 'nostr-session';
 const customFeedStorageKey = 'nostr-custom-feed-settings';
@@ -34,10 +43,12 @@ export const relays = writable<RelayState[]>(defaultRelays);
 export const session = writable<Session | null>(initialSession);
 export const follows = writable<string[]>([]);
 export const customFeedSettings = writable<CustomFeedSettings>(initialCustomFeedSettings);
+export const activeHashtag = writable<string>('');
 export const online = writable(true);
 export const notifications = writable<NotificationItem[]>([]);
 export const directMessages = writable<DirectMessage[]>([]);
 export const eventStats = writable<Record<string, EventStats>>({});
+export const likedEvents = writable<Set<string>>(new Set());
 export const loadingFeed = writable(false);
 export const loadingMessages = writable(false);
 export const loadingMoreFeed = writable(false);
@@ -50,8 +61,11 @@ let currentRelays = defaultRelays;
 let currentFollows: string[] = [];
 let currentSettings = defaultCustomFeedSettings;
 let currentMode: FeedMode = 'global';
+let currentHashtag = '';
+let currentContactItems: ContactListItem[] = [];
 let oldestFeedTimestamp: number | undefined;
 const requestedStats = new Set<string>();
+let activeFeedSubscription: { close(): void } | undefined;
 
 relays.subscribe((value) => (currentRelays = value));
 follows.subscribe((value) => (currentFollows = value));
@@ -60,6 +74,7 @@ customFeedSettings.subscribe((value) => {
   if (browser) localStorage.setItem(customFeedStorageKey, JSON.stringify(value));
 });
 feedMode.subscribe((value) => (currentMode = value));
+activeHashtag.subscribe((value) => (currentHashtag = value));
 
 export async function bootstrap() {
   if (!browser) return;
@@ -68,10 +83,12 @@ export async function bootstrap() {
   addEventListener('offline', () => online.set(false));
 
   const [cachedEvents, cachedProfiles] = await Promise.all([getCachedEvents(initialFeedLimit), getCachedProfiles()]);
-  events.set(cachedEvents);
-  oldestFeedTimestamp = getOldestTimestamp(cachedEvents);
+  const cachedTopLevelEvents = topLevelFeedEvents(cachedEvents);
+  events.set(cachedTopLevelEvents);
+  oldestFeedTimestamp = getOldestTimestamp(cachedTopLevelEvents);
   profiles.set(Object.fromEntries(cachedProfiles.map((profile) => [profile.pubkey, profile])));
   await hydrateDefaultFeedContext();
+  void refreshRelayInfo();
   void refreshFeed();
 }
 
@@ -80,48 +97,58 @@ export async function refreshFeed(mode = currentMode) {
   hasMoreFeed.set(true);
   oldestFeedTimestamp = undefined;
   requestedStats.clear();
-  try {
-    const nextEvents = await fetchFeed(mode, currentRelays, currentFollows, currentSettings, { limit: initialFeedLimit });
-    events.update((existing) => mergeEvents(nextEvents, existing));
-    oldestFeedTimestamp = getOldestTimestamp(nextEvents);
-    void refreshEventStats(nextEvents.map((event) => event.id));
-    const pubkeys = [...new Set(nextEvents.map((event) => event.pubkey))].slice(0, 60);
-    const foundProfiles = await fetchProfiles(pubkeys, currentRelays);
-    profiles.update((existing) => ({
-      ...existing,
-      ...Object.fromEntries(foundProfiles.map((profile) => [profile.pubkey, profile]))
-    }));
-  } finally {
+  activeFeedSubscription?.close();
+
+  if ((mode === 'follow' || mode === 'custom') && !currentFollows.length) {
+    events.set([]);
     loadingFeed.set(false);
+    return;
   }
+
+  let receivedEvents = false;
+  activeFeedSubscription = subscribeFeed(mode, currentRelays, currentFollows, currentSettings, {
+    limit: initialFeedLimit,
+    hashtag: currentHashtag,
+    onEvents(nextEvents) {
+      receivedEvents = true;
+      events.update((existing) => {
+        const merged = mergeEvents(nextEvents, existing);
+        oldestFeedTimestamp = getOldestTimestamp(merged);
+        return merged;
+      });
+      void refreshEventStats(nextEvents.map((event) => event.id));
+      void hydrateMissingProfiles(nextEvents, 60);
+      loadingFeed.set(false);
+    },
+    onComplete() {
+      if (!receivedEvents) loadingFeed.set(false);
+    }
+  });
 }
 
-export async function loadMoreFeed() {
+export async function loadMoreFeed(force = false) {
   let loading = false;
   let more = true;
   loadingMoreFeed.subscribe((value) => (loading = value))();
   hasMoreFeed.subscribe((value) => (more = value))();
-  if (loading || !more) return;
+  if (loading || (!force && !more)) return;
 
   loadingMoreFeed.set(true);
   try {
     const olderThan = oldestFeedTimestamp ? oldestFeedTimestamp - 1 : undefined;
     const nextEvents = await fetchFeed(currentMode, currentRelays, currentFollows, currentSettings, {
       limit: pageFeedLimit,
-      until: olderThan
+      until: olderThan,
+      hashtag: currentHashtag
     });
     if (nextEvents.length < pageFeedLimit) hasMoreFeed.set(false);
+    else hasMoreFeed.set(true);
     if (!nextEvents.length) return;
     const nextOldest = getOldestTimestamp(nextEvents);
     if (nextOldest !== undefined) oldestFeedTimestamp = oldestFeedTimestamp === undefined ? nextOldest : Math.min(oldestFeedTimestamp, nextOldest);
     events.update((existing) => mergeEvents(nextEvents, existing));
     void refreshEventStats(nextEvents.map((event) => event.id));
-    const pubkeys = [...new Set(nextEvents.map((event) => event.pubkey))].slice(0, 40);
-    const foundProfiles = await fetchProfiles(pubkeys, currentRelays);
-    profiles.update((existing) => ({
-      ...existing,
-      ...Object.fromEntries(foundProfiles.map((profile) => [profile.pubkey, profile]))
-    }));
+    void hydrateMissingProfiles(nextEvents, 40);
   } finally {
     loadingMoreFeed.set(false);
   }
@@ -136,6 +163,16 @@ export async function refreshEventStats(ids: string[]) {
     ...existing,
     ...stats
   }));
+}
+
+export function filterByHashtag(tag: string) {
+  activeHashtag.set(tag.trim().replace(/^#/, '').toLowerCase());
+  void refreshFeed(currentMode);
+}
+
+export async function refreshRelayInfo() {
+  const enriched = await fetchRelayInfoDocuments(currentRelays).catch(() => currentRelays);
+  relays.set(enriched);
 }
 
 export async function refreshMessages() {
@@ -161,7 +198,7 @@ export async function signIn(mode: 'nip07' | 'private-key' | 'bunker' | 'guest',
       : mode === 'private-key'
         ? loginWithPrivateKey(value)
         : mode === 'bunker'
-          ? loginWithBunker(value)
+          ? await loginWithBunker(value)
           : createGuestSession();
   session.set(next);
   persistSession(next);
@@ -180,10 +217,73 @@ export async function postNote(content: string, parent?: NostrEvent) {
   let currentSession: Session | null = null;
   session.subscribe((value) => (currentSession = value))();
   if (!currentSession) throw new Error('Sign in before posting.');
-  const tags = parent ? [['e', parent.id], ['p', parent.pubkey]] : [];
+  const tags = parent ? replyTags(parent) : [];
   const event = await publishNote(currentSession, content, currentRelays, tags);
   events.update((existing) => mergeEvents([event], existing));
   replyTarget.set(null);
+}
+
+export async function repostNote(target: NostrEvent) {
+  const currentSession = requireSession('Sign in before reposting.');
+  const event = await publishRepost(currentSession, target, currentRelays);
+  events.update((existing) => mergeEvents([event], existing));
+  eventStats.update((existing) => ({
+    ...existing,
+    [target.id]: {
+      ...(existing[target.id] ?? emptyStats()),
+      reposts: (existing[target.id]?.reposts ?? 0) + 1
+    }
+  }));
+}
+
+export async function reactToNote(target: NostrEvent, content = '+') {
+  const currentSession = requireSession('Sign in before liking.');
+  if (content !== '+' && content) {
+    await publishReaction(currentSession, target, currentRelays, content);
+    return;
+  }
+
+  let alreadyLiked = false;
+  likedEvents.subscribe((value) => (alreadyLiked = value.has(target.id)))();
+
+  if (alreadyLiked) {
+    likedEvents.update((existing) => {
+      const next = new Set(existing);
+      next.delete(target.id);
+      return next;
+    });
+    eventStats.update((existing) => {
+      const previous = existing[target.id] ?? emptyStats();
+      return {
+        ...existing,
+        [target.id]: {
+          ...previous,
+          likes: Math.max(0, previous.likes - 1)
+        }
+      };
+    });
+    return;
+  }
+
+  await publishReaction(currentSession, target, currentRelays, content);
+  likedEvents.update((existing) => new Set(existing).add(target.id));
+  eventStats.update((existing) => {
+    const previous = existing[target.id] ?? emptyStats();
+    return {
+      ...existing,
+      [target.id]: {
+        ...previous,
+        likes: content === '+' || !content ? previous.likes + 1 : previous.likes,
+        dislikes: content === '-' ? previous.dislikes + 1 : previous.dislikes,
+        emoji: content !== '+' && content !== '-' && content ? previous.emoji + 1 : previous.emoji
+      }
+    };
+  });
+}
+
+export async function reportNote(target: NostrEvent, reportType = 'spam') {
+  const currentSession = requireSession('Sign in before reporting.');
+  await publishReport(currentSession, target, currentRelays, reportType);
 }
 
 export async function saveProfile(nextProfile: Profile) {
@@ -202,20 +302,41 @@ export async function saveFollowList(pubkeys: string[]) {
   session.subscribe((value) => (currentSession = value))();
   if (!currentSession) throw new Error('Sign in before updating your follow list.');
   const clean = [...new Set(pubkeys.filter((pubkey) => /^[0-9a-f]{64}$/i.test(pubkey)))];
-  await publishContactList(currentSession, clean, currentRelays);
+  await publishContactList(currentSession, clean, currentRelays, currentContactItems, getStoreSnapshot(profiles));
   follows.set(clean);
   if (currentMode === 'follow' || currentMode === 'custom') void refreshFeed(currentMode);
+}
+
+export async function saveRelayListMetadata() {
+  const currentSession = requireSession('Sign in before publishing relay settings.');
+  await publishRelayListMetadata(currentSession, currentRelays);
 }
 
 export function mergeEvents(incoming: NostrEvent[], existing: NostrEvent[]) {
   const byId = new Map<string, NostrEvent>();
   [...existing, ...incoming].forEach((event) => byId.set(event.id, event));
-  return [...byId.values()].sort((a, b) => b.created_at - a.created_at);
+  const merged = [...byId.values()].sort((a, b) => b.created_at - a.created_at);
+  return currentMode === 'global' ? limitConsecutiveAuthors(merged, 2) : merged;
 }
 
 function getOldestTimestamp(items: NostrEvent[]) {
   if (!items.length) return undefined;
   return Math.min(...items.map((event) => event.created_at));
+}
+
+async function hydrateMissingProfiles(nextEvents: NostrEvent[], limit = 40) {
+  const existingProfiles = getStoreSnapshot(profiles);
+  const pubkeys = [...new Set(nextEvents.map((event) => event.pubkey))]
+    .filter((pubkey) => !existingProfiles[pubkey])
+    .slice(0, limit);
+  if (!pubkeys.length) return;
+
+  const foundProfiles = await fetchProfiles(pubkeys, currentRelays).catch(() => []);
+  if (!foundProfiles.length) return;
+  profiles.update((existing) => ({
+    ...existing,
+    ...Object.fromEntries(foundProfiles.map((profile) => [profile.pubkey, profile]))
+  }));
 }
 
 export function startReply(event: NostrEvent) {
@@ -290,13 +411,18 @@ async function hydrateDefaultFeedContext() {
 }
 
 async function hydrateSignedInFeedContext(currentSession: Session) {
-  const contacts = await fetchContactListDetails(currentSession.pubkey, currentRelays).catch(() => ({ pubkeys: [], relayHints: [] }));
+  const requestedMode = requestedFeedMode();
+  const relayList = await fetchRelayListMetadata(currentSession.pubkey, currentRelays).catch(() => []);
+  mergeRelayHints(relayList.map((relay) => relay.url), 90);
+  const contacts = await fetchContactListDetails(currentSession.pubkey, currentRelays).catch(() => ({ pubkeys: [], relayHints: [], items: [] }));
+  currentContactItems = contacts.items;
   mergeRelayHints(contacts.relayHints, 74);
   follows.set(contacts.pubkeys);
-  feedMode.set(hasCustomFeedFilters(currentSettings) ? 'custom' : 'follow');
+  feedMode.set(requestedMode ?? (hasCustomFeedFilters(currentSettings) ? 'custom' : 'follow'));
 }
 
 async function hydrateGuestFeedContext() {
+  const requestedMode = requestedFeedMode();
   const profile = await resolveNip05Profile(defaultGuestNip05).catch(() => null);
   if (!profile) {
     feedMode.set('global');
@@ -304,10 +430,46 @@ async function hydrateGuestFeedContext() {
   }
 
   mergeRelayHints(profile.relayHints, 96);
-  const contacts = await fetchContactListDetails(profile.pubkey, currentRelays).catch(() => ({ pubkeys: [], relayHints: [] }));
+  const relayList = await fetchRelayListMetadata(profile.pubkey, currentRelays).catch(() => []);
+  mergeRelayHints(relayList.map((relay) => relay.url), 90);
+  const contacts = await fetchContactListDetails(profile.pubkey, currentRelays).catch(() => ({ pubkeys: [], relayHints: [], items: [] }));
+  currentContactItems = contacts.items;
   mergeRelayHints(contacts.relayHints, 74);
-  follows.set(contacts.pubkeys.length ? contacts.pubkeys : [profile.pubkey]);
-  feedMode.set('follow');
+  follows.set([]);
+  feedMode.set(requestedMode === 'global' ? requestedMode : 'global');
+}
+
+function requestedFeedMode(): FeedMode | null {
+  if (!browser) return null;
+  const mode = new URL(location.href).searchParams.get('feed');
+  return mode === 'follow' || mode === 'global' || mode === 'custom' ? mode : null;
+}
+
+function replyTags(parent: NostrEvent) {
+  const parentRoot = parent.tags.find((tag) => tag[0] === 'e' && tag[3] === 'root');
+  const rootId = parentRoot?.[1] ?? parent.id;
+  const pTags = new Set([parent.pubkey, ...parent.tags.filter((tag) => tag[0] === 'p' && tag[1]).map((tag) => tag[1])]);
+  const tags = rootId === parent.id ? [['e', parent.id, '', 'root', parent.pubkey]] : [['e', rootId, '', 'root'], ['e', parent.id, '', 'reply', parent.pubkey]];
+  return [...tags, ...[...pTags].map((pubkey) => ['p', pubkey])];
+}
+
+function requireSession(message: string) {
+  const currentSession = getStoreSnapshot(session);
+  if (!currentSession) {
+    loginDialogOpen.set(true);
+    throw new Error(message);
+  }
+  return currentSession;
+}
+
+function getStoreSnapshot<T>(store: { subscribe(run: (value: T) => void): () => void }) {
+  let value!: T;
+  store.subscribe((next) => (value = next))();
+  return value;
+}
+
+function emptyStats(): EventStats {
+  return { replies: 0, reposts: 0, likes: 0, dislikes: 0, emoji: 0, zaps: 0 };
 }
 
 function hasCustomFeedFilters(settings: CustomFeedSettings) {

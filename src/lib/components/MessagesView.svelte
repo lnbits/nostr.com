@@ -1,13 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { LockKeyhole, MessageSquareText, RefreshCw, ShieldCheck, Sparkles } from '@lucide/svelte';
+  import { LockKeyhole, MessageSquareText, RefreshCw, Sparkles } from '@lucide/svelte';
   import { nip19 } from 'nostr-tools';
   import { directMessages, loadingMessages, loginDialogOpen, refreshMessages, session } from '$lib/stores/app';
 
   const protocols = [
-    { label: 'NIP-04', detail: 'Encrypted direct messages', icon: LockKeyhole },
-    { label: 'NIP-26', detail: 'Delegation tags detected', icon: ShieldCheck },
-    { label: 'NIP-17', detail: 'Private DMs should be added next', icon: Sparkles }
+    { label: 'NIP-04', detail: 'Legacy DMs; can leak metadata', icon: LockKeyhole },
+    { label: 'NIP-17', detail: 'Modern private DMs', icon: Sparkles }
   ];
 
   $: conversations = groupMessages($directMessages);
@@ -86,7 +85,7 @@
     <section class="panel message-empty">
       <MessageSquareText size={26} />
       <strong>No direct messages found</strong>
-      <span>NIP-04 kind 4 messages will appear here when relays return conversations for this key.</span>
+      <span>NIP-04 and NIP-17 messages will appear here when relays return conversations for this key.</span>
     </section>
   {/if}
 </section>

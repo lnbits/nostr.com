@@ -6,9 +6,10 @@
     <meta name="theme-color" content="#0f172a" />
     <script>
       try {
-        const theme = localStorage.getItem('nostr-theme');
+        const embedded = location.pathname.startsWith('/embed/');
+        const theme = embedded ? 'dark' : localStorage.getItem('nostr-theme');
         document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : 'light';
-        if (theme !== 'dark' && theme !== 'light') localStorage.setItem('nostr-theme', 'light');
+        if (!embedded && theme !== 'dark' && theme !== 'light') localStorage.setItem('nostr-theme', 'light');
       } catch {
         document.documentElement.dataset.theme = 'light';
       }

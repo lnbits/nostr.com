@@ -30,11 +30,20 @@ export interface RelayState {
   read: boolean;
   write: boolean;
   score: number;
+  supportedNips?: number[];
+  limitation?: Record<string, unknown>;
 }
 
 export interface ContactListDetails {
   pubkeys: string[];
   relayHints: string[];
+  items: ContactListItem[];
+}
+
+export interface ContactListItem {
+  pubkey: string;
+  relay?: string;
+  petname?: string;
 }
 
 export interface Nip05Profile {
@@ -47,11 +56,21 @@ export interface CustomFeedSettings {
   keywords: string[];
 }
 
+export interface FeedQueryOptions {
+  limit?: number;
+  until?: number;
+  hashtag?: string;
+}
+
 export interface Session {
   pubkey: string;
   mode: LoginMode;
   secret?: string;
   bunker?: string;
+  bunkerClientSecret?: string;
+  bunkerRelays?: string[];
+  bunkerRemotePubkey?: string;
+  bunkerSecret?: string | null;
 }
 
 export interface NotificationItem {
@@ -63,19 +82,29 @@ export interface NotificationItem {
 
 export interface DirectMessage {
   id: string;
-  protocol: 'NIP-04' | 'NIP-26';
+  protocol: 'NIP-04' | 'NIP-17';
   peer: string;
   from: string;
   to: string;
   created_at: number;
   encrypted: string;
   content?: string;
-  delegated: boolean;
 }
 
 export interface EventStats {
   replies: number;
   reposts: number;
   likes: number;
+  dislikes: number;
+  emoji: number;
   zaps: number;
+}
+
+export interface MediaAttachment {
+  url: string;
+  type: 'image' | 'video';
+  alt?: string;
+  blurhash?: string;
+  dim?: string;
+  fallbackUrls: string[];
 }

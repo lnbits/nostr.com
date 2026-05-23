@@ -1,28 +1,59 @@
 <script lang="ts">
-  import { onDestroy, onMount } from 'svelte';
+  import { onMount } from 'svelte';
   import { page } from '$app/stores';
-  import { Edit3 } from '@lucide/svelte';
   import InfoView from '$lib/components/InfoView.svelte';
   import MessagesView from '$lib/components/MessagesView.svelte';
   import NoteCard from '$lib/components/NoteCard.svelte';
   import RightRail from '$lib/components/RightRail.svelte';
-  import { events, hasMoreFeed, loadingMoreFeed, loadMoreFeed, profiles, session, startCompose } from '$lib/stores/app';
+  import {
+    events,
+    feedMode,
+    follows,
+    hasMoreFeed,
+    loadingFeed,
+    loadingMoreFeed,
+    loadMoreFeed,
+    profiles,
+    relays,
+    session
+  } from '$lib/stores/app';
 
   let loadMoreSentinel: HTMLDivElement;
   let observer: IntersectionObserver | undefined;
+  let previousScrollY = 0;
+  let loadOlderArmed = false;
   $: activeHash = $page.url.hash;
+  $: hasReadRelays = $relays.some((relay) => relay.enabled && relay.read);
+  $: emptyMessage = !hasReadRelays
+    ? 'Please connect to relays'
+    : $session && ($feedMode === 'follow' || $feedMode === 'custom') && !$follows.length
+      ? 'Please follow someone'
+      : 'Please connect to relays';
 
   onMount(() => {
+    previousScrollY = window.scrollY;
     observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && !activeHash) void loadMoreFeed();
+        if (entry.isIntersecting && loadOlderArmed && !activeHash) {
+          loadOlderArmed = false;
+          void loadMoreFeed(true);
+        }
       },
-      { rootMargin: '1200px 0px' }
+      { rootMargin: '320px 0px' }
     );
     if (loadMoreSentinel) observer.observe(loadMoreSentinel);
-  });
 
-  onDestroy(() => observer?.disconnect());
+    const onScroll = () => {
+      const nextScrollY = window.scrollY;
+      if (nextScrollY > previousScrollY) loadOlderArmed = true;
+      previousScrollY = nextScrollY;
+    };
+    addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      observer?.disconnect();
+      removeEventListener('scroll', onScroll);
+    };
+  });
 </script>
 
 {#if $session}
@@ -46,10 +77,6 @@
   </div>
 {/if}
 
-{#if !$session}
-  <button class="fab" on:click={startCompose} aria-label="Compose note"><Edit3 size={23} /></button>
-{/if}
-
 {#snippet Timeline()}
   <section class="timeline">
     <section class="feed-list" aria-label="Feed">
@@ -57,10 +84,14 @@
         {#each $events as event (event.id)}
           <NoteCard {event} profile={$profiles[event.pubkey]} />
         {/each}
+      {:else if $loadingFeed}
+        <div class="empty-state">
+          <span>Refreshing notes</span>
+        </div>
       {:else}
         <div class="empty-state">
-          <strong>No notes cached yet</strong>
-          <span>Connect to relays or sign in to hydrate your follow graph.</span>
+          <strong>No notes :(</strong>
+          <span>{emptyMessage}</span>
         </div>
       {/if}
     </section>

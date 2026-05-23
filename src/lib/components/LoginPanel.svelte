@@ -20,7 +20,7 @@
 <section class="login-panel" id="login">
   <div>
     <h2>Sign in</h2>
-    <p>NIP-07, local private key, and bunker paths are wired as separate signer modes for web and native reuse.</p>
+    <p>NIP-07, local private key, and NIP-46 bunker signing are active.</p>
   </div>
 
   <div class="login-actions">

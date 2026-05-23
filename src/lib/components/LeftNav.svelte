@@ -50,7 +50,7 @@
     </a>
     <a class:active={isActive('/#info')} href="/#info">
       <MoreHorizontal size={26} />
-      <span>...info</span>
+      <span>info</span>
     </a>
   </nav>
 

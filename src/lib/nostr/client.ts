@@ -1,11 +1,14 @@
-import { finalizeEvent, generateSecretKey, getPublicKey, nip04, nip19, SimplePool } from 'nostr-tools';
+import { finalizeEvent, generateSecretKey, getEventHash, getPublicKey, nip04, nip17, nip19, nip44, nip98, SimplePool, verifyEvent } from 'nostr-tools';
 import type { Event as NostrToolsEvent, Filter } from 'nostr-tools';
+import * as nip46 from 'nostr-tools/nip46';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { cacheEvents, cacheProfile } from './cache';
 import { adultDomains, adultHashtags, defaultGuestNip05, defaultRelays, mutedWords } from './config';
-import type { ContactListDetails, CustomFeedSettings, DirectMessage, EventStats, FeedMode, Nip05Profile, NostrEvent, Profile, RelayState, Session } from './types';
+import type { ContactListDetails, ContactListItem, CustomFeedSettings, DirectMessage, EventStats, FeedMode, FeedQueryOptions, Nip05Profile, NostrEvent, Profile, RelayState, Session } from './types';
 
 const pool = new SimplePool();
+const bunkerSigners = new Map<string, nip46.BunkerSigner>();
+type SubCloser = { close: (reason?: string) => void };
 
 export function activeRelayUrls(relays: RelayState[], intent: 'read' | 'write') {
   return relays
@@ -31,8 +34,30 @@ export function loginWithPrivateKey(secret: string): Session {
   return { pubkey: getPublicKey(bytes), mode: 'private-key', secret: bytesToHex(bytes) };
 }
 
-export function loginWithBunker(uri: string): Session {
-  return { pubkey: uri.replace(/^bunker:\/\//, '').slice(0, 64), mode: 'bunker', bunker: uri };
+export async function loginWithBunker(uri: string): Promise<Session> {
+  const bunker = uri.trim();
+  const pointer = await nip46.parseBunkerInput(bunker);
+  if (!pointer) throw new Error('Enter a valid bunker:// URI.');
+  const clientSecret = generateSecretKey();
+  const signer = nip46.BunkerSigner.fromBunker(clientSecret, pointer, {
+    pool,
+    onauth: (url: string) => {
+      if (typeof window !== 'undefined') window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  });
+  await signer.connect();
+  const pubkey = await signer.getPublicKey();
+  const session: Session = {
+    pubkey,
+    mode: 'bunker',
+    bunker,
+    bunkerClientSecret: bytesToHex(clientSecret),
+    bunkerRelays: pointer.relays,
+    bunkerRemotePubkey: pointer.pubkey,
+    bunkerSecret: pointer.secret
+  };
+  bunkerSigners.set(bunkerSignerKey(session), signer);
+  return session;
 }
 
 export function filterSpam(events: NostrEvent[], mutedPubkeys = new Set<string>()) {
@@ -43,6 +68,17 @@ export function filterSpam(events: NostrEvent[], mutedPubkeys = new Set<string>(
     const lower = event.content.toLowerCase();
     return !mutedWords.some((word) => containsBlockedPhrase(lower, word));
   });
+}
+
+export function topLevelFeedEvents(events: NostrEvent[]) {
+  return events.filter((event) => !isReplyEvent(event));
+}
+
+export function isReplyEvent(event: NostrEvent) {
+  const eventTags = event.tags.filter((tag) => tag[0] === 'e' && tag[1]);
+  if (!eventTags.length) return false;
+
+  return eventTags.some((tag) => tag[3] === 'root' || tag[3] === 'reply') || eventTags.length > 0;
 }
 
 export function isFamilySafeEvent(event: NostrEvent) {
@@ -74,10 +110,18 @@ export function isMachineGeneratedContent(content: string) {
     const keys = Object.keys(parsed as Record<string, unknown>);
     const machineKeys = ['protocol', 'action', 'pipeline_segment', 'session_entropy', 'system_telemetry', 'devicePk', 'swarm', 'service_metadata'];
     const machineKeyHits = keys.filter((key) => machineKeys.includes(key)).length;
-    return machineKeyHits >= 2 || (keys.length >= 5 && machineKeyHits >= 1);
+    return machineKeyHits >= 2 || isBotMetadataPayload(parsed) || (keys.length >= 5 && machineKeyHits >= 1);
   } catch {
     return false;
   }
+}
+
+function isBotMetadataPayload(parsed: unknown) {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+  const record = parsed as Record<string, unknown>;
+  const hasBotShape = typeof record.p === 'string' && typeof record.u === 'string' && typeof record.m === 'string';
+  const hasTelemetryShape = 'bots' in record || 'emotes' in record || 'serverTime' in record || 'fw' in record || 'a' in record;
+  return hasBotShape && hasTelemetryShape;
 }
 
 function isTransportPayload(content: string) {
@@ -109,34 +153,183 @@ export function dedupeEvents(events: NostrEvent[]) {
   return output.sort((a, b) => b.created_at - a.created_at);
 }
 
+export function limitConsecutiveAuthors(events: NostrEvent[], maxConsecutive = 2) {
+  const output: NostrEvent[] = [];
+  const deferred: NostrEvent[] = [];
+  let lastPubkey = '';
+  let streak = 0;
+
+  for (const event of events) {
+    if (event.pubkey === lastPubkey && streak >= maxConsecutive) {
+      deferred.push(event);
+      continue;
+    }
+
+    output.push(event);
+    streak = event.pubkey === lastPubkey ? streak + 1 : 1;
+    lastPubkey = event.pubkey;
+    flushDeferred(output, deferred, maxConsecutive);
+  }
+
+  return output;
+}
+
+function flushDeferred(output: NostrEvent[], deferred: NostrEvent[], maxConsecutive: number) {
+  let changed = true;
+  while (changed && deferred.length) {
+    changed = false;
+    const last = output.at(-1);
+    const streak = trailingAuthorStreak(output);
+    const index = deferred.findIndex((event) => event.pubkey !== last?.pubkey || streak < maxConsecutive);
+    if (index >= 0) {
+      output.push(...deferred.splice(index, 1));
+      changed = true;
+    }
+  }
+}
+
+function trailingAuthorStreak(events: NostrEvent[]) {
+  const last = events.at(-1);
+  if (!last) return 0;
+  let count = 0;
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    if (events[index].pubkey !== last.pubkey) break;
+    count += 1;
+  }
+  return count;
+}
+
+export function verifiedRelayEvents(events: NostrEvent[]) {
+  return events.filter((event) => verifyEvent(event as NostrToolsEvent) && !isExpiredEvent(event));
+}
+
+export function isExpiredEvent(event: NostrEvent, now = Math.floor(Date.now() / 1000)) {
+  const expiration = event.tags.find((tag) => tag[0] === 'expiration' && tag[1])?.[1];
+  return Boolean(expiration && Number(expiration) <= now);
+}
+
+export function feedFiltersForMode(
+  mode: FeedMode,
+  base: Filter,
+  follows: string[] = [],
+  settings: CustomFeedSettings = { friendsOfFriends: true, keywords: [] },
+  since: number,
+  relayUrls: string[] = [],
+  options: FeedQueryOptions = {}
+) {
+  const tag = normalizedHashtag(options.hashtag);
+  const taggedBase = tag ? { ...base, '#t': [tag] } : base;
+  if (mode === 'follow' && follows.length) return [{ ...taggedBase, authors: follows, since }];
+  if (mode === 'custom' && follows.length) return customFeedFilters(taggedBase, follows, settings, since, relayUrls);
+  return [{ ...taggedBase, since }];
+}
+
 export async function fetchFeed(
   mode: FeedMode,
   relays = defaultRelays,
   follows: string[] = [],
   settings: CustomFeedSettings = { friendsOfFriends: true, keywords: [] },
-  options: { limit?: number; until?: number } = {}
+  options: FeedQueryOptions = {}
 ) {
+  if ((mode === 'follow' || mode === 'custom') && !follows.length) return [];
+
   const relayUrls = activeRelayUrls(relays, 'read');
   const base: Filter = { kinds: [1], limit: options.limit ?? 24 };
   const since = Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 7;
   if (options.until) base.until = options.until;
-  const filters: Filter[] =
-    mode === 'follow' && follows.length
-      ? [{ ...base, authors: follows, since }]
-      : mode === 'custom' && follows.length
-        ? await customFeedFilters(base, follows, settings, since, relayUrls)
-        : [{ ...base, since }];
+  const filters = await feedFiltersForMode(mode, base, follows, settings, since, relayUrls, options);
 
-  const events = (await Promise.all(filters.map((filter) => pool.querySync(relayUrls, filter)))).flat() as NostrEvent[];
-  const clean = dedupeEvents(filterSpam(events));
-  await cacheEvents(clean);
-  return clean;
+  const events = verifiedRelayEvents((await Promise.all(filters.map((filter) => pool.querySync(relayUrls, filter, { maxWait: 5000 })))).flat() as NostrEvent[]);
+  const clean = dedupeEvents(topLevelFeedEvents(filterSpam(events)));
+  const output = mode === 'global' ? limitConsecutiveAuthors(clean, 2) : clean;
+  await cacheEvents(output);
+  return output;
+}
+
+export function subscribeFeed(
+  mode: FeedMode,
+  relays = defaultRelays,
+  follows: string[] = [],
+  settings: CustomFeedSettings = { friendsOfFriends: true, keywords: [] },
+  options: FeedQueryOptions & { onEvents?: (events: NostrEvent[]) => void; onComplete?: () => void } = {}
+) {
+  let closed = false;
+  let closer: SubCloser | undefined;
+  let flushTimer: ReturnType<typeof setTimeout> | undefined;
+  const seen = new Set<string>();
+  const pending = new Map<string, NostrEvent>();
+
+  const flush = () => {
+    flushTimer = undefined;
+    const next = dedupeEvents([...pending.values()]);
+    pending.clear();
+    if (!next.length) return;
+    void cacheEvents(next);
+    options.onEvents?.(mode === 'global' ? limitConsecutiveAuthors(next, 2) : next);
+  };
+
+  const scheduleFlush = () => {
+    if (flushTimer) return;
+    flushTimer = setTimeout(flush, 120);
+  };
+
+  void (async () => {
+    if ((mode === 'follow' || mode === 'custom') && !follows.length) {
+      options.onComplete?.();
+      return;
+    }
+
+    const relayUrls = activeRelayUrls(relays, 'read');
+    const base: Filter = { kinds: [1], limit: options.limit ?? 24 };
+    const since = Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 7;
+    if (options.until) base.until = options.until;
+    const filters = await feedFiltersForMode(mode, base, follows, settings, since, relayUrls, options);
+    if (closed) return;
+
+    const requests = relayUrls.flatMap((url) => filters.map((filter) => ({ url, filter })));
+    if (!requests.length) {
+      options.onComplete?.();
+      return;
+    }
+
+    closer = pool.subscribeMap(requests, {
+      maxWait: 5000,
+      onevent(event) {
+        if (closed) return;
+        const [clean] = dedupeEvents(topLevelFeedEvents(filterSpam(verifiedRelayEvents([event as NostrEvent]))));
+        if (!clean || seen.has(clean.id)) return;
+        seen.add(clean.id);
+        pending.set(clean.id, clean);
+        scheduleFlush();
+      },
+      oneose() {
+        if (closed) return;
+        if (flushTimer) clearTimeout(flushTimer);
+        flush();
+        options.onComplete?.();
+      },
+      onclose() {
+        if (closed) return;
+        if (flushTimer) clearTimeout(flushTimer);
+        flush();
+        options.onComplete?.();
+      }
+    });
+  })();
+
+  return {
+    close() {
+      closed = true;
+      if (flushTimer) clearTimeout(flushTimer);
+      closer?.close();
+    }
+  };
 }
 
 export async function fetchMissingEvents(ids: string[], relays = defaultRelays) {
   if (!ids.length) return [];
   const relayUrls = activeRelayUrls(relays, 'read');
-  const events = (await pool.querySync(relayUrls, { ids })) as NostrEvent[];
+  const events = verifiedRelayEvents((await pool.querySync(relayUrls, { ids }, { maxWait: 5000 })) as NostrEvent[]);
   const clean = dedupeEvents(events);
   await cacheEvents(clean);
   return clean;
@@ -145,7 +338,7 @@ export async function fetchMissingEvents(ids: string[], relays = defaultRelays) 
 export async function fetchProfileEvents(pubkey: string, relays = defaultRelays, limit = 36) {
   if (!/^[0-9a-f]{64}$/i.test(pubkey)) return [];
   const relayUrls = activeRelayUrls(relays, 'read');
-  const events = (await pool.querySync(relayUrls, { kinds: [1], authors: [pubkey], limit })) as NostrEvent[];
+  const events = verifiedRelayEvents((await pool.querySync(relayUrls, { kinds: [1], authors: [pubkey], limit }, { maxWait: 5000 })) as NostrEvent[]);
   const clean = dedupeEvents(filterSpam(events));
   await cacheEvents(clean);
   return clean;
@@ -154,7 +347,7 @@ export async function fetchProfileEvents(pubkey: string, relays = defaultRelays,
 export async function fetchProfiles(pubkeys: string[], relays = defaultRelays) {
   if (!pubkeys.length) return [];
   const relayUrls = activeRelayUrls(relays, 'read');
-  const events = (await pool.querySync(relayUrls, { kinds: [0], authors: pubkeys, limit: pubkeys.length })) as NostrEvent[];
+  const events = verifiedRelayEvents((await pool.querySync(relayUrls, { kinds: [0], authors: pubkeys, limit: pubkeys.length }, { maxWait: 4000 })) as NostrEvent[]);
   const profiles = parseProfileEvents(events);
   await Promise.all(profiles.map(cacheProfile));
   return profiles;
@@ -164,7 +357,7 @@ export async function searchProfiles(query: string, relays = defaultRelays) {
   const search = query.trim().replace(/^@/, '');
   if (search.length < 2) return [];
   const relayUrls = activeRelayUrls(relays, 'read');
-  const events = (await pool.querySync(relayUrls, { kinds: [0], search, limit: 12 })) as NostrEvent[];
+  const events = verifiedRelayEvents((await pool.querySync(relayUrls, { kinds: [0], search, limit: 12 }, { maxWait: 4000 })) as NostrEvent[]);
   const profiles = parseProfileEvents(events);
   await Promise.all(profiles.map(cacheProfile));
   return profiles;
@@ -174,13 +367,23 @@ export async function fetchDirectMessages(session: Session, relays = defaultRela
   const relayUrls = activeRelayUrls(relays, 'read');
   const incomingFilter: Filter = { kinds: [4], '#p': [session.pubkey], limit: 80 };
   const outgoingFilter: Filter = { kinds: [4], authors: [session.pubkey], limit: 80 };
-  const events = (await Promise.all([pool.querySync(relayUrls, incomingFilter), pool.querySync(relayUrls, outgoingFilter)])).flat() as NostrEvent[];
-  return Promise.all(dedupeEvents(events).map((event) => toDirectMessage(event, session)));
+  const nip17Filter: Filter = { kinds: [1059], '#p': [session.pubkey], limit: 80 };
+  const events = verifiedRelayEvents(
+    (await Promise.all([
+      pool.querySync(relayUrls, incomingFilter, { maxWait: 5000 }),
+      pool.querySync(relayUrls, outgoingFilter, { maxWait: 5000 }),
+      pool.querySync(relayUrls, nip17Filter, { maxWait: 5000 })
+    ])).flat() as NostrEvent[]
+  );
+  const messages = await Promise.all(
+    dedupeEvents(events).map((event) => (event.kind === 1059 ? toNip17DirectMessage(event, session) : toNip04DirectMessage(event, session)))
+  );
+  return messages.filter((message): message is DirectMessage => Boolean(message));
 }
 
 export async function fetchEventStats(ids: string[], relays = defaultRelays) {
   const uniqueIds = [...new Set(ids)].filter(Boolean).slice(0, 80);
-  const emptyStats = () => ({ replies: 0, reposts: 0, likes: 0, zaps: 0 });
+  const emptyStats = () => ({ replies: 0, reposts: 0, likes: 0, dislikes: 0, emoji: 0, zaps: 0 });
   const stats: Record<string, EventStats> = Object.fromEntries(uniqueIds.map((id) => [id, emptyStats()]));
   if (!uniqueIds.length) return stats;
 
@@ -191,7 +394,11 @@ export async function fetchEventStats(ids: string[], relays = defaultRelays) {
     { kinds: [7], '#e': uniqueIds, limit: Math.min(800, uniqueIds.length * 35) },
     { kinds: [9735], '#e': uniqueIds, limit: Math.min(500, uniqueIds.length * 20) }
   ];
-  const events = dedupeEvents((await Promise.all(filters.map((filter) => pool.querySync(relayUrls, filter)))).flat() as NostrEvent[]);
+  const countStats = await fetchCountStats(uniqueIds, relayUrls).catch(() => ({}));
+  Object.entries(countStats).forEach(([id, stat]) => (stats[id] = { ...stats[id], ...stat }));
+  const countedIds = new Set(Object.keys(countStats));
+
+  const events = dedupeEvents(verifiedRelayEvents((await Promise.all(filters.map((filter) => pool.querySync(relayUrls, filter, { maxWait: 4500 })))).flat() as NostrEvent[]));
   const seen = {
     replies: new Set<string>(),
     reposts: new Set<string>(),
@@ -202,6 +409,7 @@ export async function fetchEventStats(ids: string[], relays = defaultRelays) {
   for (const event of events) {
     for (const id of referencedEventIds(event, uniqueIds)) {
       if (!stats[id]) continue;
+      if (countedIds.has(id)) continue;
       if (event.kind === 1 && !seen.replies.has(`${id}:${event.id}`)) {
         seen.replies.add(`${id}:${event.id}`);
         stats[id].replies += 1;
@@ -210,7 +418,10 @@ export async function fetchEventStats(ids: string[], relays = defaultRelays) {
         stats[id].reposts += 1;
       } else if (event.kind === 7 && !seen.likes.has(`${id}:${event.pubkey}`)) {
         seen.likes.add(`${id}:${event.pubkey}`);
-        stats[id].likes += 1;
+        const reaction = event.content.trim();
+        if (!reaction || reaction === '+') stats[id].likes += 1;
+        else if (reaction === '-') stats[id].dislikes += 1;
+        else stats[id].emoji += 1;
       } else if (event.kind === 9735 && !seen.zaps.has(`${id}:${event.id}`)) {
         seen.zaps.add(`${id}:${event.id}`);
         stats[id].zaps += 1;
@@ -227,10 +438,35 @@ export async function fetchContactList(pubkey: string, relays = defaultRelays) {
 
 export async function fetchContactListDetails(pubkey: string, relays = defaultRelays): Promise<ContactListDetails> {
   const relayUrls = activeRelayUrls(relays, 'read');
-  const events = ((await pool.querySync(relayUrls, { kinds: [3], authors: [pubkey], limit: 1 })) as NostrEvent[]).sort(
+  const events = verifiedRelayEvents((await pool.querySync(relayUrls, { kinds: [3], authors: [pubkey], limit: 1 }, { maxWait: 4000 })) as NostrEvent[]).sort(
     (a, b) => b.created_at - a.created_at
   );
   return extractContactListDetails(events[0]);
+}
+
+export async function fetchRelayListMetadata(pubkey: string, relays = defaultRelays) {
+  const relayUrls = activeRelayUrls(relays, 'read');
+  const [event] = verifiedRelayEvents((await pool.querySync(relayUrls, { kinds: [10002], authors: [pubkey], limit: 1 }, { maxWait: 4000 })) as NostrEvent[]).sort(
+    (a, b) => b.created_at - a.created_at
+  );
+  if (!event) return [];
+  return event.tags
+    .filter((tag) => tag[0] === 'r' && tag[1])
+    .flatMap((tag) => sanitizeRelayHints([tag[1]]).map((url) => ({ url, marker: tag[2] === 'read' || tag[2] === 'write' ? tag[2] : undefined })));
+}
+
+export async function fetchRelayInfoDocuments(relays = defaultRelays) {
+  return Promise.all(
+    relays
+      .filter((relay) => relay.enabled)
+      .map(async (relay) => {
+        const httpUrl = relay.url.replace(/^wss:\/\//, 'https://').replace(/^ws:\/\//, 'http://');
+        const response = await fetch(httpUrl, { headers: { accept: 'application/nostr+json' } });
+        if (!response.ok) return relay;
+        const info = (await response.json()) as { supported_nips?: number[]; limitation?: Record<string, unknown> };
+        return { ...relay, supportedNips: info.supported_nips, limitation: info.limitation };
+      })
+  );
 }
 
 export async function resolveNip05(identifier = defaultGuestNip05) {
@@ -262,88 +498,223 @@ export function parseProfileEvents(events: NostrEvent[]) {
   });
 }
 
-async function toDirectMessage(event: NostrEvent, session: Session): Promise<DirectMessage> {
+export async function publishReaction(session: Session, target: NostrEvent, relays = defaultRelays, content = '+') {
+  return publishEventTemplate(session, { kind: 7, content, tags: [['e', target.id, '', target.pubkey], ['p', target.pubkey], ['k', String(target.kind)]], created_at: now() }, relays);
+}
+
+export async function publishRepost(session: Session, target: NostrEvent, relays = defaultRelays) {
+  return publishEventTemplate(
+    session,
+    { kind: target.kind === 1 ? 6 : 16, content: target.kind === 1 ? JSON.stringify(target) : '', tags: [['e', target.id, '', target.pubkey], ['p', target.pubkey], ['k', String(target.kind)]], created_at: now() },
+    relays
+  );
+}
+
+export async function publishReport(session: Session, target: NostrEvent, relays = defaultRelays, reportType = 'spam', content = '') {
+  return publishEventTemplate(session, { kind: 1984, content, tags: [['e', target.id, reportType], ['p', target.pubkey, reportType]], created_at: now() }, relays);
+}
+
+async function toNip04DirectMessage(event: NostrEvent, session: Session): Promise<DirectMessage> {
   const recipient = event.tags.find((tag) => tag[0] === 'p' && tag[1])?.[1] ?? '';
-  const delegated = event.tags.some((tag) => tag[0] === 'delegation');
   const isOutgoing = event.pubkey === session.pubkey;
   const peer = isOutgoing ? recipient : event.pubkey;
   return {
     id: event.id,
-    protocol: delegated ? 'NIP-26' : 'NIP-04',
+    protocol: 'NIP-04',
     peer,
     from: event.pubkey,
     to: recipient,
     created_at: event.created_at,
     encrypted: event.content,
-    content: await decryptNip04(session, peer, event.content).catch(() => undefined),
-    delegated
+    content: await decryptNip04(session, peer, event.content).catch(() => undefined)
+  };
+}
+
+async function toNip17DirectMessage(event: NostrEvent, session: Session): Promise<DirectMessage | null> {
+  const rumor = await unwrapNip17Event(event, session).catch(() => null);
+  if (!rumor || rumor.kind !== 14) return null;
+  const recipients = rumor.tags.filter((tag) => tag[0] === 'p' && tag[1]).map((tag) => tag[1]);
+  const isOutgoing = rumor.pubkey === session.pubkey;
+  const peer = isOutgoing ? (recipients.find((pubkey) => pubkey !== session.pubkey) ?? recipients[0] ?? '') : rumor.pubkey;
+  if (!peer) return null;
+
+  return {
+    id: event.id,
+    protocol: 'NIP-17',
+    peer,
+    from: rumor.pubkey,
+    to: recipients.join(','),
+    created_at: rumor.created_at,
+    encrypted: event.content,
+    content: rumor.content
   };
 }
 
 export function canDecryptNip04(session: Session) {
-  return session.mode === 'private-key' || Boolean(typeof window !== 'undefined' && window.nostr?.nip04);
+  return session.mode === 'private-key' || session.mode === 'bunker' || Boolean(typeof window !== 'undefined' && window.nostr?.nip04);
 }
 
 async function decryptNip04(session: Session, peer: string, ciphertext: string) {
   if (!peer) return undefined;
   if (session.secret) return nip04.decrypt(hexToBytes(session.secret), peer, ciphertext);
   if (typeof window !== 'undefined' && session.mode === 'nip07' && window.nostr?.nip04) return window.nostr.nip04.decrypt(peer, ciphertext);
+  if (session.mode === 'bunker') return getBunkerSigner(session).nip04Decrypt(peer, ciphertext);
   return undefined;
 }
 
-export async function publishNote(session: Session, content: string, relays = defaultRelays, tags: string[][] = []) {
-  const draft = { kind: 1, content, tags, created_at: Math.floor(Date.now() / 1000) };
-  let event: NostrToolsEvent;
-  if (session.mode === 'nip07' && window.nostr) {
-    event = (await window.nostr.signEvent({ ...draft, pubkey: session.pubkey })) as unknown as NostrToolsEvent;
-  } else if (session.secret) {
-    event = finalizeEvent(draft, hexToBytes(session.secret));
-  } else {
-    throw new Error('This login mode cannot sign yet. Connect a signer before publishing.');
-  }
+async function unwrapNip17Event(event: NostrEvent, session: Session) {
+  if (session.secret) return nip17.unwrapEvent(event as NostrToolsEvent, hexToBytes(session.secret)) as NostrEvent;
+  const seal = (await decryptNip44(session, event.pubkey, event.content)) as NostrEvent;
+  if (!seal || seal.kind !== 13 || !verifyEvent(seal as NostrToolsEvent)) throw new Error('Invalid NIP-17 seal.');
+  const rumor = (await decryptNip44(session, seal.pubkey, seal.content)) as NostrEvent;
+  if (!rumor || rumor.pubkey !== seal.pubkey) throw new Error('Invalid NIP-17 rumor.');
+  return rumor;
+}
 
-  const urls = activeRelayUrls(relays, 'write');
-  if (!urls.length) throw new Error('No write relays are enabled.');
-  await Promise.any(pool.publish(urls, event));
-  return event as unknown as NostrEvent;
+async function decryptNip44(session: Session, peer: string, ciphertext: string) {
+  let plaintext: string | undefined;
+  if (typeof window !== 'undefined' && session.mode === 'nip07' && window.nostr?.nip44) plaintext = await window.nostr.nip44.decrypt(peer, ciphertext);
+  if (session.mode === 'bunker') plaintext = await getBunkerSigner(session).nip44Decrypt(peer, ciphertext);
+  if (!plaintext) throw new Error('NIP-44 decrypt is not available for this session.');
+  return JSON.parse(plaintext) as unknown;
+}
+
+async function encryptNip44(session: Session, peer: string, payload: unknown) {
+  const plaintext = JSON.stringify(payload);
+  if (session.secret) return nip44.encrypt(plaintext, nip44.getConversationKey(hexToBytes(session.secret), peer));
+  if (typeof window !== 'undefined' && session.mode === 'nip07' && window.nostr?.nip44) return window.nostr.nip44.encrypt(peer, plaintext);
+  if (session.mode === 'bunker') return getBunkerSigner(session).nip44Encrypt(peer, plaintext);
+  throw new Error('NIP-44 encrypt is not available for this session.');
+}
+
+export async function publishNote(session: Session, content: string, relays = defaultRelays, tags: string[][] = []) {
+  return publishEventTemplate(session, { kind: 1, content, tags, created_at: now() }, relays);
 }
 
 export async function publishProfile(session: Session, profile: Profile, relays = defaultRelays) {
   const metadata = compactProfile(profile);
-  const draft = { kind: 0, content: JSON.stringify(metadata), tags: [], created_at: Math.floor(Date.now() / 1000) };
-  let event: NostrToolsEvent;
-  if (session.mode === 'nip07' && window.nostr) {
-    event = (await window.nostr.signEvent({ ...draft, pubkey: session.pubkey })) as unknown as NostrToolsEvent;
-  } else if (session.secret) {
-    event = finalizeEvent(draft, hexToBytes(session.secret));
-  } else {
-    throw new Error('This login mode cannot sign yet. Connect a signer before updating your profile.');
-  }
-
-  const urls = activeRelayUrls(relays, 'write');
-  if (!urls.length) throw new Error('No write relays are enabled.');
-  await Promise.any(pool.publish(urls, event));
+  const event = await publishEventTemplate(session, { kind: 0, content: JSON.stringify(metadata), tags: [], created_at: now() }, relays);
   const savedProfile = { ...metadata, pubkey: session.pubkey };
   await cacheProfile(savedProfile);
-  return { event: event as unknown as NostrEvent, profile: savedProfile };
+  return { event, profile: savedProfile };
 }
 
-export async function publishContactList(session: Session, pubkeys: string[], relays = defaultRelays) {
-  const tags = [...new Set(pubkeys)].map((pubkey) => ['p', pubkey]);
-  const draft = { kind: 3, content: '', tags, created_at: Math.floor(Date.now() / 1000) };
-  let event: NostrToolsEvent;
-  if (session.mode === 'nip07' && window.nostr) {
-    event = (await window.nostr.signEvent({ ...draft, pubkey: session.pubkey })) as unknown as NostrToolsEvent;
-  } else if (session.secret) {
-    event = finalizeEvent(draft, hexToBytes(session.secret));
-  } else {
-    throw new Error('This login mode cannot sign yet. Connect a signer before updating your follow list.');
-  }
+export async function publishContactList(session: Session, pubkeys: string[], relays = defaultRelays, contacts: ContactListItem[] = [], profileMap: Record<string, Profile> = {}) {
+  const byPubkey = new Map(contacts.map((contact) => [contact.pubkey, contact]));
+  const tags = [...new Set(pubkeys)].map((pubkey) => {
+    const contact = byPubkey.get(pubkey);
+    const petname = contact?.petname || profileMap[pubkey]?.name || profileMap[pubkey]?.display_name || '';
+    return ['p', pubkey, contact?.relay ?? '', petname];
+  });
+  return publishEventTemplate(session, { kind: 3, content: '', tags, created_at: now() }, relays);
+}
 
+export async function publishRelayListMetadata(session: Session, relays = defaultRelays) {
+  const tags = relays
+    .filter((relay) => relay.enabled)
+    .flatMap((relay) => (relay.read && relay.write ? [['r', relay.url]] : relay.read ? [['r', relay.url, 'read']] : relay.write ? [['r', relay.url, 'write']] : []));
+  return publishEventTemplate(session, { kind: 10002, content: '', tags, created_at: now() }, relays);
+}
+
+export async function publishNip17DirectMessage(session: Session, recipientPubkey: string, content: string, relays = defaultRelays, subject = '') {
+  if (!/^[0-9a-f]{64}$/i.test(recipientPubkey)) throw new Error('Recipient public key is invalid.');
+  const recipientRelays = await fetchNip17InboxRelays(recipientPubkey, relays);
+  const recipient = { publicKey: recipientPubkey, relayUrl: recipientRelays[0] };
+  const wraps = session.secret ? nip17.wrapManyEvents(hexToBytes(session.secret), [recipient], content, subject || undefined) : await wrapNip17DirectMessage(session, recipient, content, subject);
+  const publishUrls = [...new Set([...recipientRelays, ...activeRelayUrls(relays, 'write')])];
+  if (!publishUrls.length) throw new Error('No relays are available for NIP-17 message publishing.');
+  await Promise.any(wraps.map((event) => Promise.any(pool.publish(publishUrls, event))));
+  return wraps as unknown as NostrEvent[];
+}
+
+export async function getNip98AuthorizationHeader(session: Session, url: string, method: string) {
+  return nip98.getToken(url, method, (draft) => signEventTemplate(session, draft), true);
+}
+
+async function wrapNip17DirectMessage(session: Session, recipient: { publicKey: string; relayUrl?: string }, content: string, subject = '') {
+  const recipients = [recipient, { publicKey: session.pubkey }];
+  return Promise.all(
+    recipients.map(async (target) => {
+      const rumor = createNip17Rumor(session.pubkey, [recipient], content, subject);
+      const seal = await signEventTemplate(session, {
+        kind: 13,
+        content: await encryptNip44(session, target.publicKey, rumor),
+        created_at: randomPastNow(),
+        tags: []
+      });
+      const randomKey = generateSecretKey();
+      return finalizeEvent(
+        {
+          kind: 1059,
+          content: nip44.encrypt(JSON.stringify(seal), nip44.getConversationKey(randomKey, target.publicKey)),
+          created_at: randomPastNow(),
+          tags: [['p', target.publicKey]]
+        },
+        randomKey
+      );
+    })
+  );
+}
+
+function createNip17Rumor(senderPubkey: string, recipients: { publicKey: string; relayUrl?: string }[], content: string, subject = '') {
+  const rumor = {
+    pubkey: senderPubkey,
+    created_at: now(),
+    kind: 14,
+    tags: [
+      ...recipients.map((recipient) => (recipient.relayUrl ? ['p', recipient.publicKey, recipient.relayUrl] : ['p', recipient.publicKey])),
+      ...(subject.trim() ? [['subject', subject.trim()]] : [])
+    ],
+    content
+  };
+  return { ...rumor, id: getEventHash(rumor) };
+}
+
+async function publishEventTemplate(session: Session, draft: Pick<NostrToolsEvent, 'kind' | 'content' | 'tags' | 'created_at'>, relays = defaultRelays) {
+  const event = await signEventTemplate(session, draft);
   const urls = activeRelayUrls(relays, 'write');
   if (!urls.length) throw new Error('No write relays are enabled.');
   await Promise.any(pool.publish(urls, event));
   return event as unknown as NostrEvent;
+}
+
+async function signEventTemplate(session: Session, draft: Pick<NostrToolsEvent, 'kind' | 'content' | 'tags' | 'created_at'>) {
+  let event: NostrToolsEvent;
+  if (session.mode === 'nip07' && window.nostr) {
+    event = (await window.nostr.signEvent({ ...draft, pubkey: session.pubkey })) as unknown as NostrToolsEvent;
+  } else if (session.secret) {
+    event = finalizeEvent(draft, hexToBytes(session.secret));
+  } else if (session.mode === 'bunker') {
+    event = (await getBunkerSigner(session).signEvent(draft)) as NostrToolsEvent;
+  } else {
+    throw new Error('No signer is available for this session.');
+  }
+
+  return event;
+}
+
+function getBunkerSigner(session: Session) {
+  if (!session.bunkerClientSecret || !session.bunkerRemotePubkey || !session.bunkerRelays?.length) throw new Error('Bunker session is missing connection details.');
+  const key = bunkerSignerKey(session);
+  const existing = bunkerSigners.get(key);
+  if (existing) return existing;
+  const pointer: nip46.BunkerPointer = {
+    pubkey: session.bunkerRemotePubkey,
+    relays: session.bunkerRelays,
+    secret: session.bunkerSecret ?? null
+  };
+  const signer = nip46.BunkerSigner.fromBunker(hexToBytes(session.bunkerClientSecret), pointer, {
+    pool,
+    onauth: (url: string) => {
+      if (typeof window !== 'undefined') window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  });
+  bunkerSigners.set(key, signer);
+  return signer;
+}
+
+function bunkerSignerKey(session: Session) {
+  return `${session.bunker ?? ''}:${session.bunkerClientSecret ?? ''}`;
 }
 
 function decodeNsec(value: string) {
@@ -355,6 +726,11 @@ function decodeNsec(value: string) {
 function sampleAuthors(follows: string[], count: number) {
   if (count >= follows.length) return follows;
   return [...follows].sort(() => Math.random() - 0.5).slice(0, count);
+}
+
+function normalizedHashtag(tag?: string) {
+  const clean = tag?.trim().replace(/^#/, '').toLowerCase();
+  return clean && /^[a-z0-9_]{2,64}$/.test(clean) ? clean : '';
 }
 
 async function customFeedFilters(base: Filter, follows: string[], settings: CustomFeedSettings, since: number, relayUrls: string[]) {
@@ -376,7 +752,7 @@ async function customFeedFilters(base: Filter, follows: string[], settings: Cust
 }
 
 async function fetchFriendsOfFriends(follows: string[], relayUrls: string[]) {
-  const contactEvents = (await pool.querySync(relayUrls, { kinds: [3], authors: follows, limit: Math.min(120, follows.length) })) as NostrEvent[];
+  const contactEvents = verifiedRelayEvents((await pool.querySync(relayUrls, { kinds: [3], authors: follows, limit: Math.min(120, follows.length) }, { maxWait: 4500 })) as NostrEvent[]);
   const directFollows = new Set(follows);
   const pubkeys = new Set<string>();
   for (const event of contactEvents) {
@@ -385,18 +761,30 @@ async function fetchFriendsOfFriends(follows: string[], relayUrls: string[]) {
   return [...pubkeys];
 }
 
+async function fetchNip17InboxRelays(pubkey: string, relays = defaultRelays) {
+  const relayUrls = activeRelayUrls(relays, 'read');
+  const [event] = verifiedRelayEvents((await pool.querySync(relayUrls, { kinds: [10050], authors: [pubkey], limit: 1 }, { maxWait: 4000 })) as NostrEvent[]).sort(
+    (a, b) => b.created_at - a.created_at
+  );
+  const inboxes = event?.tags.filter((tag) => tag[0] === 'relay' && tag[1]).flatMap((tag) => sanitizeRelayHints([tag[1]])) ?? [];
+  return inboxes.length ? inboxes.slice(0, 3) : activeRelayUrls(relays, 'write');
+}
+
 export function extractContactListDetails(event?: NostrEvent): ContactListDetails {
-  if (!event) return { pubkeys: [], relayHints: [] };
+  if (!event) return { pubkeys: [], relayHints: [], items: [] };
   const pubkeys = new Set<string>();
   const relayHints = new Set<string>();
+  const items: ContactListItem[] = [];
 
   for (const tag of event.tags) {
     if (tag[0] !== 'p' || !tag[1]) continue;
     pubkeys.add(tag[1]);
-    if (tag[2]) sanitizeRelayHints([tag[2]]).forEach((url) => relayHints.add(url));
+    const [relay] = tag[2] ? sanitizeRelayHints([tag[2]]) : [];
+    if (relay) relayHints.add(relay);
+    items.push({ pubkey: tag[1], relay, petname: tag[3] });
   }
 
-  return { pubkeys: [...pubkeys], relayHints: [...relayHints] };
+  return { pubkeys: [...pubkeys], relayHints: [...relayHints], items };
 }
 
 function sanitizeRelayHints(urls: string[]) {
@@ -406,6 +794,74 @@ function sanitizeRelayHints(urls: string[]) {
 function referencedEventIds(event: NostrEvent, ids: string[]) {
   const idSet = new Set(ids);
   return [...new Set(event.tags.flatMap((tag) => (tag[0] === 'e' && idSet.has(tag[1]) ? [tag[1]] : [])))];
+}
+
+function now() {
+  return Math.floor(Date.now() / 1000);
+}
+
+function randomPastNow() {
+  return Math.round(now() - Math.random() * 2 * 24 * 60 * 60);
+}
+
+async function fetchCountStats(ids: string[], relayUrls: string[]) {
+  const entries = await Promise.all(ids.map(async (id) => [id, await countStatsForId(id, relayUrls)] as const));
+  return Object.fromEntries(entries.filter(([, stats]) => stats));
+}
+
+async function countStatsForId(id: string, relayUrls: string[]) {
+  const [replies, reposts, likes, zaps] = await Promise.all([
+    relayCount(relayUrls, { kinds: [1], '#e': [id] }),
+    relayCount(relayUrls, { kinds: [6], '#e': [id] }),
+    relayCount(relayUrls, { kinds: [7], '#e': [id] }),
+    relayCount(relayUrls, { kinds: [9735], '#e': [id] })
+  ]);
+  if ([replies, reposts, likes, zaps].every((value) => value === undefined)) return undefined;
+  return {
+    replies: replies ?? 0,
+    reposts: reposts ?? 0,
+    likes: likes ?? 0,
+    zaps: zaps ?? 0
+  };
+}
+
+async function relayCount(relayUrls: string[], filter: Filter) {
+  const values = await Promise.all(relayUrls.slice(0, 4).map((url) => countOnRelay(url, filter).catch(() => undefined)));
+  const counts = values.filter((value): value is number => typeof value === 'number');
+  return counts.length ? Math.max(...counts) : undefined;
+}
+
+function countOnRelay(url: string, filter: Filter): Promise<number | undefined> {
+  if (typeof WebSocket === 'undefined') return Promise.resolve(undefined);
+  return new Promise((resolve) => {
+    const ws = new WebSocket(url);
+    const id = `count-${Math.random().toString(16).slice(2)}`;
+    const timeout = setTimeout(() => {
+      ws.close();
+      resolve(undefined);
+    }, 1800);
+    ws.onopen = () => ws.send(JSON.stringify(['COUNT', id, filter]));
+    ws.onerror = () => {
+      clearTimeout(timeout);
+      resolve(undefined);
+    };
+    ws.onmessage = (message) => {
+      try {
+        const data = JSON.parse(String(message.data)) as unknown[];
+        if (data[0] === 'COUNT' && data[1] === id && data[2] && typeof data[2] === 'object') {
+          clearTimeout(timeout);
+          ws.close();
+          resolve(Number((data[2] as { count?: number }).count ?? 0));
+        } else if (data[0] === 'CLOSED' && data[1] === id) {
+          clearTimeout(timeout);
+          ws.close();
+          resolve(undefined);
+        }
+      } catch {
+        // Ignore malformed relay frames.
+      }
+    };
+  });
 }
 
 function compactProfile(profile: Profile): Omit<Profile, 'pubkey'> {

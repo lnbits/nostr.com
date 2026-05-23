@@ -4,12 +4,17 @@ import {
   activeRelayUrls,
   dedupeEvents,
   extractContactListDetails,
+  feedFiltersForMode,
+  fetchFeed,
   filterSpam,
+  isReplyEvent,
   isMachineGeneratedContent,
+  limitConsecutiveAuthors,
   loginWithBunker,
   loginWithPrivateKey,
   parseProfileEvents,
-  publishNote
+  publishNote,
+  topLevelFeedEvents
 } from './client';
 import type { NostrEvent, RelayState, Session } from './types';
 
@@ -48,12 +53,60 @@ describe('nostr client helpers', () => {
     expect(dedupeEvents([older]).map((item) => item.id)).toEqual([older.id]);
   });
 
+  it('limits consecutive authors and only restores deferred notes after other authors', () => {
+    const a = 'a'.repeat(64);
+    const b = 'b'.repeat(64);
+    const c = 'c'.repeat(64);
+    const items = [
+      event({ id: '1'.repeat(64), pubkey: a }),
+      event({ id: '2'.repeat(64), pubkey: a }),
+      event({ id: '3'.repeat(64), pubkey: a }),
+      event({ id: '4'.repeat(64), pubkey: a }),
+      event({ id: '5'.repeat(64), pubkey: b }),
+      event({ id: '6'.repeat(64), pubkey: c })
+    ];
+
+    expect(limitConsecutiveAuthors(items, 2).map((item) => item.pubkey)).toEqual([a, a, b, a, a, c]);
+    expect(limitConsecutiveAuthors(items.slice(0, 4), 2).map((item) => item.id)).toEqual(['1'.repeat(64), '2'.repeat(64)]);
+  });
+
+  it('returns an empty follow or custom feed when there are no follows', async () => {
+    await expect(fetchFeed('follow', [], [])).resolves.toEqual([]);
+    await expect(fetchFeed('custom', [], [])).resolves.toEqual([]);
+  });
+
+  it('adds hashtag constraints while preserving the active feed mode', async () => {
+    const follows = ['c'.repeat(64)];
+    const base = { kinds: [1], limit: 10 };
+
+    expect(await feedFiltersForMode('global', base, follows, { friendsOfFriends: false, keywords: [] }, 123, [], { hashtag: '#Nostr' })).toEqual([
+      { kinds: [1], limit: 10, '#t': ['nostr'], since: 123 }
+    ]);
+    expect(await feedFiltersForMode('follow', base, follows, { friendsOfFriends: false, keywords: [] }, 123, [], { hashtag: 'Nostr' })).toEqual([
+      { kinds: [1], limit: 10, '#t': ['nostr'], authors: follows, since: 123 }
+    ]);
+    expect(await feedFiltersForMode('custom', base, follows, { friendsOfFriends: false, keywords: [] }, 123, [], { hashtag: 'Nostr' })).toEqual([
+      { kinds: [1], limit: 10, '#t': ['nostr'], authors: follows, since: 123 }
+    ]);
+  });
+
   it('filters muted pubkeys and obvious muted-word spam', () => {
     const muted = event({ pubkey: 'c'.repeat(64), content: 'normal note' });
     const spam = event({ content: 'free sats now' });
     const good = event({ content: 'protocol work is happening' });
 
     expect(filterSpam([muted, spam, good], new Set([muted.pubkey]))).toEqual([good]);
+  });
+
+  it('keeps replies out of top-level feed results', () => {
+    const root = event({ content: 'top-level note' });
+    const markedReply = event({ content: 'reply', tags: [['e', root.id, 'wss://relay.example', 'reply', root.pubkey]] });
+    const legacyReply = event({ content: 'legacy reply', tags: [['e', root.id]] });
+
+    expect(isReplyEvent(root)).toBe(false);
+    expect(isReplyEvent(markedReply)).toBe(true);
+    expect(isReplyEvent(legacyReply)).toBe(true);
+    expect(topLevelFeedEvents([root, markedReply, legacyReply])).toEqual([root]);
   });
 
   it('filters obvious adult content by keyword, hashtag, domain, and warning tags', () => {
@@ -64,6 +117,14 @@ describe('nostr client helpers', () => {
     const good = event({ content: 'teenage engineering made a nice synthesizer' });
 
     expect(filterSpam([keyword, hashtag, domain, warning, good])).toEqual([good]);
+  });
+
+  it('filters common hate and harassment terms without substring false positives', () => {
+    const hate = event({ content: 'white power rally spam' });
+    const slur = event({ content: 'posting n1gger bait' });
+    const benignSubstring = event({ content: 'I am debugging the turn signal relay in my car.' });
+
+    expect(filterSpam([hate, slur, benignSubstring])).toEqual([benignSubstring]);
   });
 
   it('filters machine telemetry json while allowing human text with small json snippets', () => {
@@ -93,6 +154,17 @@ describe('nostr client helpers', () => {
     expect(filterSpam([transport, human])).toEqual([human]);
   });
 
+  it('filters bot metadata json notes with emote payload fields', () => {
+    const bot = event({
+      content:
+        '{"p":"kick","u":"Holispider","m":"💻 Pokud tě zajímá cokoliv o mně nebo mém contentu, tak skoč na https://holispider.eu\\\\h — tam je kompletní lore 😂","b":"9","a":"0","f":"0","fw":"","bot":1,"emotes":[{"name":"💻","url":""},{"name":"😂","url":""}],"serverTime":"17:29"}'
+    });
+    const human = event({ content: 'I keep my links and notes here, enjoy the rabbit hole.' });
+
+    expect(isMachineGeneratedContent(bot.content)).toBe(true);
+    expect(filterSpam([bot, human])).toEqual([human]);
+  });
+
   it('logs in with raw hex and nsec private keys', () => {
     const secret = new Uint8Array(32).fill(7);
     const hex = bytesToHex(secret);
@@ -102,11 +174,8 @@ describe('nostr client helpers', () => {
     expect(loginWithPrivateKey(nsec)).toMatchObject({ mode: 'private-key', secret: hex });
   });
 
-  it('creates a bunker session without pretending it can sign locally', () => {
-    expect(loginWithBunker(`bunker://${pubkey}?relay=wss://relay.example`)).toMatchObject({
-      mode: 'bunker',
-      pubkey
-    });
+  it('rejects invalid bunker sessions before trying to sign', async () => {
+    await expect(loginWithBunker('bunker://not-a-valid-pubkey?relay=wss://relay.example')).rejects.toThrow('Enter a valid bunker:// URI.');
   });
 
   it('parses profile metadata events and ignores malformed records', () => {
