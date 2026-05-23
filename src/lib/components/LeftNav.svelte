@@ -9,7 +9,7 @@
     UserRound
   } from '@lucide/svelte';
   import { page } from '$app/stores';
-  import { goHome, session, startCompose } from '$lib/stores/app';
+  import { goHome, selectMessagePeer, session, startCompose } from '$lib/stores/app';
   import ThemeToggle from './ThemeToggle.svelte';
 
   const navItems = [
@@ -39,7 +39,11 @@
 
   <nav class="left-nav-list">
     {#each navItems as item}
-      <a class:active={isActive(item.href)} href={item.href} on:click={item.href === '/' ? goHome : undefined}>
+      <a
+        class:active={isActive(item.href)}
+        href={item.href}
+        on:click={item.href === '/' ? goHome : item.href === '/#messages' ? () => selectMessagePeer('') : undefined}
+      >
         <svelte:component this={item.icon} size={26} />
         <span>{item.label}</span>
       </a>

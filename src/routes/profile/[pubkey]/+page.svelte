@@ -5,7 +5,7 @@
   import { Check, Copy, Globe2, MessageCircle, Pencil, Save, Upload, UserPlus, X } from '@lucide/svelte';
   import { nip19 } from 'nostr-tools';
   import NoteCard from '$lib/components/NoteCard.svelte';
-  import { events, mergeEvents, profiles, relays, saveProfile, session } from '$lib/stores/app';
+  import { events, mergeEvents, profiles, relays, saveProfile, selectMessagePeer, session } from '$lib/stores/app';
   import { getCachedProfileEvents } from '$lib/nostr/cache';
   import { dedupeEvents, fetchProfileEvents, fetchProfiles, getNip98AuthorizationHeader } from '$lib/nostr/client';
   import type { NostrEvent, Profile } from '$lib/nostr/types';
@@ -238,7 +238,7 @@
         {#if !isOwnProfile}
           <div class="profile-actions">
             <button disabled={!$session}><UserPlus size={18} /> Follow</button>
-            <button class="icon-button" disabled={!$session} aria-label="Message" on:click={() => void goto('/#messages')}><MessageCircle size={19} /></button>
+            <button class="icon-button" disabled={!$session} aria-label="Message" on:click={() => { selectMessagePeer(pubkey); void goto('/#messages'); }}><MessageCircle size={19} /></button>
           </div>
         {/if}
       </div>

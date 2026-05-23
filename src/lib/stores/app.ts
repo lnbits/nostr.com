@@ -25,7 +25,9 @@ import {
   publishRelayListMetadata,
   publishReport,
   publishRepost,
+  publishNip17DirectMessage,
   resolveNip05Profile,
+  resolvePubkeyIdentifier,
   subscribeFeed,
   topLevelFeedEvents
 } from '$lib/nostr/client';
@@ -53,6 +55,7 @@ export const activeHashtag = writable<string>('');
 export const online = writable(true);
 export const notifications = writable<NotificationItem[]>([]);
 export const directMessages = writable<DirectMessage[]>([]);
+export const activeMessagePeer = writable<string>('');
 export const eventStats = writable<Record<string, EventStats>>({});
 export const likedEvents = writable<Set<string>>(new Set());
 export const loadingFeed = writable(false);
@@ -386,10 +389,43 @@ export async function refreshMessages() {
 
   loadingMessages.set(true);
   try {
-    directMessages.set(await fetchDirectMessages(currentSession, currentRelays));
+    const messages = await fetchDirectMessages(currentSession, currentRelays);
+    directMessages.update((existing) => mergeDirectMessages(messages, existing));
   } finally {
     loadingMessages.set(false);
   }
+}
+
+export async function resolveMessageRecipient(value: string) {
+  const pubkey = normalizePubkey(await resolvePubkeyIdentifier(value, currentRelays).catch(() => ''));
+  if (!pubkey) throw new Error('Could not resolve that npub or NIP-05 address.');
+  void hydrateMissingProfiles([{ id: pubkey, pubkey, created_at: 0, kind: 0, tags: [], content: '' }], 1);
+  activeMessagePeer.set(pubkey);
+  return pubkey;
+}
+
+export function selectMessagePeer(pubkey: string) {
+  activeMessagePeer.set(normalizePubkey(pubkey));
+}
+
+export async function sendDirectMessage(peer: string, content: string) {
+  const currentSession = requireSession('Sign in before sending a message.');
+  const recipient = normalizePubkey(peer);
+  const clean = content.trim();
+  if (!clean || !recipient) return;
+  const wraps = await publishNip17DirectMessage(currentSession, recipient, clean, currentRelays);
+  const message: DirectMessage = {
+    id: wraps[0]?.id ?? `${currentSession.pubkey}:${recipient}:${Date.now()}`,
+    protocol: 'NIP-17',
+    peer: recipient,
+    from: normalizePubkey(currentSession.pubkey),
+    to: recipient,
+    created_at: Math.floor(Date.now() / 1000),
+    encrypted: wraps[0]?.content ?? '',
+    content: clean
+  };
+  directMessages.update((existing) => mergeDirectMessages([message], existing));
+  activeMessagePeer.set(recipient);
 }
 
 export async function signIn(mode: 'nip07' | 'private-key' | 'bunker' | 'guest', value = '') {
@@ -519,6 +555,50 @@ export function mergeEvents(incoming: NostrEvent[], existing: NostrEvent[]) {
   const merged = [...byId.values()].sort((a, b) => b.created_at - a.created_at);
   const limited = currentMode === 'global' ? limitCryptoTopicDensity(limitConsecutiveAuthors(merged, 2), 10) : merged;
   return limited.slice(0, maxFeedEvents);
+}
+
+function mergeDirectMessages(incoming: DirectMessage[], existing: DirectMessage[]) {
+  const merged: DirectMessage[] = [];
+  for (const message of [...existing, ...incoming]
+    .map(normalizeDirectMessage)
+    .filter((message): message is DirectMessage => Boolean(message && message.peer !== normalizePubkey(currentSessionValue?.pubkey ?? '')))) {
+    const index = merged.findIndex((existingMessage) => existingMessage.id === message.id || isSameDirectMessage(existingMessage, message));
+    if (index >= 0) {
+      merged[index] = preferDirectMessage(merged[index], message);
+    } else {
+      merged.push(message);
+    }
+  }
+  return merged.sort((a, b) => b.created_at - a.created_at).slice(0, 400);
+}
+
+function normalizeDirectMessage(message: DirectMessage) {
+  const peer = normalizePubkey(message.peer);
+  const from = normalizePubkey(message.from);
+  const to = message.to
+    .split(',')
+    .map(normalizePubkey)
+    .filter(Boolean)
+    .join(',');
+  if (!peer || !from) return null;
+  return { ...message, peer, from, to };
+}
+
+function isSameDirectMessage(a: DirectMessage, b: DirectMessage) {
+  if (a.protocol !== b.protocol || a.peer !== b.peer || a.from !== b.from) return false;
+  if (!a.content || a.content !== b.content) return false;
+  return Math.abs(a.created_at - b.created_at) <= 3;
+}
+
+function preferDirectMessage(existing: DirectMessage, incoming: DirectMessage) {
+  if (!existing.encrypted && incoming.encrypted) return incoming;
+  if (!existing.content && incoming.content) return incoming;
+  return existing;
+}
+
+function normalizePubkey(value: string) {
+  const clean = value.trim().toLowerCase();
+  return /^[0-9a-f]{64}$/.test(clean) ? clean : '';
 }
 
 function getOldestTimestamp(items: NostrEvent[]) {

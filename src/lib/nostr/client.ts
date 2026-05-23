@@ -426,6 +426,20 @@ export async function searchProfiles(query: string, relays = defaultRelays) {
   return profiles;
 }
 
+export async function resolvePubkeyIdentifier(value: string, relays = defaultRelays) {
+  const clean = value.trim().replace(/^@/, '');
+  if (/^[0-9a-f]{64}$/i.test(clean)) return clean.toLowerCase();
+
+  if (/^(npub|nprofile)1[023456789acdefghjklmnpqrstuvwxyz]+$/i.test(clean)) {
+    const decoded = nip19.decode(clean);
+    if (decoded.type === 'npub') return decoded.data;
+    if (decoded.type === 'nprofile') return decoded.data.pubkey;
+  }
+
+  if (clean.includes('@')) return (await resolveNip05Profile(clean))?.pubkey ?? '';
+  return '';
+}
+
 export async function fetchDirectMessages(session: Session, relays = defaultRelays) {
   const relayUrls = activeRelayUrls(relays, 'read');
   const incomingFilter: Filter = { kinds: [4], '#p': [session.pubkey], limit: 80 };
@@ -681,7 +695,7 @@ export async function publishNip17DirectMessage(session: Session, recipientPubke
   if (!/^[0-9a-f]{64}$/i.test(recipientPubkey)) throw new Error('Recipient public key is invalid.');
   const recipientRelays = await fetchNip17InboxRelays(recipientPubkey, relays);
   const recipient = { publicKey: recipientPubkey, relayUrl: recipientRelays[0] };
-  const wraps = session.secret ? nip17.wrapManyEvents(hexToBytes(session.secret), [recipient], content, subject || undefined) : await wrapNip17DirectMessage(session, recipient, content, subject);
+  const wraps = await wrapNip17DirectMessage(session, recipient, content, subject);
   const publishUrls = [...new Set([...recipientRelays, ...activeRelayUrls(relays, 'write')])];
   if (!publishUrls.length) throw new Error('No relays are available for NIP-17 message publishing.');
   await Promise.any(wraps.map((event) => Promise.any(pool.publish(publishUrls, event))));
