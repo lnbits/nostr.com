@@ -60,3 +60,15 @@ export interface NotificationItem {
   event: NostrEvent;
   seen: boolean;
 }
+
+export interface DirectMessage {
+  id: string;
+  protocol: 'NIP-04' | 'NIP-26' | 'NIP-4e';
+  peer: string;
+  from: string;
+  to: string;
+  created_at: number;
+  encrypted: string;
+  content?: string;
+  delegated: boolean;
+}

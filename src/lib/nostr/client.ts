@@ -1,9 +1,9 @@
-import { finalizeEvent, generateSecretKey, getPublicKey, nip19, SimplePool } from 'nostr-tools';
+import { finalizeEvent, generateSecretKey, getPublicKey, nip04, nip19, SimplePool } from 'nostr-tools';
 import type { Event as NostrToolsEvent, Filter } from 'nostr-tools';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { cacheEvents, cacheProfile } from './cache';
 import { defaultGuestNip05, defaultRelays, mutedWords } from './config';
-import type { ContactListDetails, CustomFeedSettings, FeedMode, Nip05Profile, NostrEvent, Profile, RelayState, Session } from './types';
+import type { ContactListDetails, CustomFeedSettings, DirectMessage, FeedMode, Nip05Profile, NostrEvent, Profile, RelayState, Session } from './types';
 
 const pool = new SimplePool();
 
@@ -47,6 +47,7 @@ export function filterSpam(events: NostrEvent[], mutedPubkeys = new Set<string>(
 export function isMachineGeneratedContent(content: string) {
   const trimmed = content.trim();
   if (!trimmed || trimmed.length < 80) return false;
+  if (isTransportPayload(trimmed)) return true;
   if (!/^[{[]/.test(trimmed) || !/[}\]]$/.test(trimmed)) return false;
 
   try {
@@ -59,6 +60,14 @@ export function isMachineGeneratedContent(content: string) {
   } catch {
     return false;
   }
+}
+
+function isTransportPayload(content: string) {
+  if (/^\[broadcast:\[#?[a-z0-9]+]]\s*\{/i.test(content)) return true;
+  if (content.length < 500) return false;
+  if (/"route"\s*:/.test(content) && /"payload"\s*:/.test(content)) return true;
+  if (/"type"\s*:\s*"ar_profile"/.test(content) && /"payload"\s*:/.test(content)) return true;
+  return /[A-Za-z0-9+/=_-]{420,}/.test(content) && /"payload"\s*:/.test(content);
 }
 
 export function dedupeEvents(events: NostrEvent[]) {
@@ -114,6 +123,14 @@ export async function fetchProfiles(pubkeys: string[], relays = defaultRelays) {
   return profiles;
 }
 
+export async function fetchDirectMessages(session: Session, relays = defaultRelays) {
+  const relayUrls = activeRelayUrls(relays, 'read');
+  const incomingFilter: Filter = { kinds: [4], '#p': [session.pubkey], limit: 80 };
+  const outgoingFilter: Filter = { kinds: [4], authors: [session.pubkey], limit: 80 };
+  const events = (await Promise.all([pool.querySync(relayUrls, incomingFilter), pool.querySync(relayUrls, outgoingFilter)])).flat() as NostrEvent[];
+  return Promise.all(dedupeEvents(events).map((event) => toDirectMessage(event, session)));
+}
+
 export async function fetchContactList(pubkey: string, relays = defaultRelays) {
   return (await fetchContactListDetails(pubkey, relays)).pubkeys;
 }
@@ -155,6 +172,35 @@ export function parseProfileEvents(events: NostrEvent[]) {
   });
 }
 
+async function toDirectMessage(event: NostrEvent, session: Session): Promise<DirectMessage> {
+  const recipient = event.tags.find((tag) => tag[0] === 'p' && tag[1])?.[1] ?? '';
+  const delegated = event.tags.some((tag) => tag[0] === 'delegation');
+  const isOutgoing = event.pubkey === session.pubkey;
+  const peer = isOutgoing ? recipient : event.pubkey;
+  return {
+    id: event.id,
+    protocol: delegated ? 'NIP-26' : 'NIP-04',
+    peer,
+    from: event.pubkey,
+    to: recipient,
+    created_at: event.created_at,
+    encrypted: event.content,
+    content: await decryptNip04(session, peer, event.content).catch(() => undefined),
+    delegated
+  };
+}
+
+export function canDecryptNip04(session: Session) {
+  return session.mode === 'private-key' || Boolean(typeof window !== 'undefined' && window.nostr?.nip04);
+}
+
+async function decryptNip04(session: Session, peer: string, ciphertext: string) {
+  if (!peer) return undefined;
+  if (session.secret) return nip04.decrypt(hexToBytes(session.secret), peer, ciphertext);
+  if (typeof window !== 'undefined' && session.mode === 'nip07' && window.nostr?.nip04) return window.nostr.nip04.decrypt(peer, ciphertext);
+  return undefined;
+}
+
 export async function publishNote(session: Session, content: string, relays = defaultRelays, tags: string[][] = []) {
   const draft = { kind: 1, content, tags, created_at: Math.floor(Date.now() / 1000) };
   let event: NostrToolsEvent;
@@ -190,6 +236,24 @@ export async function publishProfile(session: Session, profile: Profile, relays 
   const savedProfile = { ...metadata, pubkey: session.pubkey };
   await cacheProfile(savedProfile);
   return { event: event as unknown as NostrEvent, profile: savedProfile };
+}
+
+export async function publishContactList(session: Session, pubkeys: string[], relays = defaultRelays) {
+  const tags = [...new Set(pubkeys)].map((pubkey) => ['p', pubkey]);
+  const draft = { kind: 3, content: '', tags, created_at: Math.floor(Date.now() / 1000) };
+  let event: NostrToolsEvent;
+  if (session.mode === 'nip07' && window.nostr) {
+    event = (await window.nostr.signEvent({ ...draft, pubkey: session.pubkey })) as unknown as NostrToolsEvent;
+  } else if (session.secret) {
+    event = finalizeEvent(draft, hexToBytes(session.secret));
+  } else {
+    throw new Error('This login mode cannot sign yet. Connect a signer before updating your follow list.');
+  }
+
+  const urls = activeRelayUrls(relays, 'write');
+  if (!urls.length) throw new Error('No write relays are enabled.');
+  await Promise.any(pool.publish(urls, event));
+  return event as unknown as NostrEvent;
 }
 
 function decodeNsec(value: string) {

@@ -1,31 +1,47 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import { Edit3 } from '@lucide/svelte';
+  import MessagesView from '$lib/components/MessagesView.svelte';
   import NoteCard from '$lib/components/NoteCard.svelte';
   import RightRail from '$lib/components/RightRail.svelte';
   import { events, hasMoreFeed, loadingMoreFeed, loadMoreFeed, profiles, session, startCompose } from '$lib/stores/app';
 
   let loadMoreSentinel: HTMLDivElement;
   let observer: IntersectionObserver | undefined;
+  let activeHash = '';
 
   onMount(() => {
+    const syncHash = () => (activeHash = location.hash);
+    syncHash();
+    addEventListener('hashchange', syncHash);
+
     observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) void loadMoreFeed();
+        if (entry.isIntersecting && activeHash !== '#messages') void loadMoreFeed();
       },
       { rootMargin: '700px 0px' }
     );
     if (loadMoreSentinel) observer.observe(loadMoreSentinel);
+
+    return () => removeEventListener('hashchange', syncHash);
   });
 
   onDestroy(() => observer?.disconnect());
 </script>
 
 {#if $session}
-  {@render Timeline()}
+  {#if activeHash === '#messages'}
+    <MessagesView />
+  {:else}
+    {@render Timeline()}
+  {/if}
 {:else}
   <div class="shell">
-    {@render Timeline()}
+    {#if activeHash === '#messages'}
+      <MessagesView />
+    {:else}
+      {@render Timeline()}
+    {/if}
     <RightRail />
   </div>
 {/if}

@@ -73,6 +73,16 @@ describe('nostr client helpers', () => {
     expect(filterSpam([machine, human])).toEqual([human]);
   });
 
+  it('filters broadcast transport payloads that are not human-readable notes', () => {
+    const transport = event({
+      content: `[broadcast:[#1695f]] {"route":{"id":"1779540780109963-80109","from":"[#1695f]","to":"broadcast"},"payload":{"type":"ar_profile","profile":{"id":"[#1695f]"},"p":"${'A'.repeat(600)}"}}`
+    });
+    const human = event({ content: 'I am debugging a relay route today, but this is still a normal human note.' });
+
+    expect(isMachineGeneratedContent(transport.content)).toBe(true);
+    expect(filterSpam([transport, human])).toEqual([human]);
+  });
+
   it('logs in with raw hex and nsec private keys', () => {
     const secret = new Uint8Array(32).fill(7);
     const hex = bytesToHex(secret);

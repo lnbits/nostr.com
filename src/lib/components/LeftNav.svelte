@@ -1,7 +1,6 @@
 <script lang="ts">
   import {
     Bell,
-    Compass,
     Home,
     Mail,
     MoreHorizontal,
@@ -15,7 +14,6 @@
 
   const navItems = [
     { href: '/', label: 'Home', icon: Home },
-    { href: '/#explore', label: 'Explore', icon: Compass },
     { href: '/#notifications', label: 'Notifications', icon: Bell },
     { href: '/#messages', label: 'Messages', icon: Mail },
     { href: '/settings', label: 'Settings', icon: Settings },
@@ -23,17 +21,20 @@
   ];
 
   $: profileHref = $session ? `/profile/${$session.pubkey}` : '/';
+  $: currentHref = `${$page.url.pathname}${$page.url.hash}`;
 </script>
 
 <aside class="left-nav" aria-label="Primary">
   <div class="left-nav-head">
     <a class="left-logo" href="/" aria-label="Nostr home">nostr</a>
-    <ThemeToggle />
+    <div class="nav-tools">
+      <ThemeToggle />
+    </div>
   </div>
 
   <nav class="left-nav-list">
     {#each navItems as item}
-      <a class:active={$page.url.pathname === item.href} href={item.href}>
+      <a class:active={currentHref === item.href || ($page.url.pathname === item.href && !item.href.includes('#'))} href={item.href}>
         <svelte:component this={item.icon} size={26} />
         <span>{item.label}</span>
       </a>

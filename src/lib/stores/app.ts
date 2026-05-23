@@ -4,17 +4,19 @@ import { getCachedEvents, getCachedProfiles } from '$lib/nostr/cache';
 import { defaultCustomFeedSettings, defaultGuestNip05, defaultRelays } from '$lib/nostr/config';
 import {
   createGuestSession,
+  fetchDirectMessages,
   fetchContactListDetails,
   fetchFeed,
   fetchProfiles,
   loginWithBunker,
   loginWithNip07,
   loginWithPrivateKey,
+  publishContactList,
   publishNote,
   publishProfile,
   resolveNip05Profile
 } from '$lib/nostr/client';
-import type { CustomFeedSettings, FeedMode, NostrEvent, NotificationItem, Profile, RelayState, Session } from '$lib/nostr/types';
+import type { CustomFeedSettings, DirectMessage, FeedMode, NostrEvent, NotificationItem, Profile, RelayState, Session } from '$lib/nostr/types';
 
 const sessionStorageKey = 'nostr-session';
 const customFeedStorageKey = 'nostr-custom-feed-settings';
@@ -33,7 +35,9 @@ export const follows = writable<string[]>([]);
 export const customFeedSettings = writable<CustomFeedSettings>(initialCustomFeedSettings);
 export const online = writable(true);
 export const notifications = writable<NotificationItem[]>([]);
+export const directMessages = writable<DirectMessage[]>([]);
 export const loadingFeed = writable(false);
+export const loadingMessages = writable(false);
 export const loadingMoreFeed = writable(false);
 export const hasMoreFeed = writable(true);
 export const composerOpen = writable(false);
@@ -117,6 +121,22 @@ export async function loadMoreFeed() {
   }
 }
 
+export async function refreshMessages() {
+  let currentSession: Session | null = null;
+  session.subscribe((value) => (currentSession = value))();
+  if (!currentSession) {
+    directMessages.set([]);
+    return;
+  }
+
+  loadingMessages.set(true);
+  try {
+    directMessages.set(await fetchDirectMessages(currentSession, currentRelays));
+  } finally {
+    loadingMessages.set(false);
+  }
+}
+
 export async function signIn(mode: 'nip07' | 'private-key' | 'bunker' | 'guest', value = '') {
   const next =
     mode === 'nip07'
@@ -158,6 +178,16 @@ export async function saveProfile(nextProfile: Profile) {
     ...existing,
     [profile.pubkey]: profile
   }));
+}
+
+export async function saveFollowList(pubkeys: string[]) {
+  let currentSession: Session | null = null;
+  session.subscribe((value) => (currentSession = value))();
+  if (!currentSession) throw new Error('Sign in before updating your follow list.');
+  const clean = [...new Set(pubkeys.filter((pubkey) => /^[0-9a-f]{64}$/i.test(pubkey)))];
+  await publishContactList(currentSession, clean, currentRelays);
+  follows.set(clean);
+  if (currentMode === 'follow' || currentMode === 'custom') void refreshFeed(currentMode);
 }
 
 export function mergeEvents(incoming: NostrEvent[], existing: NostrEvent[]) {
