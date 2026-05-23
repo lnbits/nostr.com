@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# SvelteKit and Vite
+.svelte-kit/
+.vite/
+node_modules/.vite/
+node_modules/.vite-temp/
+
+# Build output
+build/
+dist/
+
+# Capacitor native projects and generated assets
+android/
+ios/
+www/
+
+# Test and coverage output
+coverage/
+playwright-report/
+test-results/
+
+# Environment and local config
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
