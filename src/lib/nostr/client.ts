@@ -646,7 +646,10 @@ async function encryptNip44(session: Session, peer: string, payload: unknown) {
 }
 
 export async function publishNote(session: Session, content: string, relays = defaultRelays, tags: string[][] = []) {
-  return publishEventTemplate(session, { kind: 1, content, tags, created_at: now() }, relays);
+  const draft = await signEventTemplate(session, { kind: 1, content, tags, created_at: now() });
+  void cacheEvents([draft as unknown as NostrEvent]);
+  await publishSignedEvent(draft, relays);
+  return draft as unknown as NostrEvent;
 }
 
 export async function publishProfile(session: Session, profile: Profile, relays = defaultRelays) {
@@ -730,10 +733,14 @@ function createNip17Rumor(senderPubkey: string, recipients: { publicKey: string;
 
 async function publishEventTemplate(session: Session, draft: Pick<NostrToolsEvent, 'kind' | 'content' | 'tags' | 'created_at'>, relays = defaultRelays) {
   const event = await signEventTemplate(session, draft);
+  await publishSignedEvent(event, relays);
+  return event as unknown as NostrEvent;
+}
+
+async function publishSignedEvent(event: NostrToolsEvent, relays = defaultRelays) {
   const urls = activeRelayUrls(relays, 'write');
   if (!urls.length) throw new Error('No write relays are enabled.');
   await Promise.any(pool.publish(urls, event));
-  return event as unknown as NostrEvent;
 }
 
 async function signEventTemplate(session: Session, draft: Pick<NostrToolsEvent, 'kind' | 'content' | 'tags' | 'created_at'>) {
@@ -793,21 +800,17 @@ function normalizedHashtag(tag?: string) {
 
 async function customFeedFilters(base: Filter, follows: string[], settings: CustomFeedSettings, since: number, relayUrls: string[]) {
   const total = base.limit ?? 24;
-  const textKeywords = searchKeywords(settings);
   const feedHashtags = hashtagKeywords(settings);
-  const hashtagLimit = feedHashtags.length ? Math.max(1, Math.round(total * 0.3)) : 0;
-  const keywordLimit = textKeywords.length ? Math.max(1, Math.round(total * 0.2)) : 0;
+  const hashtagLimit = feedHashtags.length ? Math.max(1, Math.round(total * 0.2)) : 0;
   const friendsOfFriends = settings.friendsOfFriends ? await fetchFriendsOfFriends(follows, relayUrls) : [];
   const friendsOfFriendsLimit = friendsOfFriends.length ? Math.max(1, Math.round(total * 0.2)) : 0;
-  const followLimit = Math.max(1, total - hashtagLimit - keywordLimit - friendsOfFriendsLimit);
+  const followLimit = Math.max(1, total - hashtagLimit - friendsOfFriendsLimit);
   const filters: Filter[] = [{ ...base, authors: sampleAuthors(follows, followLimit), limit: followLimit, since }];
 
   if (friendsOfFriendsLimit) {
     filters.push({ ...base, authors: sampleAuthors(friendsOfFriends, friendsOfFriendsLimit), limit: friendsOfFriendsLimit, since });
   }
 
-  const search = textKeywords.join(' ');
-  if (search) filters.push({ ...base, search, limit: keywordLimit, since });
   if (feedHashtags.length) filters.push({ ...base, '#t': feedHashtags, limit: hashtagLimit, since });
   return filters;
 }
@@ -825,10 +828,6 @@ function globalFeedFilters(base: Filter, settings: CustomFeedSettings, since: nu
 
 function hashtagKeywords(settings: CustomFeedSettings) {
   return [...new Set(settings.keywords.map((keyword) => normalizedHashtag(keyword)).filter(Boolean))];
-}
-
-function searchKeywords(settings: CustomFeedSettings) {
-  return settings.keywords.map((keyword) => keyword.trim()).filter((keyword) => keyword && !keyword.startsWith('#'));
 }
 
 async function fetchFriendsOfFriends(follows: string[], relayUrls: string[]) {

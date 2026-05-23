@@ -35,6 +35,7 @@ const sessionStorageKey = 'nostr-session';
 const customFeedStorageKey = 'nostr-custom-feed-settings';
 const initialFeedLimit = 18;
 const pageFeedLimit = 24;
+const cachedFeedBufferLimit = initialFeedLimit + pageFeedLimit * 3;
 const maxFeedEvents = 240;
 
 const initialSession = browser ? readStoredSession() : null;
@@ -73,6 +74,7 @@ let currentContactItems: ContactListItem[] = [];
 let oldestFeedTimestamp: number | undefined;
 let liveFeedSub: { close: (reason?: string) => void } | undefined;
 let liveFeedToken = 0;
+let cachedOlderEvents: NostrEvent[] = [];
 const requestedStats = new Set<string>();
 
 relays.subscribe((value) => (currentRelays = value));
@@ -91,10 +93,12 @@ export async function bootstrap() {
   addEventListener('online', () => online.set(true));
   addEventListener('offline', () => online.set(false));
 
-  const [cachedEvents, cachedProfiles] = await Promise.all([getCachedEvents(initialFeedLimit), getCachedProfiles()]);
-  const cachedTopLevelEvents = topLevelFeedEvents(filterSpam(cachedEvents));
-  events.set(cachedTopLevelEvents);
-  oldestFeedTimestamp = getOldestTimestamp(cachedTopLevelEvents);
+  const [cachedEvents, cachedProfiles] = await Promise.all([getCachedEvents(cachedFeedBufferLimit), getCachedProfiles()]);
+  const cachedTopLevelEvents = cachedEventsForMode(currentMode, topLevelFeedEvents(filterSpam(cachedEvents)), cachedFeedBufferLimit);
+  const visibleEvents = cachedTopLevelEvents.slice(0, initialFeedLimit);
+  cachedOlderEvents = cachedTopLevelEvents.slice(initialFeedLimit);
+  events.set(visibleEvents);
+  oldestFeedTimestamp = getOldestTimestamp(visibleEvents);
   profiles.set(Object.fromEntries(cachedProfiles.map((profile) => [profile.pubkey, profile])));
   await hydrateDefaultFeedContext();
   void refreshRelayInfo();
@@ -102,33 +106,97 @@ export async function bootstrap() {
 }
 
 export async function refreshFeed(mode = currentMode) {
+  const fetchMode = currentHashtag ? 'global' : mode;
   loadingFeed.set(true);
   hasMoreFeed.set(true);
   oldestFeedTimestamp = undefined;
   requestedStats.clear();
   pendingNewerEvents.set([]);
 
-  if ((mode === 'follow' || mode === 'custom') && !currentFollows.length) {
+  if ((fetchMode === 'follow' || fetchMode === 'custom') && !currentFollows.length) {
     events.set([]);
+    cachedOlderEvents = [];
     stopLiveFeed();
     loadingFeed.set(false);
     return;
   }
 
   try {
-    const nextEvents = await fetchFeed(mode, currentRelays, currentFollows, effectiveFeedSettings(mode), { limit: initialFeedLimit, hashtag: currentHashtag });
-    events.set(nextEvents);
-    oldestFeedTimestamp = getOldestTimestamp(nextEvents);
-    void refreshEventStats(nextEvents.map((event) => event.id));
-    void hydrateMissingProfiles(nextEvents, 60);
-    void restartLiveFeed(getNewestTimestamp(nextEvents));
+    const nextEvents = await fetchFeed(fetchMode, currentRelays, currentFollows, effectiveFeedSettings(fetchMode), { limit: initialFeedLimit, hashtag: currentHashtag });
+    if (nextEvents.length) {
+      events.set(nextEvents);
+      oldestFeedTimestamp = getOldestTimestamp(nextEvents);
+      void refreshEventStats(nextEvents.map((event) => event.id));
+      void hydrateMissingProfiles(nextEvents, 60);
+      void primeCachedFeedBuffers(fetchMode, nextEvents);
+    }
+    void restartLiveFeed(fetchMode, getNewestTimestamp(nextEvents));
   } finally {
     loadingFeed.set(false);
   }
 }
 
+async function hydrateCachedFeed(mode = currentMode) {
+  const cachedEvents = await getCachedFeedCandidates(mode, cachedFeedBufferLimit);
+  const clean = cachedEventsForMode(mode, cachedEvents, cachedFeedBufferLimit);
+  if (!clean.length) return;
+  const visibleEvents = clean.slice(0, initialFeedLimit);
+  cachedOlderEvents = clean.slice(initialFeedLimit);
+  events.set(visibleEvents);
+  oldestFeedTimestamp = getOldestTimestamp(visibleEvents);
+  primeCachedNewerFeed(visibleEvents);
+  void refreshEventStats(visibleEvents.map((event) => event.id));
+  void hydrateMissingProfiles(visibleEvents, 40);
+}
+
+function cachedEventsForMode(mode: FeedMode, items: NostrEvent[], limit = initialFeedLimit) {
+  if (mode === 'follow') return items.filter((event) => currentFollows.includes(event.pubkey)).slice(0, limit);
+  if (mode === 'custom' && currentFollows.length) {
+    const feedHashtags = feedKeywordHashtags(currentSettings);
+    return items
+      .filter((event) => currentFollows.includes(event.pubkey) || feedHashtags.some((tag) => eventHasHashtag(event, tag)))
+      .slice(0, limit);
+  }
+  return items.slice(0, limit);
+}
+
+async function getCachedFeedCandidates(mode: FeedMode, limit = cachedFeedBufferLimit) {
+  const cachedEvents = currentHashtag ? await getCachedHashtagEvents(currentHashtag, limit) : await getCachedEvents(limit);
+  return topLevelFeedEvents(filterSpam(cachedEventsForMode(mode, topLevelFeedEvents(filterSpam(cachedEvents)), limit)));
+}
+
+async function primeCachedFeedBuffers(mode: FeedMode, visibleEvents: NostrEvent[]) {
+  const cachedEvents = cachedEventsForMode(mode, await getCachedFeedCandidates(mode, cachedFeedBufferLimit), cachedFeedBufferLimit);
+  if (!cachedEvents.length) return;
+
+  const visibleIds = new Set(visibleEvents.map((event) => event.id));
+  const newestTimestamp = getNewestTimestamp(visibleEvents);
+  const oldestTimestamp = getOldestTimestamp(visibleEvents);
+
+  cachedOlderEvents = cachedEvents
+    .filter((event) => !visibleIds.has(event.id) && (oldestTimestamp === undefined || event.created_at < oldestTimestamp))
+    .slice(0, cachedFeedBufferLimit - initialFeedLimit);
+
+  if (newestTimestamp === undefined) return;
+  const cachedNewerEvents = cachedEvents
+    .filter((event) => !visibleIds.has(event.id) && event.created_at > newestTimestamp)
+    .slice(0, pageFeedLimit);
+  if (!cachedNewerEvents.length) return;
+  pendingNewerEvents.update((existing) => mergeEvents(cachedNewerEvents, existing));
+}
+
+function primeCachedNewerFeed(visibleEvents: NostrEvent[]) {
+  const newestTimestamp = getNewestTimestamp(visibleEvents);
+  if (newestTimestamp === undefined) return;
+  const visibleIds = new Set(visibleEvents.map((event) => event.id));
+  const cachedNewerEvents = cachedOlderEvents.filter((event) => !visibleIds.has(event.id) && event.created_at > newestTimestamp);
+  if (!cachedNewerEvents.length) return;
+  pendingNewerEvents.update((existing) => mergeEvents(cachedNewerEvents, existing));
+  cachedOlderEvents = cachedOlderEvents.filter((event) => !cachedNewerEvents.some((newer) => newer.id === event.id));
+}
+
 export async function loadNewerFeed() {
-  if (currentMode !== 'global') return;
+  const fetchMode = currentHashtag ? 'global' : currentMode;
   let loading = false;
   loadingNewerFeed.subscribe((value) => (loading = value))();
   if (loading) return;
@@ -138,7 +206,7 @@ export async function loadNewerFeed() {
 
   loadingNewerFeed.set(true);
   try {
-    const nextEvents = await fetchFeed(currentMode, currentRelays, currentFollows, effectiveFeedSettings(currentMode), {
+    const nextEvents = await fetchFeed(fetchMode, currentRelays, currentFollows, effectiveFeedSettings(fetchMode), {
       limit: initialFeedLimit,
       since: newestTimestamp + 1,
       hashtag: currentHashtag
@@ -170,18 +238,18 @@ function stopLiveFeed() {
   liveFeedSub = undefined;
 }
 
-async function restartLiveFeed(newestTimestamp?: number) {
+async function restartLiveFeed(mode = currentMode, newestTimestamp?: number) {
   const token = liveFeedToken + 1;
   stopLiveFeed();
   liveFeedToken = token;
 
-  if ((currentMode === 'follow' || currentMode === 'custom') && !currentFollows.length) return;
+  if ((mode === 'follow' || mode === 'custom') && !currentFollows.length) return;
 
   const sub = await subscribeFeed(
-    currentMode,
+    mode,
     currentRelays,
     currentFollows,
-    effectiveFeedSettings(currentMode),
+    effectiveFeedSettings(mode),
     { since: newestTimestamp ? newestTimestamp + 1 : Math.floor(Date.now() / 1000), hashtag: currentHashtag },
     (event) => {
       if (token !== liveFeedToken || isKnownFeedEvent(event.id)) return;
@@ -202,7 +270,27 @@ function isKnownFeedEvent(id: string) {
   return getStoreSnapshot(events).some((event) => event.id === id) || getStoreSnapshot(pendingNewerEvents).some((event) => event.id === id);
 }
 
+function revealCachedOlderFeed() {
+  if (!cachedOlderEvents.length) return [];
+
+  const existingIds = new Set(getStoreSnapshot(events).map((event) => event.id));
+  const nextEvents = cachedOlderEvents.filter((event) => !existingIds.has(event.id)).slice(0, pageFeedLimit);
+  const revealedIds = new Set(nextEvents.map((event) => event.id));
+  cachedOlderEvents = cachedOlderEvents.filter((event) => !revealedIds.has(event.id));
+  if (!nextEvents.length) return [];
+
+  events.update((existing) => {
+    const merged = mergeEvents(nextEvents, existing);
+    oldestFeedTimestamp = getOldestTimestamp(feedEventsForActiveHashtag(merged));
+    return merged;
+  });
+  void refreshEventStats(nextEvents.map((event) => event.id));
+  void hydrateMissingProfiles(nextEvents, 40);
+  return nextEvents;
+}
+
 export async function loadMoreFeed(force = false) {
+  const fetchMode = currentHashtag ? 'global' : currentMode;
   let loading = false;
   let more = true;
   loadingMoreFeed.subscribe((value) => (loading = value))();
@@ -211,9 +299,10 @@ export async function loadMoreFeed(force = false) {
 
   loadingMoreFeed.set(true);
   try {
+    revealCachedOlderFeed();
     const currentOldest = getOldestTimestamp(feedEventsForActiveHashtag(getStoreSnapshot(events))) ?? oldestFeedTimestamp;
     const olderThan = currentOldest ? currentOldest - 1 : undefined;
-    const nextEvents = await fetchFeed(currentMode, currentRelays, currentFollows, effectiveFeedSettings(currentMode), {
+    const nextEvents = await fetchFeed(fetchMode, currentRelays, currentFollows, effectiveFeedSettings(fetchMode), {
       limit: pageFeedLimit,
       until: olderThan,
       hashtag: currentHashtag
@@ -228,6 +317,7 @@ export async function loadMoreFeed(force = false) {
     const nextOldest = getOldestTimestamp(freshEvents);
     if (nextOldest !== undefined) oldestFeedTimestamp = currentOldest === undefined ? nextOldest : Math.min(currentOldest, nextOldest);
     events.update((existing) => mergeEvents(freshEvents, existing));
+    void primeCachedFeedBuffers(fetchMode, getStoreSnapshot(events));
     void refreshEventStats(freshEvents.map((event) => event.id));
     void hydrateMissingProfiles(freshEvents, 40);
   } finally {
@@ -249,28 +339,35 @@ export async function refreshEventStats(ids: string[]) {
 export function filterByHashtag(tag: string) {
   const clean = tag.trim().replace(/^#/, '').toLowerCase();
   activeHashtag.set(clean);
-  feedMode.set('global');
+  cachedOlderEvents = [];
   void hydrateCachedHashtagFeed(clean);
   void refreshFeed('global');
 }
 
 async function hydrateCachedHashtagFeed(tag: string) {
-  const cached = await getCachedHashtagEvents(tag, initialFeedLimit);
+  const cached = topLevelFeedEvents(filterSpam(await getCachedHashtagEvents(tag, cachedFeedBufferLimit)));
   if (!cached.length || tag !== currentHashtag) return;
-  events.set(cached);
-  oldestFeedTimestamp = getOldestTimestamp(cached);
-  void refreshEventStats(cached.map((event) => event.id));
-  void hydrateMissingProfiles(cached, 40);
+  const visibleEvents = cached.slice(0, initialFeedLimit);
+  cachedOlderEvents = cached.slice(initialFeedLimit);
+  events.set(visibleEvents);
+  oldestFeedTimestamp = getOldestTimestamp(visibleEvents);
+  primeCachedNewerFeed(visibleEvents);
+  void refreshEventStats(visibleEvents.map((event) => event.id));
+  void hydrateMissingProfiles(visibleEvents, 40);
 }
 
 export function selectFeedMode(mode: FeedMode) {
   activeHashtag.set('');
+  cachedOlderEvents = [];
   feedMode.set(mode);
+  void hydrateCachedFeed(mode);
   void refreshFeed(mode);
 }
 
 export function goHome() {
   activeHashtag.set('');
+  cachedOlderEvents = [];
+  void hydrateCachedFeed(currentMode);
   void refreshFeed(currentMode);
 }
 
@@ -446,6 +543,10 @@ function eventHasHashtag(event: NostrEvent, tag: string) {
   return new RegExp(`(^|\\s)#${normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(event.content);
 }
 
+function feedKeywordHashtags(settings: CustomFeedSettings) {
+  return [...new Set(settings.keywords.map((keyword) => keyword.trim().replace(/^#/, '').toLowerCase()).filter((keyword) => /^[a-z0-9_]{2,64}$/.test(keyword)))];
+}
+
 async function hydrateMissingProfiles(nextEvents: NostrEvent[], limit = 40) {
   const existingProfiles = getStoreSnapshot(profiles);
   const pubkeys = [...new Set(nextEvents.map((event) => event.pubkey))]
@@ -539,18 +640,15 @@ async function hydrateDefaultFeedContext() {
 }
 
 async function hydrateSignedInFeedContext(currentSession: Session) {
-  const requestedMode = requestedFeedMode();
   const relayList = await fetchRelayListMetadata(currentSession.pubkey, currentRelays).catch(() => []);
   mergeRelayHints(relayList.map((relay) => relay.url), 90);
   const contacts = await fetchContactListDetails(currentSession.pubkey, currentRelays).catch(() => ({ pubkeys: [], relayHints: [], items: [] }));
   currentContactItems = contacts.items;
   mergeRelayHints(contacts.relayHints, 74);
   follows.set(contacts.pubkeys);
-  feedMode.set(requestedMode ?? (hasCustomFeedFilters(currentSettings) ? 'custom' : 'follow'));
 }
 
 async function hydrateGuestFeedContext() {
-  const requestedMode = requestedFeedMode();
   const profile = await resolveNip05Profile(defaultGuestNip05).catch(() => null);
   if (profile) {
     mergeRelayHints(profile.relayHints, 96);
@@ -561,13 +659,6 @@ async function hydrateGuestFeedContext() {
   }
   currentContactItems = [];
   follows.set([]);
-  feedMode.set(requestedMode === 'global' ? requestedMode : 'global');
-}
-
-function requestedFeedMode(): FeedMode | null {
-  if (!browser) return null;
-  const mode = new URL(location.href).searchParams.get('feed');
-  return mode === 'follow' || mode === 'global' || mode === 'custom' ? mode : null;
 }
 
 function replyTags(parent: NostrEvent) {
@@ -595,10 +686,6 @@ function getStoreSnapshot<T>(store: { subscribe(run: (value: T) => void): () => 
 
 function emptyStats(): EventStats {
   return { replies: 0, reposts: 0, likes: 0, dislikes: 0, emoji: 0 };
-}
-
-function hasCustomFeedFilters(settings: CustomFeedSettings) {
-  return settings.friendsOfFriends || settings.keywords.some((keyword) => keyword.trim()) || settings.interests.some((interest) => interest.trim());
 }
 
 function effectiveFeedSettings(mode: FeedMode): CustomFeedSettings {

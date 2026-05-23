@@ -85,4 +85,12 @@ describe('IndexedDB cache', () => {
     expect((await getCachedHashtagEvents('nostr')).map((item) => item.id)).toEqual(['nostr-new', 'nostr-old']);
     expect((await getCachedHashtagEvents('#music')).map((item) => item.id)).toEqual(['music-note']);
   });
+
+  it('recycles the hashtag cache across all tags instead of capping each tag independently', async () => {
+    await cacheEvents(Array.from({ length: 605 }, (_, index) => event(`tagged-${index}`, index, 'a'.repeat(64), `hello #topic${index}`)));
+
+    expect(await getCachedHashtagEvents('topic0')).toEqual([]);
+    expect((await getCachedHashtagEvents('topic604')).map((item) => item.id)).toEqual(['tagged-604']);
+    expect((await getCachedHashtagEvents('topic5')).map((item) => item.id)).toEqual(['tagged-5']);
+  });
 });

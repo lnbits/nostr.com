@@ -47,6 +47,13 @@
       .map((keyword) => keyword.trim())
       .filter(Boolean);
   }
+
+  function sessionLabel(mode: string) {
+    if (mode === 'private-key') return 'Local key';
+    if (mode === 'nip07') return 'Browser extension';
+    if (mode === 'bunker') return 'Remote signer';
+    return 'Signed in';
+  }
 </script>
 
 <div class="settings-page">
@@ -71,7 +78,7 @@
     <section class="panel account-settings">
       <h2>Account</h2>
       <div class="setting-grid">
-        <span>Signed in with</span><strong>{$session.mode}</strong>
+        <span>Signed in with</span><strong>{sessionLabel($session.mode)}</strong>
         <span>Public key</span><strong>{$session.pubkey.slice(0, 16)}...</strong>
       </div>
       <button class="danger-button" on:click={() => void signOut()}><LogOut size={18} /> Log out</button>

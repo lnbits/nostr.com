@@ -42,7 +42,7 @@
   $: hasReadRelays = $relays.some((relay) => relay.enabled && relay.read);
   $: feedEvents = hashtagFilteredEvents(topLevelFeedEvents($events), $activeHashtag);
   $: pullProgress = Math.min(1, pullDistance / pullThreshold);
-  $: showNewerBubble = $pendingNewerEvents.length && !pullingNewer && !hideNewerBubble && !pullStartedAtTop && pullDistance <= 0;
+  $: showNewerBubble = canLoadNewerForFeed() && $pendingNewerEvents.length && !pullingNewer && !hideNewerBubble && !pullStartedAtTop && pullDistance <= 0;
   $: emptyMessage = !hasReadRelays
     ? 'Please connect to relays'
     : $session && ($feedMode === 'follow' || $feedMode === 'custom') && !$follows.length
@@ -127,7 +127,7 @@
     pullDistance = 0;
     wheelPullRaw = 0;
     hideFloatingNewerBubble();
-    if (!shouldTrigger || pullingNewer || activeHash || $feedMode !== 'global') return;
+    if (!shouldTrigger || pullingNewer || activeHash || !canLoadNewerForFeed()) return;
 
     pullingNewer = true;
     try {
@@ -143,7 +143,11 @@
   }
 
   function canPullForNewer() {
-    return !activeHash && $feedMode === 'global' && window.scrollY <= 2;
+    return !activeHash && canLoadNewerForFeed() && window.scrollY <= 2;
+  }
+
+  function canLoadNewerForFeed() {
+    return $activeHashtag || $feedMode === 'global' || $feedMode === 'custom' || $feedMode === 'follow';
   }
 
   function elasticPullDistance(distance: number) {

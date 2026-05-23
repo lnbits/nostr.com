@@ -1,7 +1,7 @@
 import type { NostrEvent, Profile } from './types';
 
 const DB_NAME = 'nostr-social-cache';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const MAX_CACHED_EVENTS = 600;
 const MAX_CACHED_PROFILE_EVENTS = 600;
 const MAX_CACHED_HASHTAG_EVENTS = 600;
@@ -29,8 +29,11 @@ function openDb() {
   dbPromise = new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-    request.onupgradeneeded = () => {
+    request.onupgradeneeded = (event) => {
       const db = request.result;
+      if (event.oldVersion > 0 && event.oldVersion < 4 && db.objectStoreNames.contains('hashtagEvents')) {
+        db.deleteObjectStore('hashtagEvents');
+      }
       if (!db.objectStoreNames.contains('events')) {
         const events = db.createObjectStore('events', { keyPath: 'id' });
         events.createIndex('created_at', 'created_at');
@@ -44,9 +47,7 @@ function openDb() {
         profileEvents.createIndex('pubkey_created_at', ['pubkey', 'created_at']);
       }
       if (!db.objectStoreNames.contains('hashtagEvents')) {
-        const hashtagEvents = db.createObjectStore('hashtagEvents', { keyPath: 'cacheKey' });
-        hashtagEvents.createIndex('tag', 'tag');
-        hashtagEvents.createIndex('tag_created_at', ['tag', 'created_at']);
+        createHashtagEventsStore(db);
       }
       if (!db.objectStoreNames.contains('contacts')) db.createObjectStore('contacts', { keyPath: 'pubkey' });
       if (!db.objectStoreNames.contains('settings')) db.createObjectStore('settings', { keyPath: 'key' });
@@ -131,7 +132,6 @@ function pruneOldProfileEvents(store: IDBObjectStore, pubkey: string, maxEvents:
 async function cacheHashtagEventIndex(events: NostrEvent[]) {
   const entries = events.flatMap((event) => eventHashtags(event).map((tag) => ({ tag, event })));
   if (!entries.length) return;
-  const byTag = new Set(entries.map((entry) => entry.tag));
 
   await withStore<void>('hashtagEvents', 'readwrite', (store) => {
     entries.forEach(({ tag, event }) =>
@@ -142,14 +142,13 @@ async function cacheHashtagEventIndex(events: NostrEvent[]) {
         event
       } satisfies CachedHashtagEvent)
     );
-    byTag.forEach((tag) => pruneOldHashtagEvents(store, tag, MAX_CACHED_HASHTAG_EVENTS));
+    pruneOldHashtagEvents(store, MAX_CACHED_HASHTAG_EVENTS);
   }).catch(() => undefined);
 }
 
-function pruneOldHashtagEvents(store: IDBObjectStore, tag: string, maxEvents: number) {
+function pruneOldHashtagEvents(store: IDBObjectStore, maxEvents: number) {
   let kept = 0;
-  const range = IDBKeyRange.bound([tag, 0], [tag, Number.MAX_SAFE_INTEGER]);
-  const request = store.index('tag_created_at').openCursor(range, 'prev');
+  const request = store.index('created_at').openCursor(null, 'prev');
   request.onsuccess = () => {
     const cursor = request.result;
     if (!cursor) return;
@@ -210,8 +209,7 @@ export async function getCachedHashtagEvents(tag: string, limit = 120) {
   const clean = normalizeHashtag(tag);
   if (!clean) return [];
   return withStore<NostrEvent[]>('hashtagEvents', 'readonly', (store) => {
-    const range = IDBKeyRange.bound([clean, 0], [clean, Number.MAX_SAFE_INTEGER]);
-    const request = store.index('tag_created_at').openCursor(range, 'prev');
+    const request = store.index('created_at').openCursor(null, 'prev');
     const events: NostrEvent[] = [];
     request.onsuccess = () => {
       const cursor = request.result;
@@ -219,10 +217,17 @@ export async function getCachedHashtagEvents(tag: string, limit = 120) {
         (store as IDBObjectStore & { __setResult(value: NostrEvent[]): void }).__setResult(events);
         return;
       }
-      events.push((cursor.value as CachedHashtagEvent).event);
+      const cached = cursor.value as CachedHashtagEvent;
+      if (cached.tag === clean) events.push(cached.event);
       cursor.continue();
     };
   }).catch(() => []);
+}
+
+function createHashtagEventsStore(db: IDBDatabase) {
+  const hashtagEvents = db.createObjectStore('hashtagEvents', { keyPath: 'cacheKey' });
+  hashtagEvents.createIndex('tag', 'tag');
+  hashtagEvents.createIndex('created_at', 'created_at');
 }
 
 export async function cacheProfile(profile: Profile) {

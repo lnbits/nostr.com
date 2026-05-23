@@ -10,7 +10,7 @@
   $: id = $page.params.id;
   $: threadEvents = mergeThreadEvents(localThreadEvents, $events);
   $: root = rootEvent?.id === id ? rootEvent : threadEvents.find((event) => event.id === id);
-  $: replies = threadEvents.filter((event) => event.id !== id && event.tags.some((tag) => tag[0] === 'e' && tag[1] === id));
+  $: replies = id ? threadEvents.filter((event) => event.id !== id && belongsToThread(event, id)) : [];
   let focusedReplyId = '';
   let loading = true;
   let hydratedId = '';
@@ -34,6 +34,10 @@
     const byId = new Map<string, NostrEvent>();
     [...existing, ...incoming].forEach((event) => byId.set(event.id, event));
     return [...byId.values()].sort((a, b) => b.created_at - a.created_at);
+  }
+
+  function belongsToThread(event: NostrEvent, rootId: string) {
+    return event.tags.some((tag) => tag[0] === 'e' && tag[1] === rootId && (!tag[3] || tag[3] === 'root' || tag[3] === 'reply'));
   }
 
   async function hydrateThread() {

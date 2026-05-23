@@ -159,7 +159,7 @@ ${generatedKeys.nsec}
 
     <label>
       <span>Private key hex</span>
-      <input bind:value={privateKey} autocomplete="off" spellcheck="false" placeholder="nsec conversion can be added next" />
+      <input type="password" bind:value={privateKey} autocomplete="off" spellcheck="false" placeholder="nsec or hex private key" />
     </label>
     <button on:click={() => login('private-key')}><KeyRound size={18} /> Use private key</button>
 
