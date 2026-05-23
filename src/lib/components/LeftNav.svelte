@@ -22,6 +22,12 @@
 
   $: profileHref = $session ? `/profile/${$session.pubkey}` : '/';
   $: currentHref = `${$page.url.pathname}${$page.url.hash}`;
+
+  function isActive(href: string) {
+    if (href === '/') return $page.url.pathname === '/' && !$page.url.hash;
+    if (href.startsWith('/#')) return currentHref === href;
+    return $page.url.pathname === href;
+  }
 </script>
 
 <aside class="left-nav" aria-label="Primary">
@@ -34,7 +40,7 @@
 
   <nav class="left-nav-list">
     {#each navItems as item}
-      <a class:active={currentHref === item.href || ($page.url.pathname === item.href && !item.href.includes('#'))} href={item.href}>
+      <a class:active={isActive(item.href)} href={item.href}>
         <svelte:component this={item.icon} size={26} />
         <span>{item.label}</span>
       </a>

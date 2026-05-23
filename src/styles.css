@@ -327,8 +327,8 @@ label span, label strong { color: var(--text); }
 .note-card {
   display: grid;
   grid-template-columns: 48px minmax(0, 1fr);
-  gap: 12px;
-  padding: 16px 0;
+  gap: 10px;
+  padding: 11px 0;
   border-bottom: 1px solid color-mix(in srgb, var(--line) 35%, transparent);
 }
 .avatar {
@@ -344,23 +344,25 @@ label span, label strong { color: var(--text); }
 }
 .avatar.large { width: 84px; height: 84px; }
 .avatar img { width: 100%; height: 100%; object-fit: cover; }
-.note-body { min-width: 0; display: grid; gap: 8px; }
+.note-body { min-width: 0; display: grid; gap: 5px; }
 .note-meta {
   display: grid;
   grid-template-columns: minmax(0, max-content) auto 32px;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
   color: var(--muted);
+  font-size: 15px;
 }
 .note-meta strong { color: var(--text); }
 .note-content {
   position: relative;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  line-height: 1.45;
+  line-height: 1.32;
+  font-size: 15.5px;
 }
 .note-content.collapsed {
-  max-height: 11.6em;
+  max-height: 10.6em;
   overflow: hidden;
 }
 .hashtag {
@@ -386,10 +388,11 @@ label span, label strong { color: var(--text); }
   min-height: 0;
   width: fit-content;
   border: 0;
-  padding: 0;
+  padding: 1px 0;
   color: var(--accent);
   background: transparent;
   font-weight: 700;
+  font-size: 15px;
 }
 .media-grid {
   display: grid;
@@ -407,12 +410,13 @@ label span, label strong { color: var(--text); }
 .note-actions {
   display: grid;
   grid-template-columns: repeat(5, 42px);
-  gap: 4px;
+  gap: 2px;
   color: var(--muted);
+  margin-top: 1px;
 }
 .note-actions button, .note-actions a {
   border: 0;
-  min-height: 36px;
+  min-height: 30px;
   border-radius: 8px;
   display: grid;
   place-items: center;
