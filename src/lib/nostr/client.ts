@@ -8,7 +8,6 @@ import type { ContactListDetails, ContactListItem, CustomFeedSettings, DirectMes
 
 const pool = new SimplePool();
 const bunkerSigners = new Map<string, nip46.BunkerSigner>();
-type SubCloser = { close: (reason?: string) => void };
 
 export function activeRelayUrls(relays: RelayState[], intent: 'read' | 'write') {
   return relays
@@ -235,7 +234,7 @@ export async function fetchFeed(
 
   const relayUrls = activeRelayUrls(relays, 'read');
   const base: Filter = { kinds: [1], limit: options.limit ?? 24 };
-  const since = Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 7;
+  const since = options.since ?? Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 7;
   if (options.until) base.until = options.until;
   const filters = await feedFiltersForMode(mode, base, follows, settings, since, relayUrls, options);
 
@@ -244,86 +243,6 @@ export async function fetchFeed(
   const output = mode === 'global' ? limitConsecutiveAuthors(clean, 2) : clean;
   await cacheEvents(output);
   return output;
-}
-
-export function subscribeFeed(
-  mode: FeedMode,
-  relays = defaultRelays,
-  follows: string[] = [],
-  settings: CustomFeedSettings = { friendsOfFriends: true, keywords: [] },
-  options: FeedQueryOptions & { onEvents?: (events: NostrEvent[]) => void; onComplete?: () => void } = {}
-) {
-  let closed = false;
-  let closer: SubCloser | undefined;
-  let flushTimer: ReturnType<typeof setTimeout> | undefined;
-  const seen = new Set<string>();
-  const pending = new Map<string, NostrEvent>();
-
-  const flush = () => {
-    flushTimer = undefined;
-    const next = dedupeEvents([...pending.values()]);
-    pending.clear();
-    if (!next.length) return;
-    void cacheEvents(next);
-    options.onEvents?.(mode === 'global' ? limitConsecutiveAuthors(next, 2) : next);
-  };
-
-  const scheduleFlush = () => {
-    if (flushTimer) return;
-    flushTimer = setTimeout(flush, 120);
-  };
-
-  void (async () => {
-    if ((mode === 'follow' || mode === 'custom') && !follows.length) {
-      options.onComplete?.();
-      return;
-    }
-
-    const relayUrls = activeRelayUrls(relays, 'read');
-    const base: Filter = { kinds: [1], limit: options.limit ?? 24 };
-    const since = Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 7;
-    if (options.until) base.until = options.until;
-    const filters = await feedFiltersForMode(mode, base, follows, settings, since, relayUrls, options);
-    if (closed) return;
-
-    const requests = relayUrls.flatMap((url) => filters.map((filter) => ({ url, filter })));
-    if (!requests.length) {
-      options.onComplete?.();
-      return;
-    }
-
-    closer = pool.subscribeMap(requests, {
-      maxWait: 5000,
-      onevent(event) {
-        if (closed) return;
-        const [clean] = dedupeEvents(topLevelFeedEvents(filterSpam(verifiedRelayEvents([event as NostrEvent]))));
-        if (!clean || seen.has(clean.id)) return;
-        seen.add(clean.id);
-        pending.set(clean.id, clean);
-        scheduleFlush();
-      },
-      oneose() {
-        if (closed) return;
-        if (flushTimer) clearTimeout(flushTimer);
-        flush();
-        options.onComplete?.();
-      },
-      onclose() {
-        if (closed) return;
-        if (flushTimer) clearTimeout(flushTimer);
-        flush();
-        options.onComplete?.();
-      }
-    });
-  })();
-
-  return {
-    close() {
-      closed = true;
-      if (flushTimer) clearTimeout(flushTimer);
-      closer?.close();
-    }
-  };
 }
 
 export async function fetchMissingEvents(ids: string[], relays = defaultRelays) {

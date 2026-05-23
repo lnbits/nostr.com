@@ -12,6 +12,7 @@
     hasMoreFeed,
     loadingFeed,
     loadingMoreFeed,
+    loadNewerFeed,
     loadMoreFeed,
     profiles,
     relays,
@@ -22,6 +23,7 @@
   let observer: IntersectionObserver | undefined;
   let previousScrollY = 0;
   let loadOlderArmed = false;
+  let lastNewerLoadAt = 0;
   $: activeHash = $page.url.hash;
   $: hasReadRelays = $relays.some((relay) => relay.enabled && relay.read);
   $: emptyMessage = !hasReadRelays
@@ -45,8 +47,16 @@
 
     const onScroll = () => {
       const nextScrollY = window.scrollY;
+      const scrollingUp = nextScrollY < previousScrollY;
       if (nextScrollY > previousScrollY) loadOlderArmed = true;
       previousScrollY = nextScrollY;
+      if (scrollingUp && nextScrollY < 140 && $feedMode === 'global' && !activeHash) {
+        const now = Date.now();
+        if (now - lastNewerLoadAt > 1200) {
+          lastNewerLoadAt = now;
+          void loadNewerFeed();
+        }
+      }
     };
     addEventListener('scroll', onScroll, { passive: true });
     return () => {

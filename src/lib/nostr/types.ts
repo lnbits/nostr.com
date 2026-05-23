@@ -58,6 +58,7 @@ export interface CustomFeedSettings {
 
 export interface FeedQueryOptions {
   limit?: number;
+  since?: number;
   until?: number;
   hashtag?: string;
 }

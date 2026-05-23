@@ -23,7 +23,6 @@ import {
   publishReport,
   publishRepost,
   resolveNip05Profile,
-  subscribeFeed,
   topLevelFeedEvents
 } from '$lib/nostr/client';
 import type { ContactListItem, CustomFeedSettings, DirectMessage, EventStats, FeedMode, NostrEvent, NotificationItem, Profile, RelayState, Session } from '$lib/nostr/types';
@@ -50,6 +49,7 @@ export const directMessages = writable<DirectMessage[]>([]);
 export const eventStats = writable<Record<string, EventStats>>({});
 export const likedEvents = writable<Set<string>>(new Set());
 export const loadingFeed = writable(false);
+export const loadingNewerFeed = writable(false);
 export const loadingMessages = writable(false);
 export const loadingMoreFeed = writable(false);
 export const hasMoreFeed = writable(true);
@@ -65,7 +65,6 @@ let currentHashtag = '';
 let currentContactItems: ContactListItem[] = [];
 let oldestFeedTimestamp: number | undefined;
 const requestedStats = new Set<string>();
-let activeFeedSubscription: { close(): void } | undefined;
 
 relays.subscribe((value) => (currentRelays = value));
 follows.subscribe((value) => (currentFollows = value));
@@ -97,7 +96,6 @@ export async function refreshFeed(mode = currentMode) {
   hasMoreFeed.set(true);
   oldestFeedTimestamp = undefined;
   requestedStats.clear();
-  activeFeedSubscription?.close();
 
   if ((mode === 'follow' || mode === 'custom') && !currentFollows.length) {
     events.set([]);
@@ -105,25 +103,44 @@ export async function refreshFeed(mode = currentMode) {
     return;
   }
 
-  let receivedEvents = false;
-  activeFeedSubscription = subscribeFeed(mode, currentRelays, currentFollows, currentSettings, {
-    limit: initialFeedLimit,
-    hashtag: currentHashtag,
-    onEvents(nextEvents) {
-      receivedEvents = true;
-      events.update((existing) => {
-        const merged = mergeEvents(nextEvents, existing);
-        oldestFeedTimestamp = getOldestTimestamp(merged);
-        return merged;
-      });
-      void refreshEventStats(nextEvents.map((event) => event.id));
-      void hydrateMissingProfiles(nextEvents, 60);
-      loadingFeed.set(false);
-    },
-    onComplete() {
-      if (!receivedEvents) loadingFeed.set(false);
-    }
-  });
+  try {
+    const nextEvents = await fetchFeed(mode, currentRelays, currentFollows, currentSettings, { limit: initialFeedLimit, hashtag: currentHashtag });
+    events.set(nextEvents);
+    oldestFeedTimestamp = getOldestTimestamp(nextEvents);
+    void refreshEventStats(nextEvents.map((event) => event.id));
+    void hydrateMissingProfiles(nextEvents, 60);
+  } finally {
+    loadingFeed.set(false);
+  }
+}
+
+export async function loadNewerFeed() {
+  if (currentMode !== 'global') return;
+  let loading = false;
+  loadingNewerFeed.subscribe((value) => (loading = value))();
+  if (loading) return;
+
+  const newestTimestamp = getNewestTimestamp(getStoreSnapshot(events));
+  if (!newestTimestamp) return;
+
+  loadingNewerFeed.set(true);
+  try {
+    const nextEvents = await fetchFeed(currentMode, currentRelays, currentFollows, currentSettings, {
+      limit: initialFeedLimit,
+      since: newestTimestamp + 1,
+      hashtag: currentHashtag
+    });
+    if (!nextEvents.length) return;
+    events.update((existing) => {
+      const merged = mergeEvents(nextEvents, existing);
+      oldestFeedTimestamp = getOldestTimestamp(merged);
+      return merged;
+    });
+    void refreshEventStats(nextEvents.map((event) => event.id));
+    void hydrateMissingProfiles(nextEvents, 60);
+  } finally {
+    loadingNewerFeed.set(false);
+  }
 }
 
 export async function loadMoreFeed(force = false) {
@@ -322,6 +339,11 @@ export function mergeEvents(incoming: NostrEvent[], existing: NostrEvent[]) {
 function getOldestTimestamp(items: NostrEvent[]) {
   if (!items.length) return undefined;
   return Math.min(...items.map((event) => event.created_at));
+}
+
+function getNewestTimestamp(items: NostrEvent[]) {
+  if (!items.length) return undefined;
+  return Math.max(...items.map((event) => event.created_at));
 }
 
 async function hydrateMissingProfiles(nextEvents: NostrEvent[], limit = 40) {
