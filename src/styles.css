@@ -653,7 +653,7 @@ label span, label strong { color: var(--text); }
   min-width: 0;
   display: grid;
   gap: 12px;
-  padding-top: 62px;
+  padding-top: 50px;
 }
 .profile-title-row {
   min-width: 0;
@@ -678,7 +678,7 @@ label span, label strong { color: var(--text); }
   align-items: center;
 }
 .npub-pill {
-  width: fit-content;
+  width: min(100%, 360px);
   max-width: 100%;
   min-height: 38px;
   justify-content: flex-start;
@@ -687,6 +687,13 @@ label span, label strong { color: var(--text); }
   color: var(--muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 14px;
+  overflow: hidden;
+}
+.npub-pill span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .profile-about {
   margin: 0;
