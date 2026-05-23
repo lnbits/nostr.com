@@ -16,8 +16,7 @@
     { href: '/', label: 'Home', icon: Home },
     { href: '/#notifications', label: 'Notifications', icon: Bell },
     { href: '/#messages', label: 'Messages', icon: Mail },
-    { href: '/settings', label: 'Settings', icon: Settings },
-    { href: '#more', label: 'More', icon: MoreHorizontal }
+    { href: '/settings', label: 'Settings', icon: Settings }
   ];
 
   $: profileHref = $session ? `/profile/${$session.pubkey}` : '/';
@@ -48,6 +47,10 @@
     <a class:active={$page.url.pathname.startsWith('/profile')} href={profileHref}>
       <UserRound size={26} />
       <span>Profile</span>
+    </a>
+    <a class:active={isActive('/#info')} href="/#info">
+      <MoreHorizontal size={26} />
+      <span>...info</span>
     </a>
   </nav>
 

@@ -2,6 +2,7 @@
   import { onDestroy, onMount } from 'svelte';
   import { page } from '$app/stores';
   import { Edit3 } from '@lucide/svelte';
+  import InfoView from '$lib/components/InfoView.svelte';
   import MessagesView from '$lib/components/MessagesView.svelte';
   import NoteCard from '$lib/components/NoteCard.svelte';
   import RightRail from '$lib/components/RightRail.svelte';
@@ -14,9 +15,9 @@
   onMount(() => {
     observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && activeHash !== '#messages') void loadMoreFeed();
+        if (entry.isIntersecting && !activeHash) void loadMoreFeed();
       },
-      { rootMargin: '700px 0px' }
+      { rootMargin: '1200px 0px' }
     );
     if (loadMoreSentinel) observer.observe(loadMoreSentinel);
   });
@@ -27,6 +28,8 @@
 {#if $session}
   {#if activeHash === '#messages'}
     <MessagesView />
+  {:else if activeHash === '#info'}
+    <InfoView />
   {:else}
     {@render Timeline()}
   {/if}
@@ -34,6 +37,8 @@
   <div class="shell">
     {#if activeHash === '#messages'}
       <MessagesView />
+    {:else if activeHash === '#info'}
+      <InfoView />
     {:else}
       {@render Timeline()}
     {/if}

@@ -7,6 +7,7 @@ import {
   fetchDirectMessages,
   fetchContactListDetails,
   fetchFeed,
+  fetchEventStats,
   fetchProfiles,
   loginWithBunker,
   loginWithNip07,
@@ -16,7 +17,7 @@ import {
   publishProfile,
   resolveNip05Profile
 } from '$lib/nostr/client';
-import type { CustomFeedSettings, DirectMessage, FeedMode, NostrEvent, NotificationItem, Profile, RelayState, Session } from '$lib/nostr/types';
+import type { CustomFeedSettings, DirectMessage, EventStats, FeedMode, NostrEvent, NotificationItem, Profile, RelayState, Session } from '$lib/nostr/types';
 
 const sessionStorageKey = 'nostr-session';
 const customFeedStorageKey = 'nostr-custom-feed-settings';
@@ -36,6 +37,7 @@ export const customFeedSettings = writable<CustomFeedSettings>(initialCustomFeed
 export const online = writable(true);
 export const notifications = writable<NotificationItem[]>([]);
 export const directMessages = writable<DirectMessage[]>([]);
+export const eventStats = writable<Record<string, EventStats>>({});
 export const loadingFeed = writable(false);
 export const loadingMessages = writable(false);
 export const loadingMoreFeed = writable(false);
@@ -49,6 +51,7 @@ let currentFollows: string[] = [];
 let currentSettings = defaultCustomFeedSettings;
 let currentMode: FeedMode = 'global';
 let oldestFeedTimestamp: number | undefined;
+const requestedStats = new Set<string>();
 
 relays.subscribe((value) => (currentRelays = value));
 follows.subscribe((value) => (currentFollows = value));
@@ -76,10 +79,12 @@ export async function refreshFeed(mode = currentMode) {
   loadingFeed.set(true);
   hasMoreFeed.set(true);
   oldestFeedTimestamp = undefined;
+  requestedStats.clear();
   try {
     const nextEvents = await fetchFeed(mode, currentRelays, currentFollows, currentSettings, { limit: initialFeedLimit });
     events.update((existing) => mergeEvents(nextEvents, existing));
     oldestFeedTimestamp = getOldestTimestamp(nextEvents);
+    void refreshEventStats(nextEvents.map((event) => event.id));
     const pubkeys = [...new Set(nextEvents.map((event) => event.pubkey))].slice(0, 60);
     const foundProfiles = await fetchProfiles(pubkeys, currentRelays);
     profiles.update((existing) => ({
@@ -110,6 +115,7 @@ export async function loadMoreFeed() {
     const nextOldest = getOldestTimestamp(nextEvents);
     if (nextOldest !== undefined) oldestFeedTimestamp = oldestFeedTimestamp === undefined ? nextOldest : Math.min(oldestFeedTimestamp, nextOldest);
     events.update((existing) => mergeEvents(nextEvents, existing));
+    void refreshEventStats(nextEvents.map((event) => event.id));
     const pubkeys = [...new Set(nextEvents.map((event) => event.pubkey))].slice(0, 40);
     const foundProfiles = await fetchProfiles(pubkeys, currentRelays);
     profiles.update((existing) => ({
@@ -119,6 +125,17 @@ export async function loadMoreFeed() {
   } finally {
     loadingMoreFeed.set(false);
   }
+}
+
+export async function refreshEventStats(ids: string[]) {
+  const nextIds = ids.filter((id) => !requestedStats.has(id));
+  nextIds.forEach((id) => requestedStats.add(id));
+  if (!nextIds.length) return;
+  const stats = await fetchEventStats(nextIds, currentRelays).catch(() => ({}));
+  eventStats.update((existing) => ({
+    ...existing,
+    ...stats
+  }));
 }
 
 export async function refreshMessages() {

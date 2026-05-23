@@ -1,13 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { KeyRound, LockKeyhole, MessageSquareText, RefreshCw, ShieldCheck } from '@lucide/svelte';
+  import { LockKeyhole, MessageSquareText, RefreshCw, ShieldCheck, Sparkles } from '@lucide/svelte';
   import { nip19 } from 'nostr-tools';
   import { directMessages, loadingMessages, loginDialogOpen, refreshMessages, session } from '$lib/stores/app';
 
   const protocols = [
     { label: 'NIP-04', detail: 'Encrypted direct messages', icon: LockKeyhole },
-    { label: 'NIP-26', detail: 'Delegated message events', icon: ShieldCheck },
-    { label: 'NIP-4e', detail: 'Encrypted message extension ready', icon: KeyRound }
+    { label: 'NIP-26', detail: 'Delegation tags detected', icon: ShieldCheck },
+    { label: 'NIP-17', detail: 'Private DMs should be added next', icon: Sparkles }
   ];
 
   $: conversations = groupMessages($directMessages);

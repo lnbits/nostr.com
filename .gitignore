@@ -11,6 +11,10 @@ node_modules/.vite-temp/
 build/
 dist/
 
+# Local reference checkouts
+nips/
+pomegranate/
+
 # Capacitor native projects and generated assets
 android/
 ios/

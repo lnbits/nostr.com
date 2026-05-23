@@ -56,6 +56,16 @@ describe('nostr client helpers', () => {
     expect(filterSpam([muted, spam, good], new Set([muted.pubkey]))).toEqual([good]);
   });
 
+  it('filters obvious adult content by keyword, hashtag, domain, and warning tags', () => {
+    const keyword = event({ content: 'this is nsfw content' });
+    const hashtag = event({ content: 'look at this #porn account' });
+    const domain = event({ content: 'bad link https://onlyfans.com/example' });
+    const warning = event({ content: 'hidden behind warning', tags: [['content-warning']] });
+    const good = event({ content: 'teenage engineering made a nice synthesizer' });
+
+    expect(filterSpam([keyword, hashtag, domain, warning, good])).toEqual([good]);
+  });
+
   it('filters machine telemetry json while allowing human text with small json snippets', () => {
     const machine = event({
       content: JSON.stringify({

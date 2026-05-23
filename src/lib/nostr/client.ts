@@ -2,8 +2,8 @@ import { finalizeEvent, generateSecretKey, getPublicKey, nip04, nip19, SimplePoo
 import type { Event as NostrToolsEvent, Filter } from 'nostr-tools';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { cacheEvents, cacheProfile } from './cache';
-import { defaultGuestNip05, defaultRelays, mutedWords } from './config';
-import type { ContactListDetails, CustomFeedSettings, DirectMessage, FeedMode, Nip05Profile, NostrEvent, Profile, RelayState, Session } from './types';
+import { adultDomains, adultHashtags, defaultGuestNip05, defaultRelays, mutedWords } from './config';
+import type { ContactListDetails, CustomFeedSettings, DirectMessage, EventStats, FeedMode, Nip05Profile, NostrEvent, Profile, RelayState, Session } from './types';
 
 const pool = new SimplePool();
 
@@ -39,9 +39,27 @@ export function filterSpam(events: NostrEvent[], mutedPubkeys = new Set<string>(
   return events.filter((event) => {
     if (mutedPubkeys.has(event.pubkey)) return false;
     if (isMachineGeneratedContent(event.content)) return false;
+    if (!isFamilySafeEvent(event)) return false;
     const lower = event.content.toLowerCase();
-    return !mutedWords.some((word) => lower.includes(word));
+    return !mutedWords.some((word) => containsBlockedPhrase(lower, word));
   });
+}
+
+export function isFamilySafeEvent(event: NostrEvent) {
+  const text = event.content.toLowerCase();
+  if (mutedWords.some((word) => containsBlockedPhrase(text, word))) return false;
+  if (adultDomains.some((domain) => text.includes(domain))) return false;
+  if (adultHashtags.some((tag) => hasHashtag(text, tag))) return false;
+
+  for (const tag of event.tags) {
+    const [name, ...values] = tag;
+    const lowerValues = values.map((value) => value.toLowerCase());
+    if (name === 'content-warning' || name === 'warning') return false;
+    if (name === 't' && lowerValues.some((value) => adultHashtags.includes(value.replace(/^#/, '')))) return false;
+    if ((name === 'r' || name === 'url' || name === 'imeta') && lowerValues.some((value) => adultDomains.some((domain) => value.includes(domain)))) return false;
+  }
+
+  return true;
 }
 
 export function isMachineGeneratedContent(content: string) {
@@ -68,6 +86,16 @@ function isTransportPayload(content: string) {
   if (/"route"\s*:/.test(content) && /"payload"\s*:/.test(content)) return true;
   if (/"type"\s*:\s*"ar_profile"/.test(content) && /"payload"\s*:/.test(content)) return true;
   return /[A-Za-z0-9+/=_-]{420,}/.test(content) && /"payload"\s*:/.test(content);
+}
+
+function containsBlockedPhrase(text: string, phrase: string) {
+  const escaped = phrase.trim().toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (!escaped) return false;
+  return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i').test(text);
+}
+
+function hasHashtag(text: string, tag: string) {
+  return new RegExp(`(^|\\s)#${tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(text);
 }
 
 export function dedupeEvents(events: NostrEvent[]) {
@@ -114,10 +142,29 @@ export async function fetchMissingEvents(ids: string[], relays = defaultRelays) 
   return clean;
 }
 
+export async function fetchProfileEvents(pubkey: string, relays = defaultRelays, limit = 36) {
+  if (!/^[0-9a-f]{64}$/i.test(pubkey)) return [];
+  const relayUrls = activeRelayUrls(relays, 'read');
+  const events = (await pool.querySync(relayUrls, { kinds: [1], authors: [pubkey], limit })) as NostrEvent[];
+  const clean = dedupeEvents(filterSpam(events));
+  await cacheEvents(clean);
+  return clean;
+}
+
 export async function fetchProfiles(pubkeys: string[], relays = defaultRelays) {
   if (!pubkeys.length) return [];
   const relayUrls = activeRelayUrls(relays, 'read');
   const events = (await pool.querySync(relayUrls, { kinds: [0], authors: pubkeys, limit: pubkeys.length })) as NostrEvent[];
+  const profiles = parseProfileEvents(events);
+  await Promise.all(profiles.map(cacheProfile));
+  return profiles;
+}
+
+export async function searchProfiles(query: string, relays = defaultRelays) {
+  const search = query.trim().replace(/^@/, '');
+  if (search.length < 2) return [];
+  const relayUrls = activeRelayUrls(relays, 'read');
+  const events = (await pool.querySync(relayUrls, { kinds: [0], search, limit: 12 })) as NostrEvent[];
   const profiles = parseProfileEvents(events);
   await Promise.all(profiles.map(cacheProfile));
   return profiles;
@@ -129,6 +176,49 @@ export async function fetchDirectMessages(session: Session, relays = defaultRela
   const outgoingFilter: Filter = { kinds: [4], authors: [session.pubkey], limit: 80 };
   const events = (await Promise.all([pool.querySync(relayUrls, incomingFilter), pool.querySync(relayUrls, outgoingFilter)])).flat() as NostrEvent[];
   return Promise.all(dedupeEvents(events).map((event) => toDirectMessage(event, session)));
+}
+
+export async function fetchEventStats(ids: string[], relays = defaultRelays) {
+  const uniqueIds = [...new Set(ids)].filter(Boolean).slice(0, 80);
+  const emptyStats = () => ({ replies: 0, reposts: 0, likes: 0, zaps: 0 });
+  const stats: Record<string, EventStats> = Object.fromEntries(uniqueIds.map((id) => [id, emptyStats()]));
+  if (!uniqueIds.length) return stats;
+
+  const relayUrls = activeRelayUrls(relays, 'read');
+  const filters: Filter[] = [
+    { kinds: [1], '#e': uniqueIds, limit: Math.min(500, uniqueIds.length * 20) },
+    { kinds: [6, 16], '#e': uniqueIds, limit: Math.min(500, uniqueIds.length * 20) },
+    { kinds: [7], '#e': uniqueIds, limit: Math.min(800, uniqueIds.length * 35) },
+    { kinds: [9735], '#e': uniqueIds, limit: Math.min(500, uniqueIds.length * 20) }
+  ];
+  const events = dedupeEvents((await Promise.all(filters.map((filter) => pool.querySync(relayUrls, filter)))).flat() as NostrEvent[]);
+  const seen = {
+    replies: new Set<string>(),
+    reposts: new Set<string>(),
+    likes: new Set<string>(),
+    zaps: new Set<string>()
+  };
+
+  for (const event of events) {
+    for (const id of referencedEventIds(event, uniqueIds)) {
+      if (!stats[id]) continue;
+      if (event.kind === 1 && !seen.replies.has(`${id}:${event.id}`)) {
+        seen.replies.add(`${id}:${event.id}`);
+        stats[id].replies += 1;
+      } else if ((event.kind === 6 || event.kind === 16) && !seen.reposts.has(`${id}:${event.id}`)) {
+        seen.reposts.add(`${id}:${event.id}`);
+        stats[id].reposts += 1;
+      } else if (event.kind === 7 && !seen.likes.has(`${id}:${event.pubkey}`)) {
+        seen.likes.add(`${id}:${event.pubkey}`);
+        stats[id].likes += 1;
+      } else if (event.kind === 9735 && !seen.zaps.has(`${id}:${event.id}`)) {
+        seen.zaps.add(`${id}:${event.id}`);
+        stats[id].zaps += 1;
+      }
+    }
+  }
+
+  return stats;
 }
 
 export async function fetchContactList(pubkey: string, relays = defaultRelays) {
@@ -311,6 +401,11 @@ export function extractContactListDetails(event?: NostrEvent): ContactListDetail
 
 function sanitizeRelayHints(urls: string[]) {
   return [...new Set(urls.map((url) => url.trim()).filter((url) => /^wss:\/\/[^ ]+\.[^ ]+/.test(url)))];
+}
+
+function referencedEventIds(event: NostrEvent, ids: string[]) {
+  const idSet = new Set(ids);
+  return [...new Set(event.tags.flatMap((tag) => (tag[0] === 'e' && idSet.has(tag[1]) ? [tag[1]] : [])))];
 }
 
 function compactProfile(profile: Profile): Omit<Profile, 'pubkey'> {

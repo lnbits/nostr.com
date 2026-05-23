@@ -2,10 +2,12 @@
   import { Heart, MessageCircle, Repeat2, Zap, MoreHorizontal, Flag } from '@lucide/svelte';
   import type { NostrEvent, Profile } from '$lib/nostr/types';
   import { extractMediaUrls, isVideoUrl, parseHashtags } from '$lib/nostr/media';
-  import { customFeedSettings, feedMode, refreshFeed, startReply } from '$lib/stores/app';
+  import { customFeedSettings, eventStats, feedMode, refreshFeed, startReply } from '$lib/stores/app';
 
   export let event: NostrEvent;
   export let profile: Profile | undefined;
+  export let featured = false;
+  export let onOpen: ((event: NostrEvent) => void) | undefined = undefined;
 
   const previewLength = 400;
   let expanded = false;
@@ -16,6 +18,7 @@
   $: isLong = event.content.length > previewLength;
   $: visibleContent = !isLong || expanded ? event.content : event.content.slice(0, previewLength).trimEnd();
   $: contentParts = parseHashtags(visibleContent);
+  $: counts = $eventStats[event.id] ?? { replies: 0, reposts: 0, likes: 0, zaps: 0 };
   $: time = new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(
     Math.max(-30, Math.round((event.created_at * 1000 - Date.now()) / 86400000)),
     'day'
@@ -29,9 +32,13 @@
     feedMode.set('custom');
     void refreshFeed('custom');
   }
+
+  function openNote() {
+    if (onOpen) onOpen(event);
+  }
 </script>
 
-<article class="note-card">
+<article class="note-card" class:featured>
   <a class="avatar" href={`/profile/${event.pubkey}`} aria-label={`${name} profile`}>
     {#if avatar}
       <img src={avatar} alt="" loading="lazy" />
@@ -51,7 +58,11 @@
         {#if part.type === 'hashtag'}
           <button class="hashtag" on:click={() => filterHashtag(part.value)}>#{part.value}</button>
         {:else}
-          <a href={`/thread/${event.id}`}>{part.value}</a>
+          {#if onOpen}
+            <button class="note-open-text" on:click={openNote}>{part.value}</button>
+          {:else}
+            <a href={`/thread/${event.id}`}>{part.value}</a>
+          {/if}
         {/if}
       {/each}
       {#if isLong && !expanded}
@@ -76,10 +87,10 @@
       </div>
     {/if}
     <div class="note-actions">
-      <button aria-label="Reply" on:click={() => startReply(event)}><MessageCircle size={18} /></button>
-      <button aria-label="Repost"><Repeat2 size={18} /></button>
-      <button aria-label="Like"><Heart size={18} /></button>
-      <button aria-label="Zap"><Zap size={18} /></button>
+      <button aria-label="Reply" on:click={() => startReply(event)}><MessageCircle size={18} /><span>{counts.replies}</span></button>
+      <button aria-label="Repost"><Repeat2 size={18} /><span>{counts.reposts}</span></button>
+      <button aria-label="Like"><Heart size={18} /><span>{counts.likes}</span></button>
+      <button aria-label="Zap"><Zap size={18} /><span>{counts.zaps}</span></button>
       <button aria-label="Report"><Flag size={17} /></button>
     </div>
   </div>

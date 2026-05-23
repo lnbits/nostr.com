@@ -63,7 +63,7 @@ export interface NotificationItem {
 
 export interface DirectMessage {
   id: string;
-  protocol: 'NIP-04' | 'NIP-26' | 'NIP-4e';
+  protocol: 'NIP-04' | 'NIP-26';
   peer: string;
   from: string;
   to: string;
@@ -71,4 +71,11 @@ export interface DirectMessage {
   encrypted: string;
   content?: string;
   delegated: boolean;
+}
+
+export interface EventStats {
+  replies: number;
+  reposts: number;
+  likes: number;
+  zaps: number;
 }

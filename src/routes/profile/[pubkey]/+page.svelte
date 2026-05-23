@@ -1,11 +1,10 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { BellPlus, Check, Copy, Globe2, Save, UserPlus } from '@lucide/svelte';
   import { nip19 } from 'nostr-tools';
   import NoteCard from '$lib/components/NoteCard.svelte';
-  import { events, profiles, relays, saveProfile, session } from '$lib/stores/app';
-  import { fetchProfiles } from '$lib/nostr/client';
+  import { events, mergeEvents, profiles, relays, saveProfile, session } from '$lib/stores/app';
+  import { fetchProfileEvents, fetchProfiles } from '$lib/nostr/client';
   import type { Profile } from '$lib/nostr/types';
 
   const emptyProfile = (): Profile => ({
@@ -34,14 +33,14 @@
   let copied = false;
   let error = '';
   let draft: Profile = emptyProfile();
+  let hydratedPubkey = '';
 
   $: if (pubkey) draft = { ...emptyProfile(), ...profile, pubkey };
 
-  onMount(async () => {
-    if (!pubkey) return;
-    const [found] = await fetchProfiles([pubkey], $relays).catch(() => []);
-    if (found) profiles.update((existing) => ({ ...existing, [found.pubkey]: found }));
-  });
+  $: if (pubkey && pubkey !== hydratedPubkey) {
+    hydratedPubkey = pubkey;
+    void hydrateProfile(pubkey);
+  }
 
   async function copyNpub() {
     await navigator.clipboard.writeText(npub);
@@ -59,6 +58,16 @@
     } finally {
       saving = false;
     }
+  }
+
+  async function hydrateProfile(nextPubkey: string) {
+    const [found, profileEvents] = await Promise.all([
+      fetchProfiles([nextPubkey], $relays).catch(() => []),
+      fetchProfileEvents(nextPubkey, $relays).catch(() => [])
+    ]);
+    const [profile] = found;
+    if (profile) profiles.update((existing) => ({ ...existing, [profile.pubkey]: profile }));
+    if (profileEvents.length) events.update((existing) => mergeEvents(profileEvents, existing));
   }
 
   function normalizePubkey(value: string) {
