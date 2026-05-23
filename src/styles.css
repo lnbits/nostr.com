@@ -438,6 +438,11 @@ label span, label strong { color: var(--text); }
 .login-panel { display: grid; gap: 14px; }
 .login-panel p { color: var(--muted); margin: 0; }
 .login-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.filter-card-form {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 14px;
+}
 .interest-picker {
   position: relative;
 }
@@ -467,6 +472,10 @@ label span, label strong { color: var(--text); }
   border-radius: 8px;
   background: var(--panel);
   box-shadow: var(--shadow);
+}
+.interest-picker.open-down .interest-menu {
+  top: calc(100% + 6px);
+  bottom: auto;
 }
 .interest-option {
   min-height: 38px;

@@ -6,7 +6,9 @@
 
   let keywordText = '';
 
-  $: if (open) keywordText = $customFeedSettings.keywords.join(', ');
+  $: if (open) {
+    keywordText = $customFeedSettings.keywords.join(', ');
+  }
 
   function close() {
     open = false;
@@ -20,9 +22,10 @@
         .map((keyword) => keyword.trim())
         .filter(Boolean)
     }));
-    if ($feedMode === 'custom') void refreshFeed('custom');
+    if ($feedMode === 'global' || $feedMode === 'custom') void refreshFeed($feedMode);
     close();
   }
+
 </script>
 
 {#if open}
@@ -43,7 +46,7 @@
         </label>
 
         <label class="custom-feed-field">
-          <span>Keywords</span>
+          <span>Feed keywords</span>
           <input bind:value={keywordText} placeholder="bitcoin, svelte, lightning" />
         </label>
       </div>

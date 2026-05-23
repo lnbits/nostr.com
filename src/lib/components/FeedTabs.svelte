@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import { SlidersHorizontal } from '@lucide/svelte';
   import { feedMode, selectFeedMode } from '$lib/stores/app';
   import type { FeedMode } from '$lib/nostr/types';
@@ -17,6 +18,7 @@
   function select(key: FeedMode) {
     if (disabled) return;
     selectFeedMode(key);
+    void goto('/');
   }
 
   let customDialogOpen = false;

@@ -3,7 +3,7 @@
   import { nip19 } from 'nostr-tools';
   import { hexToBytes } from '@noble/hashes/utils.js';
   import { createGuestSession } from '$lib/nostr/client';
-  import { socialInterests } from '$lib/nostr/config';
+  import { keywordsForInterests, socialInterests } from '$lib/nostr/config';
   import { customFeedSettings, loginDialogOpen, refreshFeed, saveProfile, signIn } from '$lib/stores/app';
 
   let privateKey = '';
@@ -85,9 +85,11 @@ ${generatedKeys.nsec}
     savingProfile = true;
     try {
       await signIn('private-key', generatedKeys.nsec);
+      const interestKeywords = keywordsForInterests(selectedInterests);
       customFeedSettings.update((settings) => ({
         ...settings,
-        interests: selectedInterests
+        keywords: [...new Set([...settings.keywords, ...interestKeywords])],
+        interests: []
       }));
       const profileDraft = {
         pubkey: generatedKeys.pubkey,

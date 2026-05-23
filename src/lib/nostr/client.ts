@@ -3,7 +3,7 @@ import type { Event as NostrToolsEvent, Filter } from 'nostr-tools';
 import * as nip46 from 'nostr-tools/nip46';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { cacheEvents, cacheProfile, cacheProfileEvents } from './cache';
-import { adultDomains, adultHashtags, defaultGuestNip05, defaultRelays, interestHashtagMap, mutedWords } from './config';
+import { adultDomains, adultHashtags, defaultGuestNip05, defaultRelays, mutedWords } from './config';
 import type { ContactListDetails, ContactListItem, CustomFeedSettings, DirectMessage, EventStats, FeedMode, FeedQueryOptions, Nip05Profile, NostrEvent, Profile, RelayState, Session } from './types';
 
 const pool = new SimplePool();
@@ -305,7 +305,7 @@ export function feedFiltersForMode(
   const taggedBase = tag ? { ...base, '#t': [tag] } : base;
   if (mode === 'follow' && follows.length) return [{ ...taggedBase, authors: follows, since }];
   if (mode === 'custom' && follows.length) return customFeedFilters(taggedBase, follows, settings, since, relayUrls);
-  if (mode === 'global' && settings.interests.some((interest) => interest.trim())) return globalFeedFilters(taggedBase, settings, since);
+  if (mode === 'global' && hashtagKeywords(settings).length) return globalFeedFilters(taggedBase, settings, since);
   return [{ ...taggedBase, since }];
 }
 
@@ -793,47 +793,42 @@ function normalizedHashtag(tag?: string) {
 
 async function customFeedFilters(base: Filter, follows: string[], settings: CustomFeedSettings, since: number, relayUrls: string[]) {
   const total = base.limit ?? 24;
-  const hasKeywords = settings.keywords.some((keyword) => keyword.trim());
-  const hasInterests = settings.interests.some((interest) => interest.trim());
-  const interestLimit = hasInterests ? Math.max(1, Math.round(total * 0.3)) : 0;
-  const keywordLimit = hasKeywords ? Math.max(1, Math.round(total * 0.2)) : 0;
+  const textKeywords = searchKeywords(settings);
+  const feedHashtags = hashtagKeywords(settings);
+  const hashtagLimit = feedHashtags.length ? Math.max(1, Math.round(total * 0.3)) : 0;
+  const keywordLimit = textKeywords.length ? Math.max(1, Math.round(total * 0.2)) : 0;
   const friendsOfFriends = settings.friendsOfFriends ? await fetchFriendsOfFriends(follows, relayUrls) : [];
   const friendsOfFriendsLimit = friendsOfFriends.length ? Math.max(1, Math.round(total * 0.2)) : 0;
-  const followLimit = Math.max(1, total - interestLimit - keywordLimit - friendsOfFriendsLimit);
+  const followLimit = Math.max(1, total - hashtagLimit - keywordLimit - friendsOfFriendsLimit);
   const filters: Filter[] = [{ ...base, authors: sampleAuthors(follows, followLimit), limit: followLimit, since }];
 
   if (friendsOfFriendsLimit) {
     filters.push({ ...base, authors: sampleAuthors(friendsOfFriends, friendsOfFriendsLimit), limit: friendsOfFriendsLimit, since });
   }
 
-  const search = settings.keywords.map((keyword) => keyword.trim()).filter(Boolean).join(' ');
+  const search = textKeywords.join(' ');
   if (search) filters.push({ ...base, search, limit: keywordLimit, since });
-  const interestSearch = searchTermsForInterests(settings.interests).join(' ');
-  if (interestSearch) filters.push({ ...base, search: interestSearch, limit: interestLimit, since });
+  if (feedHashtags.length) filters.push({ ...base, '#t': feedHashtags, limit: hashtagLimit, since });
   return filters;
 }
 
 function globalFeedFilters(base: Filter, settings: CustomFeedSettings, since: number) {
   const total = base.limit ?? 24;
-  const interestLimit = Math.max(1, Math.round(total * 0.3));
-  const generalLimit = Math.max(1, total - interestLimit);
-  const interestSearch = searchTermsForInterests(settings.interests).join(' ');
+  const hashtagLimit = Math.max(1, Math.round(total * 0.3));
+  const generalLimit = Math.max(1, total - hashtagLimit);
+  const feedHashtags = hashtagKeywords(settings);
   return [
     { ...base, limit: generalLimit, since },
-    { ...base, search: interestSearch, limit: interestLimit, since }
+    { ...base, '#t': feedHashtags, limit: hashtagLimit, since }
   ];
 }
 
-function searchTermsForInterests(interests: string[]) {
-  return [
-    ...new Set(
-      interests.flatMap((interest) => {
-        const clean = interest.trim().toLowerCase();
-        if (!clean) return [];
-        return [clean, ...(interestHashtagMap[clean] ?? [])];
-      })
-    )
-  ];
+function hashtagKeywords(settings: CustomFeedSettings) {
+  return [...new Set(settings.keywords.map((keyword) => normalizedHashtag(keyword)).filter(Boolean))];
+}
+
+function searchKeywords(settings: CustomFeedSettings) {
+  return settings.keywords.map((keyword) => keyword.trim()).filter((keyword) => keyword && !keyword.startsWith('#'));
 }
 
 async function fetchFriendsOfFriends(follows: string[], relayUrls: string[]) {

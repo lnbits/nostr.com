@@ -50,6 +50,7 @@
 
   function filterHashtag(tag: string) {
     filterByHashtag(tag);
+    if (browser) void goto('/');
   }
 
   function openNote() {

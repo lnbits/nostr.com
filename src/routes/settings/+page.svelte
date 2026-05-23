@@ -1,6 +1,6 @@
 <script lang="ts">
   import { LogOut, Moon, Plus, Save, SlidersHorizontal, Sun, Trash2 } from '@lucide/svelte';
-  import { customFeedSettings, relays, session, signOut } from '$lib/stores/app';
+  import { customFeedSettings, feedMode, refreshFeed, relays, session, signOut } from '$lib/stores/app';
   import { normalizeRelayUrl } from '$lib/nostr/client';
   import { setThemeMode, themeMode, type ThemeMode } from '$lib/stores/theme';
 
@@ -19,6 +19,33 @@
       return existing.has(url) ? items : [...items, { url, enabled: true, read: true, write: true, score: 50 }];
     });
     newRelay = 'wss://';
+  }
+
+  function updateKeywords(value: string) {
+    customFeedSettings.update((settings) => ({
+      ...settings,
+      keywords: parseKeywords(value)
+    }));
+    refreshActiveFilteredFeed();
+  }
+
+  function updateFriendsOfFriends(value: boolean) {
+    customFeedSettings.update((settings) => ({
+      ...settings,
+      friendsOfFriends: value
+    }));
+    refreshActiveFilteredFeed();
+  }
+
+  function refreshActiveFilteredFeed() {
+    if ($feedMode === 'global' || $feedMode === 'custom') void refreshFeed($feedMode);
+  }
+
+  function parseKeywords(value: string) {
+    return value
+      .split(',')
+      .map((keyword) => keyword.trim())
+      .filter(Boolean);
   }
 </script>
 
@@ -52,25 +79,17 @@
   {/if}
 
   <section class="panel">
-    <h2><SlidersHorizontal size={20} /> Custom feed</h2>
+    <h2><SlidersHorizontal size={20} /> Filters</h2>
+    <div class="filter-card-form">
+      <label>
+        <span>Feed keywords</span>
+        <input value={$customFeedSettings.keywords.join(', ')} on:change={(event) => updateKeywords(event.currentTarget.value)} placeholder="bitcoin, svelte, lightning" />
+      </label>
+    </div>
+
     <label class="switch-row">
-      <span>Friends of friends</span>
-      <input type="checkbox" bind:checked={$customFeedSettings.friendsOfFriends} />
-    </label>
-    <label>
-      <span>Keywords</span>
-      <input
-        value={$customFeedSettings.keywords.join(', ')}
-        on:change={(event) =>
-          customFeedSettings.update((settings) => ({
-            ...settings,
-            keywords: event.currentTarget.value
-              .split(',')
-              .map((keyword) => keyword.trim())
-              .filter(Boolean)
-          }))}
-        placeholder="bitcoin, svelte, lightning"
-      />
+      <span>Friends of friends for custom feed</span>
+      <input type="checkbox" checked={$customFeedSettings.friendsOfFriends} on:change={(event) => updateFriendsOfFriends(event.currentTarget.checked)} />
     </label>
   </section>
 

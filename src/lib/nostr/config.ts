@@ -40,8 +40,21 @@ export const interestHashtagMap: Record<string, string[]> = {
   art: ['art', 'artstr'],
   photography: ['photography', 'photostr'],
   music: ['music', 'musicstr'],
-  food: ['food', 'foodstr']
+  food: ['food', 'foodstr'],
+  nature: ['nature', 'naturestr']
 };
+
+export function keywordsForInterests(interests: string[]) {
+  return [
+    ...new Set(
+      interests.flatMap((interest) => {
+        const clean = interest.trim().toLowerCase();
+        if (!clean) return [];
+        return (interestHashtagMap[clean] ?? [clean]).map((tag) => `#${tag}`);
+      })
+    )
+  ];
+}
 
 export const defaultGuestNip05 = 'benarc@nostr.com';
 

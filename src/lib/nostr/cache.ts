@@ -1,13 +1,21 @@
 import type { NostrEvent, Profile } from './types';
 
 const DB_NAME = 'nostr-social-cache';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const MAX_CACHED_EVENTS = 600;
 const MAX_CACHED_PROFILE_EVENTS = 600;
+const MAX_CACHED_HASHTAG_EVENTS = 600;
 
 interface CachedProfileEvent {
   cacheKey: string;
   pubkey: string;
+  created_at: number;
+  event: NostrEvent;
+}
+
+interface CachedHashtagEvent {
+  cacheKey: string;
+  tag: string;
   created_at: number;
   event: NostrEvent;
 }
@@ -34,6 +42,11 @@ function openDb() {
         const profileEvents = db.createObjectStore('profileEvents', { keyPath: 'cacheKey' });
         profileEvents.createIndex('pubkey', 'pubkey');
         profileEvents.createIndex('pubkey_created_at', ['pubkey', 'created_at']);
+      }
+      if (!db.objectStoreNames.contains('hashtagEvents')) {
+        const hashtagEvents = db.createObjectStore('hashtagEvents', { keyPath: 'cacheKey' });
+        hashtagEvents.createIndex('tag', 'tag');
+        hashtagEvents.createIndex('tag_created_at', ['tag', 'created_at']);
       }
       if (!db.objectStoreNames.contains('contacts')) db.createObjectStore('contacts', { keyPath: 'pubkey' });
       if (!db.objectStoreNames.contains('settings')) db.createObjectStore('settings', { keyPath: 'key' });
@@ -68,6 +81,7 @@ export async function cacheEvents(events: NostrEvent[]) {
     events.forEach((event) => store.put(event));
     pruneOldEvents(store, MAX_CACHED_EVENTS);
   }).catch(() => undefined);
+  await cacheHashtagEventIndex(events);
 }
 
 export async function cacheProfileEvents(events: NostrEvent[]) {
@@ -114,6 +128,50 @@ function pruneOldProfileEvents(store: IDBObjectStore, pubkey: string, maxEvents:
   };
 }
 
+async function cacheHashtagEventIndex(events: NostrEvent[]) {
+  const entries = events.flatMap((event) => eventHashtags(event).map((tag) => ({ tag, event })));
+  if (!entries.length) return;
+  const byTag = new Set(entries.map((entry) => entry.tag));
+
+  await withStore<void>('hashtagEvents', 'readwrite', (store) => {
+    entries.forEach(({ tag, event }) =>
+      store.put({
+        cacheKey: `${tag}:${event.id}`,
+        tag,
+        created_at: event.created_at,
+        event
+      } satisfies CachedHashtagEvent)
+    );
+    byTag.forEach((tag) => pruneOldHashtagEvents(store, tag, MAX_CACHED_HASHTAG_EVENTS));
+  }).catch(() => undefined);
+}
+
+function pruneOldHashtagEvents(store: IDBObjectStore, tag: string, maxEvents: number) {
+  let kept = 0;
+  const range = IDBKeyRange.bound([tag, 0], [tag, Number.MAX_SAFE_INTEGER]);
+  const request = store.index('tag_created_at').openCursor(range, 'prev');
+  request.onsuccess = () => {
+    const cursor = request.result;
+    if (!cursor) return;
+    kept += 1;
+    if (kept > maxEvents) cursor.delete();
+    cursor.continue();
+  };
+}
+
+function eventHashtags(event: NostrEvent) {
+  const tags = new Set<string>();
+  event.tags.forEach((tag) => {
+    if (tag[0] === 't' && tag[1]) tags.add(normalizeHashtag(tag[1]));
+  });
+  for (const match of event.content.matchAll(/(^|[\s([{"'])#([A-Za-z0-9_]{2,64})/g)) tags.add(normalizeHashtag(match[2]));
+  return [...tags].filter(Boolean);
+}
+
+function normalizeHashtag(tag: string) {
+  return tag.trim().replace(/^#/, '').toLowerCase();
+}
+
 export async function getCachedEvents(limit = 80) {
   return withStore<NostrEvent[]>('events', 'readonly', (store) => {
     const request = store.index('created_at').openCursor(null, 'prev');
@@ -143,6 +201,25 @@ export async function getCachedProfileEvents(pubkey: string, limit = 120) {
         return;
       }
       events.push((cursor.value as CachedProfileEvent).event);
+      cursor.continue();
+    };
+  }).catch(() => []);
+}
+
+export async function getCachedHashtagEvents(tag: string, limit = 120) {
+  const clean = normalizeHashtag(tag);
+  if (!clean) return [];
+  return withStore<NostrEvent[]>('hashtagEvents', 'readonly', (store) => {
+    const range = IDBKeyRange.bound([clean, 0], [clean, Number.MAX_SAFE_INTEGER]);
+    const request = store.index('tag_created_at').openCursor(range, 'prev');
+    const events: NostrEvent[] = [];
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor || events.length >= limit) {
+        (store as IDBObjectStore & { __setResult(value: NostrEvent[]): void }).__setResult(events);
+        return;
+      }
+      events.push((cursor.value as CachedHashtagEvent).event);
       cursor.continue();
     };
   }).catch(() => []);

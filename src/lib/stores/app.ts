@@ -1,7 +1,7 @@
 import { browser } from '$app/environment';
 import { writable } from 'svelte/store';
-import { getCachedEvents, getCachedProfiles } from '$lib/nostr/cache';
-import { defaultCustomFeedSettings, defaultGuestNip05, defaultRelays } from '$lib/nostr/config';
+import { getCachedEvents, getCachedHashtagEvents, getCachedProfiles } from '$lib/nostr/cache';
+import { defaultCustomFeedSettings, defaultGuestNip05, defaultRelays, keywordsForInterests } from '$lib/nostr/config';
 import {
   createGuestSession,
   fetchDirectMessages,
@@ -247,9 +247,20 @@ export async function refreshEventStats(ids: string[]) {
 }
 
 export function filterByHashtag(tag: string) {
-  activeHashtag.set(tag.trim().replace(/^#/, '').toLowerCase());
+  const clean = tag.trim().replace(/^#/, '').toLowerCase();
+  activeHashtag.set(clean);
   feedMode.set('global');
+  void hydrateCachedHashtagFeed(clean);
   void refreshFeed('global');
+}
+
+async function hydrateCachedHashtagFeed(tag: string) {
+  const cached = await getCachedHashtagEvents(tag, initialFeedLimit);
+  if (!cached.length || tag !== currentHashtag) return;
+  events.set(cached);
+  oldestFeedTimestamp = getOldestTimestamp(cached);
+  void refreshEventStats(cached.map((event) => event.id));
+  void hydrateMissingProfiles(cached, 40);
 }
 
 export function selectFeedMode(mode: FeedMode) {
@@ -503,8 +514,13 @@ function readStoredCustomFeedSettings() {
       ...defaultCustomFeedSettings,
       ...saved,
       friendsOfFriends: typeof saved.friendsOfFriends === 'boolean' ? saved.friendsOfFriends : defaultCustomFeedSettings.friendsOfFriends,
-      keywords: Array.isArray(saved.keywords) ? saved.keywords.filter((keyword): keyword is string => typeof keyword === 'string') : [],
-      interests: Array.isArray(saved.interests) ? saved.interests.filter((interest): interest is string => typeof interest === 'string') : []
+      keywords: [
+        ...new Set([
+          ...(Array.isArray(saved.keywords) ? saved.keywords.filter((keyword): keyword is string => typeof keyword === 'string') : []),
+          ...keywordsForInterests(Array.isArray(saved.interests) ? saved.interests.filter((interest): interest is string => typeof interest === 'string') : [])
+        ])
+      ],
+      interests: []
     };
   } catch {
     localStorage.removeItem(customFeedStorageKey);

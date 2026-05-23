@@ -1,14 +1,14 @@
-import { cacheEvents, cacheProfile, cacheProfileEvents, getCachedEvents, getCachedProfileEvents, getCachedProfiles, resetCacheConnectionForTests } from './cache';
+import { cacheEvents, cacheProfile, cacheProfileEvents, getCachedEvents, getCachedHashtagEvents, getCachedProfileEvents, getCachedProfiles, resetCacheConnectionForTests } from './cache';
 import type { NostrEvent } from './types';
 
-function event(id: string, created_at: number, pubkey = 'a'.repeat(64)): NostrEvent {
+function event(id: string, created_at: number, pubkey = 'a'.repeat(64), content = `event ${id}`, tags: string[][] = []): NostrEvent {
   return {
     id,
     pubkey,
     created_at,
     kind: 1,
-    tags: [],
-    content: `event ${id}`,
+    tags,
+    content,
     sig: 'b'.repeat(128)
   };
 }
@@ -73,5 +73,16 @@ describe('IndexedDB cache', () => {
     expect(cached).toHaveLength(600);
     expect(cached[0].id).toBe('alice-604');
     expect(cached.at(-1)?.id).toBe('alice-5');
+  });
+
+  it('keeps a separate ordered hashtag event cache from tags and content', async () => {
+    await cacheEvents([
+      event('nostr-old', 10, 'a'.repeat(64), 'hello #Nostr'),
+      event('music-note', 30, 'b'.repeat(64), 'tagged only', [['t', 'music']]),
+      event('nostr-new', 40, 'c'.repeat(64), 'new #nostr thing')
+    ]);
+
+    expect((await getCachedHashtagEvents('nostr')).map((item) => item.id)).toEqual(['nostr-new', 'nostr-old']);
+    expect((await getCachedHashtagEvents('#music')).map((item) => item.id)).toEqual(['music-note']);
   });
 });

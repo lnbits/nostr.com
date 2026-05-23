@@ -108,18 +108,18 @@ describe('nostr client helpers', () => {
     ]);
   });
 
-  it('reserves part of global and custom feeds for profile interests', async () => {
+  it('reserves part of global and custom feeds for hashtag keywords', async () => {
     const follows = ['c'.repeat(64)];
     const base = { kinds: [1], limit: 10 };
-    const settings = { friendsOfFriends: false, keywords: [], interests: ['art', 'music'] };
+    const settings = { friendsOfFriends: false, keywords: ['#art', '#artstr', '#music', '#musicstr'], interests: [] };
 
     expect(await feedFiltersForMode('global', base, follows, settings, 123, [])).toEqual([
       { kinds: [1], limit: 7, since: 123 },
-      { kinds: [1], limit: 3, search: 'art artstr music musicstr', since: 123 }
+      { kinds: [1], limit: 3, '#t': ['art', 'artstr', 'music', 'musicstr'], since: 123 }
     ]);
     expect(await feedFiltersForMode('custom', base, follows, settings, 123, [])).toEqual([
       { kinds: [1], limit: 7, authors: follows, since: 123 },
-      { kinds: [1], limit: 3, search: 'art artstr music musicstr', since: 123 }
+      { kinds: [1], limit: 3, '#t': ['art', 'artstr', 'music', 'musicstr'], since: 123 }
     ]);
   });
 
