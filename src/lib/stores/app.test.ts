@@ -39,4 +39,14 @@ describe('app store helpers', () => {
 
     expect(mergeEvents(items, []).map((item) => item.id)).toEqual(['a1', 'a2', 'b1', 'a3', 'a4']);
   });
+
+  it('caps the in-memory feed after merging', () => {
+    const authors = ['a'.repeat(64), 'b'.repeat(64), 'c'.repeat(64)];
+    const items = Array.from({ length: 245 }, (_, index) => authorEvent(`event-${index}`, index, authors[index % authors.length]));
+
+    const merged = mergeEvents(items, []);
+    expect(merged).toHaveLength(240);
+    expect(merged[0].id).toBe('event-244');
+    expect(merged.at(-1)?.id).toBe('event-5');
+  });
 });

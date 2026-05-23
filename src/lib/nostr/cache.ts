@@ -2,6 +2,7 @@ import type { NostrEvent, Profile } from './types';
 
 const DB_NAME = 'nostr-social-cache';
 const DB_VERSION = 1;
+const MAX_CACHED_EVENTS = 600;
 
 let dbPromise: Promise<IDBDatabase> | undefined;
 
@@ -52,7 +53,20 @@ export async function cacheEvents(events: NostrEvent[]) {
   if (!events.length) return;
   await withStore<void>('events', 'readwrite', (store) => {
     events.forEach((event) => store.put(event));
+    pruneOldEvents(store, MAX_CACHED_EVENTS);
   }).catch(() => undefined);
+}
+
+function pruneOldEvents(store: IDBObjectStore, maxEvents: number) {
+  let kept = 0;
+  const request = store.index('created_at').openCursor(null, 'prev');
+  request.onsuccess = () => {
+    const cursor = request.result;
+    if (!cursor) return;
+    kept += 1;
+    if (kept > maxEvents) cursor.delete();
+    cursor.continue();
+  };
 }
 
 export async function getCachedEvents(limit = 80) {

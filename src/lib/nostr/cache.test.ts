@@ -40,6 +40,15 @@ describe('IndexedDB cache', () => {
     expect((await getCachedEvents(2)).map((item) => item.id)).toEqual(['newer', 'middle']);
   });
 
+  it('prunes old events after the cache reaches its storage cap', async () => {
+    await cacheEvents(Array.from({ length: 605 }, (_, index) => event(`event-${index}`, index)));
+
+    const cached = await getCachedEvents(700);
+    expect(cached).toHaveLength(600);
+    expect(cached[0].id).toBe('event-604');
+    expect(cached.at(-1)?.id).toBe('event-5');
+  });
+
   it('upserts profiles by pubkey', async () => {
     await cacheProfile({ pubkey: 'a'.repeat(64), name: 'First' });
     await cacheProfile({ pubkey: 'a'.repeat(64), name: 'Updated' });

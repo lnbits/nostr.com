@@ -1,9 +1,11 @@
 <script lang="ts">
   import { browser } from '$app/environment';
+  import { goto } from '$app/navigation';
   import { Copy, ExternalLink, Flag, Heart, MessageCircle, MoreHorizontal, Repeat2, Zap } from '@lucide/svelte';
   import type { NostrEvent, Profile } from '$lib/nostr/types';
   import { extractMediaAttachments, parseNoteText } from '$lib/nostr/media';
-  import { eventStats, filterByHashtag, likedEvents, reactToNote, reportNote, repostNote, startReply } from '$lib/stores/app';
+  import { fetchLikeAuthors, fetchProfiles } from '$lib/nostr/client';
+  import { eventStats, filterByHashtag, likedEvents, profiles, reactToNote, relays, reportNote, repostNote, startReply } from '$lib/stores/app';
 
   export let event: NostrEvent;
   export let profile: Profile | undefined;
@@ -16,6 +18,9 @@
   let openImage: { url: string; alt?: string } | null = null;
   let menuOpen = false;
   let copiedEmbed = false;
+  let likePopoverOpen = false;
+  let likeAuthors: string[] = [];
+  let loadingLikeAuthors = false;
 
   $: name = profile?.display_name || profile?.name || event.pubkey.slice(0, 10);
   $: avatar = profile?.picture;
@@ -25,10 +30,23 @@
   $: contentParts = parseNoteText(visibleContent, mediaAttachments.map((media) => media.url), event.tags);
   $: counts = $eventStats[event.id] ?? { replies: 0, reposts: 0, likes: 0, dislikes: 0, emoji: 0, zaps: 0 };
   $: liked = $likedEvents.has(event.id);
-  $: time = new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(
-    Math.max(-30, Math.round((event.created_at * 1000 - Date.now()) / 86400000)),
-    'day'
-  );
+  $: timestamp = new Date(event.created_at * 1000);
+  $: time = formatNoteTime(timestamp);
+  $: fullTime = timestamp.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+
+  function formatNoteTime(date: Date, now = new Date()) {
+    const elapsedMs = Math.max(0, now.getTime() - date.getTime());
+    const elapsedMinutes = Math.floor(elapsedMs / 60000);
+    if (elapsedMinutes < 1) return 'now';
+    if (elapsedMinutes < 60) return `${elapsedMinutes}min`;
+    if (elapsedMinutes < 120) return '1hr';
+    if (isSameDay(date, now)) return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  }
+
+  function isSameDay(date: Date, other: Date) {
+    return date.getFullYear() === other.getFullYear() && date.getMonth() === other.getMonth() && date.getDate() === other.getDate();
+  }
 
   function filterHashtag(tag: string) {
     filterByHashtag(tag);
@@ -36,7 +54,7 @@
 
   function openNote() {
     if (onOpen) onOpen(event);
-    else if (browser && !embedded) window.location.href = `/thread/${event.id}`;
+    else if (browser && !embedded) void goto(`/thread/${event.id}`);
   }
 
   function openFromNoteBody(pointerEvent: MouseEvent) {
@@ -51,7 +69,29 @@
   }
 
   function isInteractiveTarget(target: EventTarget | null) {
-    return target instanceof Element && Boolean(target.closest('a, button, input, textarea, video, .note-actions, .media-grid, .note-menu'));
+    return target instanceof Element && Boolean(target.closest('a, button, input, textarea, video, .note-actions, .media-grid, .note-menu, .reaction-popover'));
+  }
+
+  async function toggleLikePopover() {
+    likePopoverOpen = !likePopoverOpen;
+    if (!likePopoverOpen || likeAuthors.length || loadingLikeAuthors) return;
+
+    loadingLikeAuthors = true;
+    try {
+      likeAuthors = await fetchLikeAuthors(event.id, $relays);
+      const missing = likeAuthors.filter((pubkey) => !$profiles[pubkey]);
+      if (missing.length) {
+        const fetchedProfiles = await fetchProfiles(missing, $relays).catch(() => []);
+        if (fetchedProfiles.length) profiles.update((existing) => ({ ...existing, ...Object.fromEntries(fetchedProfiles.map((profile) => [profile.pubkey, profile])) }));
+      }
+    } finally {
+      loadingLikeAuthors = false;
+    }
+  }
+
+  function profileName(pubkey: string) {
+    const item = $profiles[pubkey];
+    return item?.display_name || item?.name || `${pubkey.slice(0, 8)}...${pubkey.slice(-4)}`;
   }
 
   function embedUrl() {
@@ -90,7 +130,7 @@
   <div class="note-body" role={embedded ? undefined : 'button'} tabindex={embedded ? undefined : 0} on:click={openFromNoteBody} on:keydown={openFromKeyboard}>
     <div class="note-meta">
       <a href={`/profile/${event.pubkey}`}><strong>{name}</strong></a>
-      <span>{time}</span>
+      <time datetime={timestamp.toISOString()} title={fullTime}>{time}</time>
       {#if !embedded}
         <div class="note-menu">
           <button class="icon-button small" aria-label="More actions" aria-expanded={menuOpen} on:click={() => (menuOpen = !menuOpen)}>
@@ -152,7 +192,24 @@
       <div class="note-actions">
         <button aria-label="Reply" on:click={() => startReply(event)}><MessageCircle size={18} /><span>{counts.replies}</span></button>
         <button aria-label="Repost" on:click={() => void repostNote(event)}><Repeat2 size={18} /><span>{counts.reposts}</span></button>
-        <button class:liked aria-label={liked ? 'Unlike' : 'Like'} aria-pressed={liked} on:click={() => void reactToNote(event)}><Heart size={18} fill={liked ? 'currentColor' : 'none'} /><span>{counts.likes}</span></button>
+        <span class="like-action">
+          <button class:liked aria-label={liked ? 'Unlike' : 'Like'} aria-pressed={liked} on:click={() => void reactToNote(event)}><Heart size={18} fill={liked ? 'currentColor' : 'none'} /></button>
+          <button class="reaction-count" aria-label="Show likes" aria-expanded={likePopoverOpen} on:click={toggleLikePopover}>{counts.likes}</button>
+          {#if likePopoverOpen}
+            <div class="reaction-popover">
+              <strong>Liked by</strong>
+              {#if loadingLikeAuthors}
+                <span>Loading</span>
+              {:else if likeAuthors.length}
+                {#each likeAuthors as pubkey}
+                  <a href={`/profile/${pubkey}`}>{profileName(pubkey)}</a>
+                {/each}
+              {:else}
+                <span>No likes found yet</span>
+              {/if}
+            </div>
+          {/if}
+        </span>
         <button aria-label="Zap"><Zap size={18} /><span>{counts.zaps}</span></button>
         <button aria-label="Report" on:click={() => void reportNote(event)}><Flag size={17} /></button>
       </div>

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { SlidersHorizontal } from '@lucide/svelte';
-  import { feedMode, refreshFeed } from '$lib/stores/app';
+  import { feedMode, selectFeedMode } from '$lib/stores/app';
   import type { FeedMode } from '$lib/nostr/types';
   import CustomFeedDialog from './CustomFeedDialog.svelte';
   import FollowListDialog from './FollowListDialog.svelte';
@@ -16,8 +16,7 @@
 
   function select(key: FeedMode) {
     if (disabled) return;
-    feedMode.set(key);
-    void refreshFeed(key);
+    selectFeedMode(key);
   }
 
   let customDialogOpen = false;

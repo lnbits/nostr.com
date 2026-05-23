@@ -9,7 +9,7 @@
     Zap
   } from '@lucide/svelte';
   import { page } from '$app/stores';
-  import { session, startCompose } from '$lib/stores/app';
+  import { goHome, session, startCompose } from '$lib/stores/app';
   import ThemeToggle from './ThemeToggle.svelte';
 
   const navItems = [
@@ -31,7 +31,7 @@
 
 <aside class="left-nav" aria-label="Primary">
   <div class="left-nav-head">
-    <a class="left-logo" href="/" aria-label="Nostr home">nostr</a>
+    <a class="left-logo" href="/" aria-label="Nostr home" on:click={goHome}>nostr</a>
     <div class="nav-tools">
       <ThemeToggle />
     </div>
@@ -39,7 +39,7 @@
 
   <nav class="left-nav-list">
     {#each navItems as item}
-      <a class:active={isActive(item.href)} href={item.href}>
+      <a class:active={isActive(item.href)} href={item.href} on:click={item.href === '/' ? goHome : undefined}>
         <svelte:component this={item.icon} size={26} />
         <span>{item.label}</span>
       </a>

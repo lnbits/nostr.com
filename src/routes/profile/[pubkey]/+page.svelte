@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import { BellPlus, Check, Copy, Globe2, Pencil, Save, Upload, UserPlus, X } from '@lucide/svelte';
+  import { Check, Copy, Globe2, MessageCircle, Pencil, Save, Upload, UserPlus, X } from '@lucide/svelte';
   import { nip19 } from 'nostr-tools';
   import NoteCard from '$lib/components/NoteCard.svelte';
   import { events, mergeEvents, profiles, relays, saveProfile, session } from '$lib/stores/app';
@@ -19,6 +21,8 @@
     lud16: '',
     lud06: ''
   });
+  const initialProfileEventLimit = 72;
+  const profileEventPageLimit = 48;
 
   $: pubkey = normalizePubkey($page.params.pubkey ?? '');
   $: profile = $profiles[pubkey];
@@ -37,6 +41,10 @@
   let editorOpen = false;
   let draft: Profile = emptyProfile();
   let hydratedPubkey = '';
+  let profileLoadMoreSentinel: HTMLDivElement;
+  let profileObserver: IntersectionObserver | undefined;
+  let loadingMoreProfile = false;
+  let hasMoreProfile = true;
   let pictureInput: HTMLInputElement;
   let bannerInput: HTMLInputElement;
 
@@ -46,6 +54,17 @@
     hydratedPubkey = pubkey;
     void hydrateProfile(pubkey);
   }
+
+  onMount(() => {
+    profileObserver = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) void loadMoreProfileEvents();
+      },
+      { rootMargin: '360px 0px' }
+    );
+    if (profileLoadMoreSentinel) profileObserver.observe(profileLoadMoreSentinel);
+    return () => profileObserver?.disconnect();
+  });
 
   async function copyNpub() {
     await navigator.clipboard.writeText(npub);
@@ -67,13 +86,35 @@
   }
 
   async function hydrateProfile(nextPubkey: string) {
+    hasMoreProfile = true;
+    loadingMoreProfile = false;
     const [found, profileEvents] = await Promise.all([
       $profiles[nextPubkey] ? Promise.resolve([]) : fetchProfiles([nextPubkey], $relays).catch(() => []),
-      fetchProfileEvents(nextPubkey, $relays).catch(() => [])
+      fetchProfileEvents(nextPubkey, $relays, initialProfileEventLimit).catch(() => [])
     ]);
     const [profile] = found;
     if (profile) profiles.update((existing) => ({ ...existing, [profile.pubkey]: profile }));
     if (profileEvents.length) events.update((existing) => mergeEvents(profileEvents, existing));
+  }
+
+  async function loadMoreProfileEvents() {
+    if (!pubkey || loadingMoreProfile || !hasMoreProfile) return;
+    const oldest = oldestProfileTimestamp();
+    if (!oldest) return;
+
+    loadingMoreProfile = true;
+    try {
+      const nextEvents = await fetchProfileEvents(pubkey, $relays, profileEventPageLimit, { until: oldest - 1 }).catch(() => []);
+      if (nextEvents.length < profileEventPageLimit) hasMoreProfile = false;
+      if (nextEvents.length) events.update((existing) => mergeEvents(nextEvents, existing));
+    } finally {
+      loadingMoreProfile = false;
+    }
+  }
+
+  function oldestProfileTimestamp() {
+    if (!userEvents.length) return undefined;
+    return Math.min(...userEvents.map((event) => event.created_at));
   }
 
   async function uploadProfileMedia(file: File | undefined, target: 'picture' | 'banner') {
@@ -161,6 +202,10 @@
 </script>
 
 <section class="profile-hero">
+  {#if !$session}
+    <a class="info-back" href="/">← Feed</a>
+  {/if}
+
   <div class="profile-banner" style={`background-image: ${profile?.banner ? `url(${profile.banner})` : 'none'}`}></div>
 
   <div class="profile-card">
@@ -178,8 +223,8 @@
         </div>
         {#if !isOwnProfile}
           <div class="profile-actions">
-            <button><UserPlus size={18} /> Follow</button>
-            <button class="icon-button" aria-label="Notify"><BellPlus size={19} /></button>
+            <button disabled={!$session}><UserPlus size={18} /> Follow</button>
+            <button class="icon-button" disabled={!$session} aria-label="Message" on:click={() => void goto('/#messages')}><MessageCircle size={19} /></button>
           </div>
         {/if}
       </div>
@@ -287,4 +332,11 @@
   {:else}
     <div class="empty-state"><strong>No cached notes for this profile</strong><span>Refresh the global feed to fetch more events.</span></div>
   {/each}
+  <div class="load-more-sentinel profile-load-more-sentinel" bind:this={profileLoadMoreSentinel}>
+    {#if loadingMoreProfile}
+      <span>Loading older profile notes</span>
+    {:else if !hasMoreProfile && userEvents.length}
+      <span>End of profile notes</span>
+    {/if}
+  </div>
 </section>

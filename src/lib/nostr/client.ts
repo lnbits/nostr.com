@@ -8,13 +8,59 @@ import type { ContactListDetails, ContactListItem, CustomFeedSettings, DirectMes
 
 const pool = new SimplePool();
 const bunkerSigners = new Map<string, nip46.BunkerSigner>();
+type SubCloser = { close: (reason?: string) => void };
 
 export function activeRelayUrls(relays: RelayState[], intent: 'read' | 'write') {
-  return relays
+  const urls = relays
     .filter((relay) => relay.enabled && relay[intent])
     .sort((a, b) => b.score - a.score)
     .slice(0, intent === 'read' ? 8 : 3)
-    .map((relay) => relay.url);
+    .map((relay) => normalizeRelayUrl(relay.url))
+    .filter(Boolean);
+  return [...new Set(urls)];
+}
+
+export function normalizeRelayUrl(url: string) {
+  const trimmed = url.trim();
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'wss:' && parsed.protocol !== 'ws:') return '';
+    parsed.protocol = parsed.protocol.toLowerCase();
+    parsed.hostname = parsed.hostname.toLowerCase();
+    parsed.pathname = parsed.pathname.replace(/\/+$/, '');
+    parsed.search = '';
+    parsed.hash = '';
+    return parsed.toString().replace(/\/$/, '');
+  } catch {
+    return /^wss:\/\/[^ ]+\.[^ ]+/.test(trimmed) ? trimmed.replace(/\/+$/, '') : '';
+  }
+}
+
+function queryShortLived(relayUrls: string[], filter: Filter, maxWait = 5000) {
+  return new Promise<NostrEvent[]>((resolve) => {
+    const events: NostrEvent[] = [];
+    let settled = false;
+    let closer: SubCloser | undefined;
+    const timeout = setTimeout(() => finish(), maxWait + 250);
+
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      closer?.close();
+      resolve(events);
+    };
+
+    closer = pool.subscribeManyEose(relayUrls, filter, {
+      maxWait,
+      onevent(event) {
+        events.push(event as NostrEvent);
+      },
+      onclose() {
+        finish();
+      }
+    });
+  });
 }
 
 export function createGuestSession(): Session {
@@ -99,8 +145,8 @@ export function isFamilySafeEvent(event: NostrEvent) {
 
 export function isMachineGeneratedContent(content: string) {
   const trimmed = content.trim();
-  if (!trimmed || trimmed.length < 80) return false;
   if (isTransportPayload(trimmed)) return true;
+  if (!trimmed) return false;
   if (!/^[{[]/.test(trimmed) || !/[}\]]$/.test(trimmed)) return false;
 
   try {
@@ -109,10 +155,25 @@ export function isMachineGeneratedContent(content: string) {
     const keys = Object.keys(parsed as Record<string, unknown>);
     const machineKeys = ['protocol', 'action', 'pipeline_segment', 'session_entropy', 'system_telemetry', 'devicePk', 'swarm', 'service_metadata'];
     const machineKeyHits = keys.filter((key) => machineKeys.includes(key)).length;
-    return machineKeyHits >= 2 || isBotMetadataPayload(parsed) || (keys.length >= 5 && machineKeyHits >= 1);
+    return isPureJsonNotePayload(parsed) || machineKeyHits >= 2 || isMachineJsonPayload(parsed) || isBotMetadataPayload(parsed) || (keys.length >= 5 && machineKeyHits >= 1);
   } catch {
     return false;
   }
+}
+
+function isPureJsonNotePayload(parsed: unknown) {
+  return typeof parsed === 'object' && parsed !== null;
+}
+
+function isMachineJsonPayload(parsed: unknown) {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+  const record = parsed as Record<string, unknown>;
+  const type = typeof record.type === 'string' ? record.type.toLowerCase() : '';
+  if (/^(swarm|device|service|telemetry|protocol|identity)[_-]/.test(type)) return true;
+  if (type.includes('swarm') || type.includes('telemetry') || type.includes('device_record')) return true;
+  if ('record' in record && typeof record.record === 'string' && isMachineGeneratedContent(record.record)) return true;
+  if ('content' in record && typeof record.content === 'string' && isMachineGeneratedContent(record.content)) return true;
+  return false;
 }
 
 function isBotMetadataPayload(parsed: unknown) {
@@ -171,6 +232,30 @@ export function limitConsecutiveAuthors(events: NostrEvent[], maxConsecutive = 2
   }
 
   return output;
+}
+
+export function limitCryptoTopicDensity(events: NostrEvent[], minGap = 10) {
+  const output: NostrEvent[] = [];
+  let postsSinceCryptoTopic = minGap;
+
+  for (const event of events) {
+    if (isCryptoTopicEvent(event)) {
+      if (postsSinceCryptoTopic < minGap) continue;
+      postsSinceCryptoTopic = 0;
+    } else {
+      postsSinceCryptoTopic += 1;
+    }
+    output.push(event);
+  }
+
+  return output;
+}
+
+function isCryptoTopicEvent(event: NostrEvent) {
+  const text = event.content.toLowerCase();
+  const limitedTopics = ['crypto', 'bitcoin', 'fintech', 'node', 'z-cash', 'zacsh', 'monero'];
+  if (limitedTopics.some((topic) => containsBlockedPhrase(text, topic))) return true;
+  return event.tags.some((tag) => tag[0] === 't' && tag[1] && limitedTopics.includes(tag[1].replace(/^#/, '').toLowerCase()));
 }
 
 function flushDeferred(output: NostrEvent[], deferred: NostrEvent[], maxConsecutive: number) {
@@ -238,35 +323,93 @@ export async function fetchFeed(
   if (options.until) base.until = options.until;
   const filters = await feedFiltersForMode(mode, base, follows, settings, since, relayUrls, options);
 
-  const events = verifiedRelayEvents((await Promise.all(filters.map((filter) => pool.querySync(relayUrls, filter, { maxWait: 5000 })))).flat() as NostrEvent[]);
+  const events = verifiedRelayEvents((await Promise.all(filters.map((filter) => queryShortLived(relayUrls, filter, 5000)))).flat());
   const clean = dedupeEvents(topLevelFeedEvents(filterSpam(events)));
-  const output = mode === 'global' ? limitConsecutiveAuthors(clean, 2) : clean;
+  const output = mode === 'global' ? limitCryptoTopicDensity(limitConsecutiveAuthors(clean, 2), 10) : clean;
   await cacheEvents(output);
   return output;
+}
+
+export async function subscribeFeed(
+  mode: FeedMode,
+  relays = defaultRelays,
+  follows: string[] = [],
+  settings: CustomFeedSettings = { friendsOfFriends: true, keywords: [] },
+  options: FeedQueryOptions = {},
+  onEvent: (event: NostrEvent) => void
+) {
+  if ((mode === 'follow' || mode === 'custom') && !follows.length) return undefined;
+
+  const relayUrls = activeRelayUrls(relays, 'read');
+  if (!relayUrls.length) return undefined;
+
+  const base: Filter = { kinds: [1] };
+  const since = options.since ?? Math.floor(Date.now() / 1000);
+  const filters = await feedFiltersForMode(mode, base, follows, settings, since, relayUrls, options);
+  const requests = filters.flatMap((filter) => relayUrls.map((url) => ({ url, filter })));
+
+  return pool.subscribeMap(requests, {
+    label: 'main-feed-live',
+    onevent(event) {
+      const [clean] = topLevelFeedEvents(filterSpam(verifiedRelayEvents([event as NostrEvent])));
+      if (clean) {
+        void cacheEvents([clean]);
+        onEvent(clean);
+      }
+    }
+  });
 }
 
 export async function fetchMissingEvents(ids: string[], relays = defaultRelays) {
   if (!ids.length) return [];
   const relayUrls = activeRelayUrls(relays, 'read');
-  const events = verifiedRelayEvents((await pool.querySync(relayUrls, { ids }, { maxWait: 5000 })) as NostrEvent[]);
+  const events = verifiedRelayEvents(await queryShortLived(relayUrls, { ids }, 5000));
   const clean = dedupeEvents(events);
   await cacheEvents(clean);
   return clean;
 }
 
-export async function fetchProfileEvents(pubkey: string, relays = defaultRelays, limit = 36) {
-  if (!/^[0-9a-f]{64}$/i.test(pubkey)) return [];
+export async function fetchThreadReplies(rootId: string, relays = defaultRelays, limit = 80) {
+  if (!/^[0-9a-f]{64}$/i.test(rootId)) return [];
   const relayUrls = activeRelayUrls(relays, 'read');
-  const events = verifiedRelayEvents((await pool.querySync(relayUrls, { kinds: [1], authors: [pubkey], limit }, { maxWait: 5000 })) as NostrEvent[]);
+  const events = verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [1], '#e': [rootId], limit }, 5000));
   const clean = dedupeEvents(filterSpam(events));
   await cacheEvents(clean);
   return clean;
 }
 
+export async function fetchProfileEvents(pubkey: string, relays = defaultRelays, limit = 36, options: Pick<FeedQueryOptions, 'until' | 'since'> = {}) {
+  if (!/^[0-9a-f]{64}$/i.test(pubkey)) return [];
+  const relayUrls = activeRelayUrls(relays, 'read');
+  const filter: Filter = { kinds: [1], authors: [pubkey], limit };
+  if (options.until) filter.until = options.until;
+  if (options.since) filter.since = options.since;
+  const events = verifiedRelayEvents(await queryShortLived(relayUrls, filter, 5000));
+  const clean = dedupeEvents(filterSpam(events));
+  await cacheEvents(clean);
+  return clean;
+}
+
+export async function fetchLikeAuthors(eventId: string, relays = defaultRelays, limit = 32) {
+  if (!/^[0-9a-f]{64}$/i.test(eventId)) return [];
+  const relayUrls = activeRelayUrls(relays, 'read');
+  const reactions = dedupeEvents(verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [7], '#e': [eventId], limit }, 4000)));
+  return [
+    ...new Set(
+      reactions
+        .filter((event) => {
+          const reaction = event.content.trim();
+          return !reaction || reaction === '+';
+        })
+        .map((event) => event.pubkey)
+    )
+  ];
+}
+
 export async function fetchProfiles(pubkeys: string[], relays = defaultRelays) {
   if (!pubkeys.length) return [];
   const relayUrls = activeRelayUrls(relays, 'read');
-  const events = verifiedRelayEvents((await pool.querySync(relayUrls, { kinds: [0], authors: pubkeys, limit: pubkeys.length }, { maxWait: 4000 })) as NostrEvent[]);
+  const events = verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [0], authors: pubkeys, limit: pubkeys.length }, 4000));
   const profiles = parseProfileEvents(events);
   await Promise.all(profiles.map(cacheProfile));
   return profiles;
@@ -276,7 +419,7 @@ export async function searchProfiles(query: string, relays = defaultRelays) {
   const search = query.trim().replace(/^@/, '');
   if (search.length < 2) return [];
   const relayUrls = activeRelayUrls(relays, 'read');
-  const events = verifiedRelayEvents((await pool.querySync(relayUrls, { kinds: [0], search, limit: 12 }, { maxWait: 4000 })) as NostrEvent[]);
+  const events = verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [0], search, limit: 12 }, 4000));
   const profiles = parseProfileEvents(events);
   await Promise.all(profiles.map(cacheProfile));
   return profiles;
@@ -289,10 +432,10 @@ export async function fetchDirectMessages(session: Session, relays = defaultRela
   const nip17Filter: Filter = { kinds: [1059], '#p': [session.pubkey], limit: 80 };
   const events = verifiedRelayEvents(
     (await Promise.all([
-      pool.querySync(relayUrls, incomingFilter, { maxWait: 5000 }),
-      pool.querySync(relayUrls, outgoingFilter, { maxWait: 5000 }),
-      pool.querySync(relayUrls, nip17Filter, { maxWait: 5000 })
-    ])).flat() as NostrEvent[]
+      queryShortLived(relayUrls, incomingFilter, 5000),
+      queryShortLived(relayUrls, outgoingFilter, 5000),
+      queryShortLived(relayUrls, nip17Filter, 5000)
+    ])).flat()
   );
   const messages = await Promise.all(
     dedupeEvents(events).map((event) => (event.kind === 1059 ? toNip17DirectMessage(event, session) : toNip04DirectMessage(event, session)))
@@ -317,7 +460,7 @@ export async function fetchEventStats(ids: string[], relays = defaultRelays) {
   Object.entries(countStats).forEach(([id, stat]) => (stats[id] = { ...stats[id], ...stat }));
   const countedIds = new Set(Object.keys(countStats));
 
-  const events = dedupeEvents(verifiedRelayEvents((await Promise.all(filters.map((filter) => pool.querySync(relayUrls, filter, { maxWait: 4500 })))).flat() as NostrEvent[]));
+  const events = dedupeEvents(verifiedRelayEvents((await Promise.all(filters.map((filter) => queryShortLived(relayUrls, filter, 4500)))).flat()));
   const seen = {
     replies: new Set<string>(),
     reposts: new Set<string>(),
@@ -357,7 +500,7 @@ export async function fetchContactList(pubkey: string, relays = defaultRelays) {
 
 export async function fetchContactListDetails(pubkey: string, relays = defaultRelays): Promise<ContactListDetails> {
   const relayUrls = activeRelayUrls(relays, 'read');
-  const events = verifiedRelayEvents((await pool.querySync(relayUrls, { kinds: [3], authors: [pubkey], limit: 1 }, { maxWait: 4000 })) as NostrEvent[]).sort(
+  const events = verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [3], authors: [pubkey], limit: 1 }, 4000)).sort(
     (a, b) => b.created_at - a.created_at
   );
   return extractContactListDetails(events[0]);
@@ -365,7 +508,7 @@ export async function fetchContactListDetails(pubkey: string, relays = defaultRe
 
 export async function fetchRelayListMetadata(pubkey: string, relays = defaultRelays) {
   const relayUrls = activeRelayUrls(relays, 'read');
-  const [event] = verifiedRelayEvents((await pool.querySync(relayUrls, { kinds: [10002], authors: [pubkey], limit: 1 }, { maxWait: 4000 })) as NostrEvent[]).sort(
+  const [event] = verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [10002], authors: [pubkey], limit: 1 }, 4000)).sort(
     (a, b) => b.created_at - a.created_at
   );
   if (!event) return [];
@@ -671,7 +814,7 @@ async function customFeedFilters(base: Filter, follows: string[], settings: Cust
 }
 
 async function fetchFriendsOfFriends(follows: string[], relayUrls: string[]) {
-  const contactEvents = verifiedRelayEvents((await pool.querySync(relayUrls, { kinds: [3], authors: follows, limit: Math.min(120, follows.length) }, { maxWait: 4500 })) as NostrEvent[]);
+  const contactEvents = verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [3], authors: follows, limit: Math.min(120, follows.length) }, 4500));
   const directFollows = new Set(follows);
   const pubkeys = new Set<string>();
   for (const event of contactEvents) {
@@ -682,7 +825,7 @@ async function fetchFriendsOfFriends(follows: string[], relayUrls: string[]) {
 
 async function fetchNip17InboxRelays(pubkey: string, relays = defaultRelays) {
   const relayUrls = activeRelayUrls(relays, 'read');
-  const [event] = verifiedRelayEvents((await pool.querySync(relayUrls, { kinds: [10050], authors: [pubkey], limit: 1 }, { maxWait: 4000 })) as NostrEvent[]).sort(
+  const [event] = verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [10050], authors: [pubkey], limit: 1 }, 4000)).sort(
     (a, b) => b.created_at - a.created_at
   );
   const inboxes = event?.tags.filter((tag) => tag[0] === 'relay' && tag[1]).flatMap((tag) => sanitizeRelayHints([tag[1]])) ?? [];
@@ -707,7 +850,7 @@ export function extractContactListDetails(event?: NostrEvent): ContactListDetail
 }
 
 function sanitizeRelayHints(urls: string[]) {
-  return [...new Set(urls.map((url) => url.trim()).filter((url) => /^wss:\/\/[^ ]+\.[^ ]+/.test(url)))];
+  return [...new Set(urls.map(normalizeRelayUrl).filter(Boolean))];
 }
 
 function referencedEventIds(event: NostrEvent, ids: string[]) {

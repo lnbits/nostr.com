@@ -103,7 +103,11 @@
 
 <section class="info-view">
   <header class="info-head">
-    <h1>Info</h1>
+    <a class="info-back" href="/" aria-label="Back to feed">← Feed</a>
+    <div class="info-title-row">
+      <h1>Info</h1>
+      <img src="/robot.png" alt="" class="info-robot" />
+    </div>
     <p>
       Nostr is a completely free and open-source protocol that nobody controls. It enables
       social media and many other applications without creating walled gardens or centralized
@@ -115,6 +119,7 @@
       freedom to move between clients is what makes Nostr a commons, not a walled garden that
       can be controlled. You can even build your own client!
     </p>
+    <p>This Nostr social client is just one of the kazillion clients that exist.</p>
     <p>
       Learn more at <a href="https://nostr.org" target="_blank" rel="noreferrer">nostr.org</a>
     </p>

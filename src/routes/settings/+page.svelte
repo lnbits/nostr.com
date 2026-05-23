@@ -1,6 +1,7 @@
 <script lang="ts">
   import { LogOut, Moon, Plus, Save, SlidersHorizontal, Sun, Trash2 } from '@lucide/svelte';
   import { customFeedSettings, relays, session, signOut } from '$lib/stores/app';
+  import { normalizeRelayUrl } from '$lib/nostr/client';
   import { setThemeMode, themeMode, type ThemeMode } from '$lib/stores/theme';
 
   const themes: { mode: ThemeMode; label: string; icon: typeof Sun }[] = [
@@ -11,8 +12,12 @@
   let newRelay = 'wss://';
 
   function addRelay() {
-    if (!newRelay.startsWith('wss://')) return;
-    relays.update((items) => [...items, { url: newRelay, enabled: true, read: true, write: true, score: 50 }]);
+    const url = normalizeRelayUrl(newRelay);
+    if (!url) return;
+    relays.update((items) => {
+      const existing = new Set(items.map((relay) => normalizeRelayUrl(relay.url) || relay.url));
+      return existing.has(url) ? items : [...items, { url, enabled: true, read: true, write: true, score: 50 }];
+    });
     newRelay = 'wss://';
   }
 </script>

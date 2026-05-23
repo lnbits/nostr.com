@@ -1,10 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { tick } from 'svelte';
   import { page } from '$app/stores';
+  import { ArrowUp } from '@lucide/svelte';
   import InfoView from '$lib/components/InfoView.svelte';
   import MessagesView from '$lib/components/MessagesView.svelte';
   import NoteCard from '$lib/components/NoteCard.svelte';
-  import RightRail from '$lib/components/RightRail.svelte';
   import {
     events,
     feedMode,
@@ -14,18 +15,34 @@
     loadingMoreFeed,
     loadNewerFeed,
     loadMoreFeed,
+    pendingNewerEvents,
     profiles,
+    revealNewerFeed,
     relays,
-    session
+    session,
+    activeHashtag
   } from '$lib/stores/app';
+  import { topLevelFeedEvents } from '$lib/nostr/client';
 
   let loadMoreSentinel: HTMLDivElement;
   let observer: IntersectionObserver | undefined;
   let previousScrollY = 0;
   let loadOlderArmed = false;
-  let lastNewerLoadAt = 0;
+  let pullStartY = 0;
+  let pullDistance = 0;
+  let wheelPullRaw = 0;
+  let wheelPullTimeout: ReturnType<typeof setTimeout> | undefined;
+  let pullingNewer = false;
+  let pullStartedAtTop = false;
+  let hideNewerBubble = false;
+  let hideNewerBubbleTimeout: ReturnType<typeof setTimeout> | undefined;
+  const pullThreshold = 78;
+  const newerBubbleCooldownMs = 5000;
   $: activeHash = $page.url.hash;
   $: hasReadRelays = $relays.some((relay) => relay.enabled && relay.read);
+  $: feedEvents = hashtagFilteredEvents(topLevelFeedEvents($events), $activeHashtag);
+  $: pullProgress = Math.min(1, pullDistance / pullThreshold);
+  $: showNewerBubble = $pendingNewerEvents.length && !pullingNewer && !hideNewerBubble && !pullStartedAtTop && pullDistance <= 0;
   $: emptyMessage = !hasReadRelays
     ? 'Please connect to relays'
     : $session && ($feedMode === 'follow' || $feedMode === 'custom') && !$follows.length
@@ -38,7 +55,7 @@
       ([entry]) => {
         if (entry.isIntersecting && loadOlderArmed && !activeHash) {
           loadOlderArmed = false;
-          void loadMoreFeed(true);
+          void loadMoreFeed();
         }
       },
       { rootMargin: '320px 0px' }
@@ -47,51 +64,148 @@
 
     const onScroll = () => {
       const nextScrollY = window.scrollY;
-      const scrollingUp = nextScrollY < previousScrollY;
-      if (nextScrollY > previousScrollY) loadOlderArmed = true;
-      previousScrollY = nextScrollY;
-      if (scrollingUp && nextScrollY < 140 && $feedMode === 'global' && !activeHash) {
-        const now = Date.now();
-        if (now - lastNewerLoadAt > 1200) {
-          lastNewerLoadAt = now;
-          void loadNewerFeed();
+      if (nextScrollY > previousScrollY) {
+        loadOlderArmed = true;
+        if (!activeHash && isNearPageBottom()) {
+          loadOlderArmed = false;
+          void loadMoreFeed();
         }
       }
+      previousScrollY = nextScrollY;
     };
     addEventListener('scroll', onScroll, { passive: true });
     return () => {
       observer?.disconnect();
+      clearTimeout(hideNewerBubbleTimeout);
+      clearTimeout(wheelPullTimeout);
       removeEventListener('scroll', onScroll);
     };
   });
+
+  async function revealBufferedNewer(preservePosition = true) {
+    const beforeHeight = document.documentElement.scrollHeight;
+    revealNewerFeed();
+    await tick();
+    const heightDelta = document.documentElement.scrollHeight - beforeHeight;
+    if (preservePosition && heightDelta > 0) window.scrollBy({ top: heightDelta, left: 0, behavior: 'instant' });
+  }
+
+  function startPullForNewer(event: TouchEvent) {
+    if (!canPullForNewer()) return;
+    pullStartedAtTop = true;
+    pullStartY = event.touches[0]?.clientY ?? 0;
+    pullDistance = 0;
+  }
+
+  function updatePullForNewer(event: TouchEvent) {
+    if (!pullStartedAtTop) return;
+    const touch = event.touches[0];
+    if (!touch) return;
+    const distance = touch.clientY - pullStartY;
+    if (distance <= 0 || window.scrollY > 2) {
+      pullDistance = 0;
+      return;
+    }
+    event.preventDefault();
+    pullDistance = elasticPullDistance(distance);
+  }
+
+  function wheelPullForNewer(event: WheelEvent) {
+    if (!canPullForNewer() || event.deltaY >= 0) return;
+    event.preventDefault();
+    pullStartedAtTop = true;
+    wheelPullRaw = Math.min(190, wheelPullRaw + Math.abs(event.deltaY));
+    pullDistance = elasticPullDistance(wheelPullRaw);
+    clearTimeout(wheelPullTimeout);
+    wheelPullTimeout = setTimeout(() => void finishPullForNewer(), 150);
+  }
+
+  async function finishPullForNewer() {
+    if (!pullStartedAtTop) return;
+    const shouldTrigger = pullDistance >= pullThreshold;
+    pullStartedAtTop = false;
+    pullDistance = 0;
+    wheelPullRaw = 0;
+    hideFloatingNewerBubble();
+    if (!shouldTrigger || pullingNewer || activeHash || $feedMode !== 'global') return;
+
+    pullingNewer = true;
+    try {
+      if ($pendingNewerEvents.length) {
+        await revealBufferedNewer(false);
+        return;
+      }
+      const fetched = await loadNewerFeed();
+      if (fetched?.length) await revealBufferedNewer(false);
+    } finally {
+      pullingNewer = false;
+    }
+  }
+
+  function canPullForNewer() {
+    return !activeHash && $feedMode === 'global' && window.scrollY <= 2;
+  }
+
+  function elasticPullDistance(distance: number) {
+    return Math.min(124, distance * 0.52 + Math.sqrt(distance) * 3.4);
+  }
+
+  function hideFloatingNewerBubble() {
+    hideNewerBubble = true;
+    clearTimeout(hideNewerBubbleTimeout);
+    hideNewerBubbleTimeout = setTimeout(() => {
+      hideNewerBubble = false;
+    }, newerBubbleCooldownMs);
+  }
+
+  function isNearPageBottom() {
+    return window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 360;
+  }
+
+  function hashtagFilteredEvents(items: typeof $events, tag: string) {
+    const normalized = tag.trim().replace(/^#/, '').toLowerCase();
+    if (!normalized) return items;
+    return items.filter((event) => {
+      if (event.tags.some((item) => item[0] === 't' && item[1]?.replace(/^#/, '').toLowerCase() === normalized)) return true;
+      return new RegExp(`(^|\\s)#${normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(event.content);
+    });
+  }
 </script>
 
-{#if $session}
-  {#if activeHash === '#messages'}
-    <MessagesView />
-  {:else if activeHash === '#info'}
-    <InfoView />
-  {:else}
-    {@render Timeline()}
-  {/if}
+{#if activeHash === '#messages'}
+  <MessagesView />
+{:else if activeHash === '#info'}
+  <InfoView />
 {:else}
-  <div class="shell">
-    {#if activeHash === '#messages'}
-      <MessagesView />
-    {:else if activeHash === '#info'}
-      <InfoView />
-    {:else}
-      {@render Timeline()}
-    {/if}
-    <RightRail />
-  </div>
+  {@render Timeline()}
 {/if}
 
 {#snippet Timeline()}
-  <section class="timeline">
+  <section
+    class="timeline"
+    class:pulling-newer={pullStartedAtTop}
+    class:pull-ready={pullDistance >= pullThreshold}
+    aria-label="Timeline"
+    style={`--pull-progress: ${pullProgress}; --pull-distance: ${pullDistance}px;`}
+    on:touchstart={startPullForNewer}
+    on:touchmove={updatePullForNewer}
+    on:touchend={finishPullForNewer}
+    on:touchcancel={finishPullForNewer}
+    on:wheel={wheelPullForNewer}
+  >
+    <div class="pull-newer-zone" aria-hidden="true">
+      <ArrowUp size={18} />
+    </div>
+    {#if showNewerBubble}
+      <div class="newer-feed-bubble-wrap">
+        <button class="newer-feed-bubble" on:click={() => void revealBufferedNewer()} title="Scroll up to reveal new notes" aria-label={`Scroll up to reveal ${$pendingNewerEvents.length} new notes`}>
+          <ArrowUp size={20} />
+        </button>
+      </div>
+    {/if}
     <section class="feed-list" aria-label="Feed">
-      {#if $events.length}
-        {#each $events as event (event.id)}
+      {#if feedEvents.length}
+        {#each feedEvents as event (event.id)}
           <NoteCard {event} profile={$profiles[event.pubkey]} />
         {/each}
       {:else if $loadingFeed}
@@ -108,8 +222,8 @@
     <div class="load-more-sentinel" bind:this={loadMoreSentinel}>
       {#if $loadingMoreFeed}
         <span>Loading more notes</span>
-      {:else if !$hasMoreFeed && $events.length}
-        <span>End of cached relay results</span>
+      {:else if $hasMoreFeed && feedEvents.length}
+        <span>Scroll down for older notes</span>
       {/if}
     </div>
   </section>

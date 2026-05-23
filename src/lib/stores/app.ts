@@ -11,10 +11,13 @@ import {
   fetchProfiles,
   fetchRelayInfoDocuments,
   fetchRelayListMetadata,
+  filterSpam,
+  limitCryptoTopicDensity,
   limitConsecutiveAuthors,
   loginWithBunker,
   loginWithNip07,
   loginWithPrivateKey,
+  normalizeRelayUrl,
   publishContactList,
   publishNote,
   publishProfile,
@@ -23,6 +26,7 @@ import {
   publishReport,
   publishRepost,
   resolveNip05Profile,
+  subscribeFeed,
   topLevelFeedEvents
 } from '$lib/nostr/client';
 import type { ContactListItem, CustomFeedSettings, DirectMessage, EventStats, FeedMode, NostrEvent, NotificationItem, Profile, RelayState, Session } from '$lib/nostr/types';
@@ -31,12 +35,14 @@ const sessionStorageKey = 'nostr-session';
 const customFeedStorageKey = 'nostr-custom-feed-settings';
 const initialFeedLimit = 18;
 const pageFeedLimit = 24;
+const maxFeedEvents = 240;
 
 const initialSession = browser ? readStoredSession() : null;
 const initialCustomFeedSettings = browser ? readStoredCustomFeedSettings() : defaultCustomFeedSettings;
 
 export const feedMode = writable<FeedMode>('global');
 export const events = writable<NostrEvent[]>([]);
+export const pendingNewerEvents = writable<NostrEvent[]>([]);
 export const profiles = writable<Record<string, Profile>>({});
 export const relays = writable<RelayState[]>(defaultRelays);
 export const session = writable<Session | null>(initialSession);
@@ -64,6 +70,8 @@ let currentMode: FeedMode = 'global';
 let currentHashtag = '';
 let currentContactItems: ContactListItem[] = [];
 let oldestFeedTimestamp: number | undefined;
+let liveFeedSub: { close: (reason?: string) => void } | undefined;
+let liveFeedToken = 0;
 const requestedStats = new Set<string>();
 
 relays.subscribe((value) => (currentRelays = value));
@@ -82,7 +90,7 @@ export async function bootstrap() {
   addEventListener('offline', () => online.set(false));
 
   const [cachedEvents, cachedProfiles] = await Promise.all([getCachedEvents(initialFeedLimit), getCachedProfiles()]);
-  const cachedTopLevelEvents = topLevelFeedEvents(cachedEvents);
+  const cachedTopLevelEvents = topLevelFeedEvents(filterSpam(cachedEvents));
   events.set(cachedTopLevelEvents);
   oldestFeedTimestamp = getOldestTimestamp(cachedTopLevelEvents);
   profiles.set(Object.fromEntries(cachedProfiles.map((profile) => [profile.pubkey, profile])));
@@ -96,9 +104,11 @@ export async function refreshFeed(mode = currentMode) {
   hasMoreFeed.set(true);
   oldestFeedTimestamp = undefined;
   requestedStats.clear();
+  pendingNewerEvents.set([]);
 
   if ((mode === 'follow' || mode === 'custom') && !currentFollows.length) {
     events.set([]);
+    stopLiveFeed();
     loadingFeed.set(false);
     return;
   }
@@ -109,6 +119,7 @@ export async function refreshFeed(mode = currentMode) {
     oldestFeedTimestamp = getOldestTimestamp(nextEvents);
     void refreshEventStats(nextEvents.map((event) => event.id));
     void hydrateMissingProfiles(nextEvents, 60);
+    void restartLiveFeed(getNewestTimestamp(nextEvents));
   } finally {
     loadingFeed.set(false);
   }
@@ -120,7 +131,7 @@ export async function loadNewerFeed() {
   loadingNewerFeed.subscribe((value) => (loading = value))();
   if (loading) return;
 
-  const newestTimestamp = getNewestTimestamp(getStoreSnapshot(events));
+  const newestTimestamp = getNewestTimestamp(feedEventsForActiveHashtag([...getStoreSnapshot(events), ...getStoreSnapshot(pendingNewerEvents)]));
   if (!newestTimestamp) return;
 
   loadingNewerFeed.set(true);
@@ -130,17 +141,63 @@ export async function loadNewerFeed() {
       since: newestTimestamp + 1,
       hashtag: currentHashtag
     });
-    if (!nextEvents.length) return;
-    events.update((existing) => {
-      const merged = mergeEvents(nextEvents, existing);
-      oldestFeedTimestamp = getOldestTimestamp(merged);
-      return merged;
-    });
+    if (!nextEvents.length) return [];
+    pendingNewerEvents.update((existing) => mergeEvents(nextEvents, existing));
     void refreshEventStats(nextEvents.map((event) => event.id));
     void hydrateMissingProfiles(nextEvents, 60);
+    return nextEvents;
   } finally {
     loadingNewerFeed.set(false);
   }
+}
+
+export function revealNewerFeed() {
+  const pending = getStoreSnapshot(pendingNewerEvents);
+  if (!pending.length) return;
+  pendingNewerEvents.set([]);
+  events.update((existing) => {
+    const merged = mergeEvents(pending, existing);
+    oldestFeedTimestamp = getOldestTimestamp(feedEventsForActiveHashtag(merged));
+    return merged;
+  });
+}
+
+function stopLiveFeed() {
+  liveFeedToken += 1;
+  liveFeedSub?.close('restarting main feed subscription');
+  liveFeedSub = undefined;
+}
+
+async function restartLiveFeed(newestTimestamp?: number) {
+  const token = liveFeedToken + 1;
+  stopLiveFeed();
+  liveFeedToken = token;
+
+  if ((currentMode === 'follow' || currentMode === 'custom') && !currentFollows.length) return;
+
+  const sub = await subscribeFeed(
+    currentMode,
+    currentRelays,
+    currentFollows,
+    currentSettings,
+    { since: newestTimestamp ? newestTimestamp + 1 : Math.floor(Date.now() / 1000), hashtag: currentHashtag },
+    (event) => {
+      if (token !== liveFeedToken || isKnownFeedEvent(event.id)) return;
+      pendingNewerEvents.update((existing) => mergeEvents([event], existing));
+      void refreshEventStats([event.id]);
+      void hydrateMissingProfiles([event], 8);
+    }
+  ).catch(() => undefined);
+
+  if (token !== liveFeedToken) {
+    sub?.close('stale main feed subscription');
+    return;
+  }
+  liveFeedSub = sub;
+}
+
+function isKnownFeedEvent(id: string) {
+  return getStoreSnapshot(events).some((event) => event.id === id) || getStoreSnapshot(pendingNewerEvents).some((event) => event.id === id);
 }
 
 export async function loadMoreFeed(force = false) {
@@ -152,20 +209,25 @@ export async function loadMoreFeed(force = false) {
 
   loadingMoreFeed.set(true);
   try {
-    const olderThan = oldestFeedTimestamp ? oldestFeedTimestamp - 1 : undefined;
+    const currentOldest = getOldestTimestamp(feedEventsForActiveHashtag(getStoreSnapshot(events))) ?? oldestFeedTimestamp;
+    const olderThan = currentOldest ? currentOldest - 1 : undefined;
     const nextEvents = await fetchFeed(currentMode, currentRelays, currentFollows, currentSettings, {
       limit: pageFeedLimit,
       until: olderThan,
       hashtag: currentHashtag
     });
-    if (nextEvents.length < pageFeedLimit) hasMoreFeed.set(false);
-    else hasMoreFeed.set(true);
-    if (!nextEvents.length) return;
-    const nextOldest = getOldestTimestamp(nextEvents);
-    if (nextOldest !== undefined) oldestFeedTimestamp = oldestFeedTimestamp === undefined ? nextOldest : Math.min(oldestFeedTimestamp, nextOldest);
-    events.update((existing) => mergeEvents(nextEvents, existing));
-    void refreshEventStats(nextEvents.map((event) => event.id));
-    void hydrateMissingProfiles(nextEvents, 40);
+    const existingIds = new Set(getStoreSnapshot(events).map((event) => event.id));
+    const freshEvents = nextEvents.filter((event) => !existingIds.has(event.id));
+    if (!freshEvents.length) {
+      hasMoreFeed.set(true);
+      return;
+    }
+    hasMoreFeed.set(true);
+    const nextOldest = getOldestTimestamp(freshEvents);
+    if (nextOldest !== undefined) oldestFeedTimestamp = currentOldest === undefined ? nextOldest : Math.min(currentOldest, nextOldest);
+    events.update((existing) => mergeEvents(freshEvents, existing));
+    void refreshEventStats(freshEvents.map((event) => event.id));
+    void hydrateMissingProfiles(freshEvents, 40);
   } finally {
     loadingMoreFeed.set(false);
   }
@@ -184,6 +246,18 @@ export async function refreshEventStats(ids: string[]) {
 
 export function filterByHashtag(tag: string) {
   activeHashtag.set(tag.trim().replace(/^#/, '').toLowerCase());
+  feedMode.set('global');
+  void refreshFeed('global');
+}
+
+export function selectFeedMode(mode: FeedMode) {
+  activeHashtag.set('');
+  feedMode.set(mode);
+  void refreshFeed(mode);
+}
+
+export function goHome() {
+  activeHashtag.set('');
   void refreshFeed(currentMode);
 }
 
@@ -333,7 +407,8 @@ export function mergeEvents(incoming: NostrEvent[], existing: NostrEvent[]) {
   const byId = new Map<string, NostrEvent>();
   [...existing, ...incoming].forEach((event) => byId.set(event.id, event));
   const merged = [...byId.values()].sort((a, b) => b.created_at - a.created_at);
-  return currentMode === 'global' ? limitConsecutiveAuthors(merged, 2) : merged;
+  const limited = currentMode === 'global' ? limitCryptoTopicDensity(limitConsecutiveAuthors(merged, 2), 10) : merged;
+  return limited.slice(0, maxFeedEvents);
 }
 
 function getOldestTimestamp(items: NostrEvent[]) {
@@ -344,6 +419,18 @@ function getOldestTimestamp(items: NostrEvent[]) {
 function getNewestTimestamp(items: NostrEvent[]) {
   if (!items.length) return undefined;
   return Math.max(...items.map((event) => event.created_at));
+}
+
+function feedEventsForActiveHashtag(items: NostrEvent[]) {
+  if (!currentHashtag) return items;
+  return items.filter((event) => eventHasHashtag(event, currentHashtag));
+}
+
+function eventHasHashtag(event: NostrEvent, tag: string) {
+  const normalized = tag.trim().replace(/^#/, '').toLowerCase();
+  if (!normalized) return true;
+  if (event.tags.some((item) => item[0] === 't' && item[1]?.replace(/^#/, '').toLowerCase() === normalized)) return true;
+  return new RegExp(`(^|\\s)#${normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(event.content);
 }
 
 async function hydrateMissingProfiles(nextEvents: NostrEvent[], limit = 40) {
@@ -446,17 +533,14 @@ async function hydrateSignedInFeedContext(currentSession: Session) {
 async function hydrateGuestFeedContext() {
   const requestedMode = requestedFeedMode();
   const profile = await resolveNip05Profile(defaultGuestNip05).catch(() => null);
-  if (!profile) {
-    feedMode.set('global');
-    return;
+  if (profile) {
+    mergeRelayHints(profile.relayHints, 96);
+    const relayList = await fetchRelayListMetadata(profile.pubkey, currentRelays).catch(() => []);
+    mergeRelayHints(relayList.map((relay) => relay.url), 90);
+    const contacts = await fetchContactListDetails(profile.pubkey, currentRelays).catch(() => ({ pubkeys: [], relayHints: [], items: [] }));
+    mergeRelayHints(contacts.relayHints, 74);
   }
-
-  mergeRelayHints(profile.relayHints, 96);
-  const relayList = await fetchRelayListMetadata(profile.pubkey, currentRelays).catch(() => []);
-  mergeRelayHints(relayList.map((relay) => relay.url), 90);
-  const contacts = await fetchContactListDetails(profile.pubkey, currentRelays).catch(() => ({ pubkeys: [], relayHints: [], items: [] }));
-  currentContactItems = contacts.items;
-  mergeRelayHints(contacts.relayHints, 74);
+  currentContactItems = [];
   follows.set([]);
   feedMode.set(requestedMode === 'global' ? requestedMode : 'global');
 }
@@ -499,11 +583,13 @@ function hasCustomFeedFilters(settings: CustomFeedSettings) {
 }
 
 function mergeRelayHints(urls: string[], startingScore = 76) {
-  const clean = [...new Set(urls.filter((url) => /^wss:\/\/[^ ]+\.[^ ]+/.test(url)))].slice(0, 12);
+  const clean = [...new Set(urls.map(normalizeRelayUrl).filter(Boolean))].slice(0, 8);
   if (!clean.length) return;
 
   relays.update((existing) => {
-    const known = new Set(existing.map((relay) => relay.url));
+    const normalizedExisting = existing.map((relay) => ({ ...relay, url: normalizeRelayUrl(relay.url) || relay.url }));
+    const byUrl = new Map(normalizedExisting.map((relay) => [relay.url, relay]));
+    const known = new Set(byUrl.keys());
     const additions = clean
       .filter((url) => !known.has(url))
       .map((url, index) => ({
@@ -514,6 +600,6 @@ function mergeRelayHints(urls: string[], startingScore = 76) {
         score: Math.max(55, startingScore - index)
       }));
 
-    return additions.length ? [...existing, ...additions] : existing;
+    return additions.length ? [...byUrl.values(), ...additions] : [...byUrl.values()];
   });
 }

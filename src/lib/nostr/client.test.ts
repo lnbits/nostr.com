@@ -9,6 +9,7 @@ import {
   filterSpam,
   isReplyEvent,
   isMachineGeneratedContent,
+  limitCryptoTopicDensity,
   limitConsecutiveAuthors,
   loginWithBunker,
   loginWithPrivateKey,
@@ -68,6 +69,23 @@ describe('nostr client helpers', () => {
 
     expect(limitConsecutiveAuthors(items, 2).map((item) => item.pubkey)).toEqual([a, a, b, a, a, c]);
     expect(limitConsecutiveAuthors(items.slice(0, 4), 2).map((item) => item.id)).toEqual(['1'.repeat(64), '2'.repeat(64)]);
+  });
+
+  it('spaces crypto and bitcoin topics out in broad global feeds', () => {
+    const items = [
+      event({ id: '1'.repeat(64), content: 'bitcoin is moving' }),
+      event({ id: '2'.repeat(64), content: 'crypto markets update' }),
+      event({ id: 'a'.repeat(64), content: 'fintech node operators are active' }),
+      event({ id: 'b'.repeat(64), content: 'monero and z-cash discussion' }),
+      ...Array.from({ length: 10 }, (_, index) => event({ id: `${index + 3}`.repeat(64).slice(0, 64), content: `normal post ${index}` })),
+      event({ id: 'd'.repeat(64), content: 'another #bitcoin thought' })
+    ];
+
+    expect(limitCryptoTopicDensity(items, 10).map((item) => item.content)).toEqual([
+      'bitcoin is moving',
+      ...Array.from({ length: 10 }, (_, index) => `normal post ${index}`),
+      'another #bitcoin thought'
+    ]);
   });
 
   it('returns an empty follow or custom feed when there are no follows', async () => {
@@ -142,6 +160,42 @@ describe('nostr client helpers', () => {
     expect(isMachineGeneratedContent(machine.content)).toBe(true);
     expect(isMachineGeneratedContent(human.content)).toBe(false);
     expect(filterSpam([machine, human])).toEqual([human]);
+  });
+
+  it('filters pure json text notes from broad feeds', () => {
+    const jsonNote = event({
+      content: JSON.stringify({
+        type: 'zone_list',
+        zone: '7gS9HiiJAlzX6DpcYoq',
+        name: 'Tucson',
+        ts: 1779568044946,
+        members: [{ devicePk: '4a29ff60c53837e9e20555bfeb2a046be3eb140818144628691fcf7efb1d2f1', swarm: '' }]
+      })
+    });
+    const human = event({ content: 'I posted a human-readable note with a tiny sample: {"ok":true}' });
+
+    expect(isMachineGeneratedContent(jsonNote.content)).toBe(true);
+    expect(isMachineGeneratedContent(human.content)).toBe(false);
+    expect(filterSpam([jsonNote, human])).toEqual([human]);
+  });
+
+  it('filters nested swarm device json records from the feed', () => {
+    const swarm = event({
+      content: JSON.stringify({
+        type: 'swarm_device_record',
+        record: JSON.stringify({
+          kind: 30078,
+          created_at: 1779560256,
+          tags: [['t', 'swarm_discovery']],
+          type: 'device',
+          content: JSON.stringify({ identityId: 'id-LnZz1joVZtIvTiIo', label: 'Aux', devicePks: ['4a29ff60c5'] })
+        })
+      })
+    });
+    const human = event({ content: 'I changed my lightning node setup today and wrote notes for humans.' });
+
+    expect(isMachineGeneratedContent(swarm.content)).toBe(true);
+    expect(filterSpam([swarm, human])).toEqual([human]);
   });
 
   it('filters broadcast transport payloads that are not human-readable notes', () => {
