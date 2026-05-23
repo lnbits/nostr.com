@@ -62,7 +62,7 @@
     },
     {
       id: 'NIP-45',
-      description: 'Relay COUNT queries, used best-effort for reply, repost, reaction, and zap totals when relays support it.'
+      description: 'Relay COUNT queries, used best-effort for reply, repost, and reaction totals when relays support it.'
     },
     {
       id: 'NIP-46',
@@ -75,10 +75,6 @@
     {
       id: 'NIP-56',
       description: 'Reports, used to publish report events for spam, abuse, and unsafe content.'
-    },
-    {
-      id: 'NIP-57',
-      description: 'Lightning zaps, used for counting zap receipts on notes.'
     },
     {
       id: 'NIP-65',
@@ -113,13 +109,13 @@
       social media and many other applications without creating walled gardens or centralized
       platforms.
     </p>
+    <p>This Nostr social client is just one of the kazillion clients that exist.</p>
     <p>
       Nostr is modular and evolves through Nostr Improvement Proposals (NIPs). Because clients
       share the same open protocol, users are free to choose whichever client they prefer. The
       freedom to move between clients is what makes Nostr a commons, not a walled garden that
       can be controlled. You can even build your own client!
     </p>
-    <p>This Nostr social client is just one of the kazillion clients that exist.</p>
     <p>
       Learn more at <a href="https://nostr.org" target="_blank" rel="noreferrer">nostr.org</a>
     </p>

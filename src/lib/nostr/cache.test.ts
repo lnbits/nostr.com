@@ -1,10 +1,10 @@
-import { cacheEvents, cacheProfile, getCachedEvents, getCachedProfiles, resetCacheConnectionForTests } from './cache';
+import { cacheEvents, cacheProfile, cacheProfileEvents, getCachedEvents, getCachedProfileEvents, getCachedProfiles, resetCacheConnectionForTests } from './cache';
 import type { NostrEvent } from './types';
 
-function event(id: string, created_at: number): NostrEvent {
+function event(id: string, created_at: number, pubkey = 'a'.repeat(64)): NostrEvent {
   return {
     id,
-    pubkey: 'a'.repeat(64),
+    pubkey,
     created_at,
     kind: 1,
     tags: [],
@@ -54,5 +54,24 @@ describe('IndexedDB cache', () => {
     await cacheProfile({ pubkey: 'a'.repeat(64), name: 'Updated' });
 
     expect(await getCachedProfiles()).toEqual([{ pubkey: 'a'.repeat(64), name: 'Updated' }]);
+  });
+
+  it('keeps a separate ordered profile event cache', async () => {
+    const alice = 'a'.repeat(64);
+    const bob = 'b'.repeat(64);
+    await cacheProfileEvents([event('alice-old', 10, alice), event('bob-note', 30, bob), event('alice-new', 40, alice)]);
+
+    expect((await getCachedProfileEvents(alice)).map((item) => item.id)).toEqual(['alice-new', 'alice-old']);
+    expect((await getCachedProfileEvents(bob)).map((item) => item.id)).toEqual(['bob-note']);
+  });
+
+  it('caps profile event indexes independently of the global event cache', async () => {
+    const alice = 'a'.repeat(64);
+    await cacheProfileEvents(Array.from({ length: 605 }, (_, index) => event(`alice-${index}`, index, alice)));
+
+    const cached = await getCachedProfileEvents(alice, 700);
+    expect(cached).toHaveLength(600);
+    expect(cached[0].id).toBe('alice-604');
+    expect(cached.at(-1)?.id).toBe('alice-5');
   });
 });

@@ -97,14 +97,29 @@ describe('nostr client helpers', () => {
     const follows = ['c'.repeat(64)];
     const base = { kinds: [1], limit: 10 };
 
-    expect(await feedFiltersForMode('global', base, follows, { friendsOfFriends: false, keywords: [] }, 123, [], { hashtag: '#Nostr' })).toEqual([
+    expect(await feedFiltersForMode('global', base, follows, { friendsOfFriends: false, keywords: [], interests: [] }, 123, [], { hashtag: '#Nostr' })).toEqual([
       { kinds: [1], limit: 10, '#t': ['nostr'], since: 123 }
     ]);
-    expect(await feedFiltersForMode('follow', base, follows, { friendsOfFriends: false, keywords: [] }, 123, [], { hashtag: 'Nostr' })).toEqual([
+    expect(await feedFiltersForMode('follow', base, follows, { friendsOfFriends: false, keywords: [], interests: [] }, 123, [], { hashtag: 'Nostr' })).toEqual([
       { kinds: [1], limit: 10, '#t': ['nostr'], authors: follows, since: 123 }
     ]);
-    expect(await feedFiltersForMode('custom', base, follows, { friendsOfFriends: false, keywords: [] }, 123, [], { hashtag: 'Nostr' })).toEqual([
+    expect(await feedFiltersForMode('custom', base, follows, { friendsOfFriends: false, keywords: [], interests: [] }, 123, [], { hashtag: 'Nostr' })).toEqual([
       { kinds: [1], limit: 10, '#t': ['nostr'], authors: follows, since: 123 }
+    ]);
+  });
+
+  it('reserves part of global and custom feeds for profile interests', async () => {
+    const follows = ['c'.repeat(64)];
+    const base = { kinds: [1], limit: 10 };
+    const settings = { friendsOfFriends: false, keywords: [], interests: ['art', 'music'] };
+
+    expect(await feedFiltersForMode('global', base, follows, settings, 123, [])).toEqual([
+      { kinds: [1], limit: 7, since: 123 },
+      { kinds: [1], limit: 3, search: 'art artstr music musicstr', since: 123 }
+    ]);
+    expect(await feedFiltersForMode('custom', base, follows, settings, 123, [])).toEqual([
+      { kinds: [1], limit: 7, authors: follows, since: 123 },
+      { kinds: [1], limit: 3, search: 'art artstr music musicstr', since: 123 }
     ]);
   });
 

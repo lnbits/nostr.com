@@ -4,9 +4,9 @@
     Home,
     Mail,
     MoreHorizontal,
+    PencilLine,
     Settings,
-    UserRound,
-    Zap
+    UserRound
   } from '@lucide/svelte';
   import { page } from '$app/stores';
   import { goHome, session, startCompose } from '$lib/stores/app';
@@ -54,5 +54,5 @@
     </a>
   </nav>
 
-  <button class="compose-wide" on:click={startCompose}><Zap size={21} /> Note</button>
+  <button class="compose-wide" on:click={startCompose}><PencilLine size={21} /> Note</button>
 </aside>

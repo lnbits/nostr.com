@@ -2,8 +2,8 @@ import { finalizeEvent, generateSecretKey, getEventHash, getPublicKey, nip04, ni
 import type { Event as NostrToolsEvent, Filter } from 'nostr-tools';
 import * as nip46 from 'nostr-tools/nip46';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
-import { cacheEvents, cacheProfile } from './cache';
-import { adultDomains, adultHashtags, defaultGuestNip05, defaultRelays, mutedWords } from './config';
+import { cacheEvents, cacheProfile, cacheProfileEvents } from './cache';
+import { adultDomains, adultHashtags, defaultGuestNip05, defaultRelays, interestHashtagMap, mutedWords } from './config';
 import type { ContactListDetails, ContactListItem, CustomFeedSettings, DirectMessage, EventStats, FeedMode, FeedQueryOptions, Nip05Profile, NostrEvent, Profile, RelayState, Session } from './types';
 
 const pool = new SimplePool();
@@ -296,7 +296,7 @@ export function feedFiltersForMode(
   mode: FeedMode,
   base: Filter,
   follows: string[] = [],
-  settings: CustomFeedSettings = { friendsOfFriends: true, keywords: [] },
+  settings: CustomFeedSettings = { friendsOfFriends: true, keywords: [], interests: [] },
   since: number,
   relayUrls: string[] = [],
   options: FeedQueryOptions = {}
@@ -305,6 +305,7 @@ export function feedFiltersForMode(
   const taggedBase = tag ? { ...base, '#t': [tag] } : base;
   if (mode === 'follow' && follows.length) return [{ ...taggedBase, authors: follows, since }];
   if (mode === 'custom' && follows.length) return customFeedFilters(taggedBase, follows, settings, since, relayUrls);
+  if (mode === 'global' && settings.interests.some((interest) => interest.trim())) return globalFeedFilters(taggedBase, settings, since);
   return [{ ...taggedBase, since }];
 }
 
@@ -312,7 +313,7 @@ export async function fetchFeed(
   mode: FeedMode,
   relays = defaultRelays,
   follows: string[] = [],
-  settings: CustomFeedSettings = { friendsOfFriends: true, keywords: [] },
+  settings: CustomFeedSettings = { friendsOfFriends: true, keywords: [], interests: [] },
   options: FeedQueryOptions = {}
 ) {
   if ((mode === 'follow' || mode === 'custom') && !follows.length) return [];
@@ -334,7 +335,7 @@ export async function subscribeFeed(
   mode: FeedMode,
   relays = defaultRelays,
   follows: string[] = [],
-  settings: CustomFeedSettings = { friendsOfFriends: true, keywords: [] },
+  settings: CustomFeedSettings = { friendsOfFriends: true, keywords: [], interests: [] },
   options: FeedQueryOptions = {},
   onEvent: (event: NostrEvent) => void
 ) {
@@ -386,7 +387,7 @@ export async function fetchProfileEvents(pubkey: string, relays = defaultRelays,
   if (options.since) filter.since = options.since;
   const events = verifiedRelayEvents(await queryShortLived(relayUrls, filter, 5000));
   const clean = dedupeEvents(filterSpam(events));
-  await cacheEvents(clean);
+  await cacheProfileEvents(clean);
   return clean;
 }
 
@@ -445,7 +446,7 @@ export async function fetchDirectMessages(session: Session, relays = defaultRela
 
 export async function fetchEventStats(ids: string[], relays = defaultRelays) {
   const uniqueIds = [...new Set(ids)].filter(Boolean).slice(0, 80);
-  const emptyStats = () => ({ replies: 0, reposts: 0, likes: 0, dislikes: 0, emoji: 0, zaps: 0 });
+  const emptyStats = () => ({ replies: 0, reposts: 0, likes: 0, dislikes: 0, emoji: 0 });
   const stats: Record<string, EventStats> = Object.fromEntries(uniqueIds.map((id) => [id, emptyStats()]));
   if (!uniqueIds.length) return stats;
 
@@ -453,8 +454,7 @@ export async function fetchEventStats(ids: string[], relays = defaultRelays) {
   const filters: Filter[] = [
     { kinds: [1], '#e': uniqueIds, limit: Math.min(500, uniqueIds.length * 20) },
     { kinds: [6, 16], '#e': uniqueIds, limit: Math.min(500, uniqueIds.length * 20) },
-    { kinds: [7], '#e': uniqueIds, limit: Math.min(800, uniqueIds.length * 35) },
-    { kinds: [9735], '#e': uniqueIds, limit: Math.min(500, uniqueIds.length * 20) }
+    { kinds: [7], '#e': uniqueIds, limit: Math.min(800, uniqueIds.length * 35) }
   ];
   const countStats = await fetchCountStats(uniqueIds, relayUrls).catch(() => ({}));
   Object.entries(countStats).forEach(([id, stat]) => (stats[id] = { ...stats[id], ...stat }));
@@ -464,8 +464,7 @@ export async function fetchEventStats(ids: string[], relays = defaultRelays) {
   const seen = {
     replies: new Set<string>(),
     reposts: new Set<string>(),
-    likes: new Set<string>(),
-    zaps: new Set<string>()
+    likes: new Set<string>()
   };
 
   for (const event of events) {
@@ -484,9 +483,6 @@ export async function fetchEventStats(ids: string[], relays = defaultRelays) {
         if (!reaction || reaction === '+') stats[id].likes += 1;
         else if (reaction === '-') stats[id].dislikes += 1;
         else stats[id].emoji += 1;
-      } else if (event.kind === 9735 && !seen.zaps.has(`${id}:${event.id}`)) {
-        seen.zaps.add(`${id}:${event.id}`);
-        stats[id].zaps += 1;
       }
     }
   }
@@ -798,10 +794,12 @@ function normalizedHashtag(tag?: string) {
 async function customFeedFilters(base: Filter, follows: string[], settings: CustomFeedSettings, since: number, relayUrls: string[]) {
   const total = base.limit ?? 24;
   const hasKeywords = settings.keywords.some((keyword) => keyword.trim());
+  const hasInterests = settings.interests.some((interest) => interest.trim());
+  const interestLimit = hasInterests ? Math.max(1, Math.round(total * 0.3)) : 0;
   const keywordLimit = hasKeywords ? Math.max(1, Math.round(total * 0.2)) : 0;
   const friendsOfFriends = settings.friendsOfFriends ? await fetchFriendsOfFriends(follows, relayUrls) : [];
   const friendsOfFriendsLimit = friendsOfFriends.length ? Math.max(1, Math.round(total * 0.2)) : 0;
-  const followLimit = Math.max(1, total - keywordLimit - friendsOfFriendsLimit);
+  const followLimit = Math.max(1, total - interestLimit - keywordLimit - friendsOfFriendsLimit);
   const filters: Filter[] = [{ ...base, authors: sampleAuthors(follows, followLimit), limit: followLimit, since }];
 
   if (friendsOfFriendsLimit) {
@@ -810,7 +808,32 @@ async function customFeedFilters(base: Filter, follows: string[], settings: Cust
 
   const search = settings.keywords.map((keyword) => keyword.trim()).filter(Boolean).join(' ');
   if (search) filters.push({ ...base, search, limit: keywordLimit, since });
+  const interestSearch = searchTermsForInterests(settings.interests).join(' ');
+  if (interestSearch) filters.push({ ...base, search: interestSearch, limit: interestLimit, since });
   return filters;
+}
+
+function globalFeedFilters(base: Filter, settings: CustomFeedSettings, since: number) {
+  const total = base.limit ?? 24;
+  const interestLimit = Math.max(1, Math.round(total * 0.3));
+  const generalLimit = Math.max(1, total - interestLimit);
+  const interestSearch = searchTermsForInterests(settings.interests).join(' ');
+  return [
+    { ...base, limit: generalLimit, since },
+    { ...base, search: interestSearch, limit: interestLimit, since }
+  ];
+}
+
+function searchTermsForInterests(interests: string[]) {
+  return [
+    ...new Set(
+      interests.flatMap((interest) => {
+        const clean = interest.trim().toLowerCase();
+        if (!clean) return [];
+        return [clean, ...(interestHashtagMap[clean] ?? [])];
+      })
+    )
+  ];
 }
 
 async function fetchFriendsOfFriends(follows: string[], relayUrls: string[]) {
@@ -872,18 +895,16 @@ async function fetchCountStats(ids: string[], relayUrls: string[]) {
 }
 
 async function countStatsForId(id: string, relayUrls: string[]) {
-  const [replies, reposts, likes, zaps] = await Promise.all([
+  const [replies, reposts, likes] = await Promise.all([
     relayCount(relayUrls, { kinds: [1], '#e': [id] }),
     relayCount(relayUrls, { kinds: [6], '#e': [id] }),
-    relayCount(relayUrls, { kinds: [7], '#e': [id] }),
-    relayCount(relayUrls, { kinds: [9735], '#e': [id] })
+    relayCount(relayUrls, { kinds: [7], '#e': [id] })
   ]);
-  if ([replies, reposts, likes, zaps].every((value) => value === undefined)) return undefined;
+  if ([replies, reposts, likes].every((value) => value === undefined)) return undefined;
   return {
     replies: replies ?? 0,
     reposts: reposts ?? 0,
-    likes: likes ?? 0,
-    zaps: zaps ?? 0
+    likes: likes ?? 0
   };
 }
 
@@ -932,12 +953,13 @@ function compactProfile(profile: Profile): Omit<Profile, 'pubkey'> {
       name: profile.name,
       display_name: profile.display_name,
       about: profile.about,
+      interests: profile.interests?.filter((interest) => interest.trim()),
       picture: profile.picture,
       banner: profile.banner,
       nip05: profile.nip05,
       lud16: profile.lud16,
       lud06: profile.lud06,
       website: profile.website
-    }).filter(([, value]) => typeof value === 'string' && value.trim())
+    }).filter(([, value]) => (typeof value === 'string' && value.trim()) || (Array.isArray(value) && value.length))
   ) as Omit<Profile, 'pubkey'>;
 }

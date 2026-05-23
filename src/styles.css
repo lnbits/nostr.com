@@ -55,7 +55,7 @@ body {
   overflow-x: hidden;
 }
 a { color: inherit; text-decoration: none; }
-button, input, textarea {
+button, input, textarea, select {
   font: inherit;
   color: inherit;
 }
@@ -72,7 +72,7 @@ button {
   cursor: pointer;
 }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
-input, textarea {
+input, textarea, select {
   width: 100%;
   border: 1px solid color-mix(in srgb, var(--line) 35%, transparent);
   background: var(--surface);
@@ -82,6 +82,11 @@ input, textarea {
 textarea { min-height: 130px; resize: vertical; }
 label { display: grid; gap: 8px; color: var(--muted); }
 label span, label strong { color: var(--text); }
+.field-label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text);
+}
 
 .app-frame { min-height: 100svh; padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
 .embed-shell {
@@ -312,7 +317,7 @@ label span, label strong { color: var(--text); }
 }
 .follow-list-manager {
   max-height: min(360px, 45svh);
-  overflow: auto;
+  overflow: visible;
   display: grid;
   gap: 8px;
   margin-top: 14px;
@@ -433,6 +438,53 @@ label span, label strong { color: var(--text); }
 .login-panel { display: grid; gap: 14px; }
 .login-panel p { color: var(--muted); margin: 0; }
 .login-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.interest-picker {
+  position: relative;
+}
+.interest-trigger {
+  width: 100%;
+  justify-content: space-between;
+  text-align: left;
+}
+.interest-trigger span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.interest-menu {
+  position: absolute;
+  bottom: calc(42px + 6px);
+  left: 0;
+  right: 0;
+  z-index: 80;
+  max-height: min(260px, 42svh);
+  overflow: auto;
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid color-mix(in srgb, var(--line) 38%, transparent);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.interest-option {
+  min-height: 38px;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: var(--text);
+}
+.interest-option:hover {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+.interest-option input {
+  width: auto;
+  accent-color: var(--accent);
+}
 .primary {
   background: var(--text);
   color: var(--bg);
@@ -596,7 +648,7 @@ label span, label strong { color: var(--text); }
   padding: 0;
   color: var(--accent);
   background: transparent;
-  font-weight: 700;
+  font-weight: 400;
 }
 .fade-tail {
   position: absolute;
@@ -614,7 +666,7 @@ label span, label strong { color: var(--text); }
   padding: 0;
   color: var(--accent);
   background: transparent;
-  font-weight: 700;
+  font-weight: 400;
   font-size: 14.5px;
 }
 .media-grid {
@@ -681,9 +733,9 @@ label span, label strong { color: var(--text); }
   background: #050505;
 }
 .note-actions {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(42px, max-content));
-  gap: 0;
+  display: flex;
+  justify-content: flex-start;
+  gap: 10px;
   color: var(--muted);
 }
 .note-actions button, .note-actions a {
@@ -693,7 +745,7 @@ label span, label strong { color: var(--text); }
   display: inline-flex;
   justify-content: flex-start;
   gap: 4px;
-  padding: 0 8px;
+  padding: 0 2px;
 }
 .note-actions span {
   min-width: 1ch;
@@ -702,6 +754,9 @@ label span, label strong { color: var(--text); }
 }
 .note-actions button.liked {
   color: #f2559a;
+}
+.note-actions .report-action {
+  margin-left: auto;
 }
 .like-action {
   position: relative;
@@ -1448,7 +1503,7 @@ label span, label strong { color: var(--text); }
     max-inline-size: 100%;
   }
   .avatar { width: 40px; height: 40px; }
-  .note-actions { grid-template-columns: repeat(5, minmax(34px, 1fr)); }
+  .note-actions { gap: 12px; }
   .login-actions, .relay-editor, .profile-card, .profile-title-row, .profile-edit-grid { grid-template-columns: 1fr; }
   .upload-url-row { grid-template-columns: 1fr; }
   .profile-card { margin-top: -44px; }

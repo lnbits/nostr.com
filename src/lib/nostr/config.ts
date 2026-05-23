@@ -9,7 +9,38 @@ export const defaultRelays: RelayState[] = [
 
 export const defaultCustomFeedSettings: CustomFeedSettings = {
   friendsOfFriends: false,
-  keywords: []
+  keywords: [],
+  interests: []
+};
+
+export const socialInterests = [
+  'art',
+  'photography',
+  'music',
+  'food',
+  'technology',
+  'bitcoin',
+  'nostr',
+  'science',
+  'books',
+  'film',
+  'gaming',
+  'sports',
+  'travel',
+  'fitness',
+  'nature',
+  'fashion',
+  'business',
+  'politics',
+  'education',
+  'parenting'
+];
+
+export const interestHashtagMap: Record<string, string[]> = {
+  art: ['art', 'artstr'],
+  photography: ['photography', 'photostr'],
+  music: ['music', 'musicstr'],
+  food: ['food', 'foodstr']
 };
 
 export const defaultGuestNip05 = 'benarc@nostr.com';

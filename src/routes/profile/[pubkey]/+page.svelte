@@ -6,8 +6,9 @@
   import { nip19 } from 'nostr-tools';
   import NoteCard from '$lib/components/NoteCard.svelte';
   import { events, mergeEvents, profiles, relays, saveProfile, session } from '$lib/stores/app';
-  import { fetchProfileEvents, fetchProfiles, getNip98AuthorizationHeader } from '$lib/nostr/client';
-  import type { Profile } from '$lib/nostr/types';
+  import { getCachedProfileEvents } from '$lib/nostr/cache';
+  import { dedupeEvents, fetchProfileEvents, fetchProfiles, getNip98AuthorizationHeader } from '$lib/nostr/client';
+  import type { NostrEvent, Profile } from '$lib/nostr/types';
 
   const emptyProfile = (): Profile => ({
     pubkey,
@@ -21,13 +22,13 @@
     lud16: '',
     lud06: ''
   });
-  const initialProfileEventLimit = 72;
-  const profileEventPageLimit = 48;
+  const initialProfileEventLimit = 120;
+  const profileEventPageLimit = 120;
 
   $: pubkey = normalizePubkey($page.params.pubkey ?? '');
   $: profile = $profiles[pubkey];
   $: isOwnProfile = Boolean($session?.pubkey === pubkey);
-  $: userEvents = $events.filter((event) => event.pubkey === pubkey);
+  $: userEvents = profileEvents.filter((event) => event.pubkey === pubkey);
   $: npub = /^[0-9a-f]{64}$/i.test(pubkey) ? nip19.npubEncode(pubkey) : '';
   $: shortNpub = npub ? `${npub.slice(0, 12)}...${npub.slice(-8)}` : '';
   $: displayName = profile?.display_name || profile?.name || (isOwnProfile ? '' : 'Nostr profile');
@@ -40,6 +41,7 @@
   let uploading: 'picture' | 'banner' | '' = '';
   let editorOpen = false;
   let draft: Profile = emptyProfile();
+  let profileEvents: NostrEvent[] = [];
   let hydratedPubkey = '';
   let profileLoadMoreSentinel: HTMLDivElement;
   let profileObserver: IntersectionObserver | undefined;
@@ -88,13 +90,18 @@
   async function hydrateProfile(nextPubkey: string) {
     hasMoreProfile = true;
     loadingMoreProfile = false;
-    const [found, profileEvents] = await Promise.all([
+    const cachedProfileEvents = await getCachedProfileEvents(nextPubkey, initialProfileEventLimit);
+    profileEvents = dedupeEvents([...cachedProfileEvents, ...$events.filter((event) => event.pubkey === nextPubkey)]);
+    const [found, fetchedProfileEvents] = await Promise.all([
       $profiles[nextPubkey] ? Promise.resolve([]) : fetchProfiles([nextPubkey], $relays).catch(() => []),
       fetchProfileEvents(nextPubkey, $relays, initialProfileEventLimit).catch(() => [])
     ]);
     const [profile] = found;
     if (profile) profiles.update((existing) => ({ ...existing, [profile.pubkey]: profile }));
-    if (profileEvents.length) events.update((existing) => mergeEvents(profileEvents, existing));
+    if (fetchedProfileEvents.length) {
+      events.update((existing) => mergeEvents(fetchedProfileEvents, existing));
+      addProfileEvents(fetchedProfileEvents);
+    }
   }
 
   async function loadMoreProfileEvents() {
@@ -105,8 +112,11 @@
     loadingMoreProfile = true;
     try {
       const nextEvents = await fetchProfileEvents(pubkey, $relays, profileEventPageLimit, { until: oldest - 1 }).catch(() => []);
-      if (nextEvents.length < profileEventPageLimit) hasMoreProfile = false;
-      if (nextEvents.length) events.update((existing) => mergeEvents(nextEvents, existing));
+      hasMoreProfile = true;
+      if (nextEvents.length) {
+        events.update((existing) => mergeEvents(nextEvents, existing));
+        addProfileEvents(nextEvents);
+      }
     } finally {
       loadingMoreProfile = false;
     }
@@ -115,6 +125,10 @@
   function oldestProfileTimestamp() {
     if (!userEvents.length) return undefined;
     return Math.min(...userEvents.map((event) => event.created_at));
+  }
+
+  function addProfileEvents(nextEvents: NostrEvent[]) {
+    profileEvents = dedupeEvents([...profileEvents, ...nextEvents]);
   }
 
   async function uploadProfileMedia(file: File | undefined, target: 'picture' | 'banner') {
@@ -330,13 +344,13 @@
   {#each userEvents as event (event.id)}
     <NoteCard {event} {profile} />
   {:else}
-    <div class="empty-state"><strong>No cached notes for this profile</strong><span>Refresh the global feed to fetch more events.</span></div>
+    <div class="empty-state"><strong>No notes for this profile yet</strong><span>Trying relays for this profile’s posts.</span></div>
   {/each}
   <div class="load-more-sentinel profile-load-more-sentinel" bind:this={profileLoadMoreSentinel}>
     {#if loadingMoreProfile}
       <span>Loading older profile notes</span>
-    {:else if !hasMoreProfile && userEvents.length}
-      <span>End of profile notes</span>
+    {:else if userEvents.length}
+      <span>Scroll down for older profile notes</span>
     {/if}
   </div>
 </section>

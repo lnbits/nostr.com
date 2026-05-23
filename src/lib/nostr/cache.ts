@@ -1,8 +1,16 @@
 import type { NostrEvent, Profile } from './types';
 
 const DB_NAME = 'nostr-social-cache';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const MAX_CACHED_EVENTS = 600;
+const MAX_CACHED_PROFILE_EVENTS = 600;
+
+interface CachedProfileEvent {
+  cacheKey: string;
+  pubkey: string;
+  created_at: number;
+  event: NostrEvent;
+}
 
 let dbPromise: Promise<IDBDatabase> | undefined;
 
@@ -22,6 +30,11 @@ function openDb() {
         events.createIndex('kind', 'kind');
       }
       if (!db.objectStoreNames.contains('profiles')) db.createObjectStore('profiles', { keyPath: 'pubkey' });
+      if (!db.objectStoreNames.contains('profileEvents')) {
+        const profileEvents = db.createObjectStore('profileEvents', { keyPath: 'cacheKey' });
+        profileEvents.createIndex('pubkey', 'pubkey');
+        profileEvents.createIndex('pubkey_created_at', ['pubkey', 'created_at']);
+      }
       if (!db.objectStoreNames.contains('contacts')) db.createObjectStore('contacts', { keyPath: 'pubkey' });
       if (!db.objectStoreNames.contains('settings')) db.createObjectStore('settings', { keyPath: 'key' });
     };
@@ -57,9 +70,41 @@ export async function cacheEvents(events: NostrEvent[]) {
   }).catch(() => undefined);
 }
 
+export async function cacheProfileEvents(events: NostrEvent[]) {
+  if (!events.length) return;
+  await cacheEvents(events);
+  const byPubkey = new Map<string, NostrEvent[]>();
+  events.forEach((event) => byPubkey.set(event.pubkey, [...(byPubkey.get(event.pubkey) ?? []), event]));
+
+  await withStore<void>('profileEvents', 'readwrite', (store) => {
+    events.forEach((event) =>
+      store.put({
+        cacheKey: `${event.pubkey}:${event.id}`,
+        pubkey: event.pubkey,
+        created_at: event.created_at,
+        event
+      } satisfies CachedProfileEvent)
+    );
+    byPubkey.forEach((_, pubkey) => pruneOldProfileEvents(store, pubkey, MAX_CACHED_PROFILE_EVENTS));
+  }).catch(() => undefined);
+}
+
 function pruneOldEvents(store: IDBObjectStore, maxEvents: number) {
   let kept = 0;
   const request = store.index('created_at').openCursor(null, 'prev');
+  request.onsuccess = () => {
+    const cursor = request.result;
+    if (!cursor) return;
+    kept += 1;
+    if (kept > maxEvents) cursor.delete();
+    cursor.continue();
+  };
+}
+
+function pruneOldProfileEvents(store: IDBObjectStore, pubkey: string, maxEvents: number) {
+  let kept = 0;
+  const range = IDBKeyRange.bound([pubkey, 0], [pubkey, Number.MAX_SAFE_INTEGER]);
+  const request = store.index('pubkey_created_at').openCursor(range, 'prev');
   request.onsuccess = () => {
     const cursor = request.result;
     if (!cursor) return;
@@ -80,6 +125,24 @@ export async function getCachedEvents(limit = 80) {
         return;
       }
       events.push(cursor.value as NostrEvent);
+      cursor.continue();
+    };
+  }).catch(() => []);
+}
+
+export async function getCachedProfileEvents(pubkey: string, limit = 120) {
+  if (!pubkey) return [];
+  return withStore<NostrEvent[]>('profileEvents', 'readonly', (store) => {
+    const range = IDBKeyRange.bound([pubkey, 0], [pubkey, Number.MAX_SAFE_INTEGER]);
+    const request = store.index('pubkey_created_at').openCursor(range, 'prev');
+    const events: NostrEvent[] = [];
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor || events.length >= limit) {
+        (store as IDBObjectStore & { __setResult(value: NostrEvent[]): void }).__setResult(events);
+        return;
+      }
+      events.push((cursor.value as CachedProfileEvent).event);
       cursor.continue();
     };
   }).catch(() => []);

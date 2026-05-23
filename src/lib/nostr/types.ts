@@ -22,6 +22,7 @@ export interface Profile {
   lud16?: string;
   lud06?: string;
   website?: string;
+  interests?: string[];
 }
 
 export interface RelayState {
@@ -54,6 +55,7 @@ export interface Nip05Profile {
 export interface CustomFeedSettings {
   friendsOfFriends: boolean;
   keywords: string[];
+  interests: string[];
 }
 
 export interface FeedQueryOptions {
@@ -76,7 +78,7 @@ export interface Session {
 
 export interface NotificationItem {
   id: string;
-  type: 'reply' | 'repost' | 'like' | 'zap' | 'mention';
+  type: 'reply' | 'repost' | 'like' | 'mention';
   event: NostrEvent;
   seen: boolean;
 }
@@ -98,7 +100,6 @@ export interface EventStats {
   likes: number;
   dislikes: number;
   emoji: number;
-  zaps: number;
 }
 
 export interface MediaAttachment {

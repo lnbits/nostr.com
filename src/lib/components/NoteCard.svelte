@@ -1,7 +1,7 @@
 <script lang="ts">
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
-  import { Copy, ExternalLink, Flag, Heart, MessageCircle, MoreHorizontal, Repeat2, Zap } from '@lucide/svelte';
+  import { Copy, ExternalLink, Flag, Heart, MessageCircle, MoreHorizontal, Repeat2 } from '@lucide/svelte';
   import type { NostrEvent, Profile } from '$lib/nostr/types';
   import { extractMediaAttachments, parseNoteText } from '$lib/nostr/media';
   import { fetchLikeAuthors, fetchProfiles } from '$lib/nostr/client';
@@ -28,7 +28,7 @@
   $: isLong = event.content.length > previewLength;
   $: visibleContent = !isLong || expanded ? event.content : event.content.slice(0, previewLength).trimEnd();
   $: contentParts = parseNoteText(visibleContent, mediaAttachments.map((media) => media.url), event.tags);
-  $: counts = $eventStats[event.id] ?? { replies: 0, reposts: 0, likes: 0, dislikes: 0, emoji: 0, zaps: 0 };
+  $: counts = $eventStats[event.id] ?? { replies: 0, reposts: 0, likes: 0, dislikes: 0, emoji: 0 };
   $: liked = $likedEvents.has(event.id);
   $: timestamp = new Date(event.created_at * 1000);
   $: time = formatNoteTime(timestamp);
@@ -210,8 +210,7 @@
             </div>
           {/if}
         </span>
-        <button aria-label="Zap"><Zap size={18} /><span>{counts.zaps}</span></button>
-        <button aria-label="Report" on:click={() => void reportNote(event)}><Flag size={17} /></button>
+        <button class="report-action" aria-label="Report" on:click={() => void reportNote(event)}><Flag size={17} /></button>
       </div>
     {/if}
   </div>

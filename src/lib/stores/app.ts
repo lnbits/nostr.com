@@ -68,6 +68,7 @@ let currentFollows: string[] = [];
 let currentSettings = defaultCustomFeedSettings;
 let currentMode: FeedMode = 'global';
 let currentHashtag = '';
+let currentSessionValue: Session | null = initialSession;
 let currentContactItems: ContactListItem[] = [];
 let oldestFeedTimestamp: number | undefined;
 let liveFeedSub: { close: (reason?: string) => void } | undefined;
@@ -82,6 +83,7 @@ customFeedSettings.subscribe((value) => {
 });
 feedMode.subscribe((value) => (currentMode = value));
 activeHashtag.subscribe((value) => (currentHashtag = value));
+session.subscribe((value) => (currentSessionValue = value));
 
 export async function bootstrap() {
   if (!browser) return;
@@ -114,7 +116,7 @@ export async function refreshFeed(mode = currentMode) {
   }
 
   try {
-    const nextEvents = await fetchFeed(mode, currentRelays, currentFollows, currentSettings, { limit: initialFeedLimit, hashtag: currentHashtag });
+    const nextEvents = await fetchFeed(mode, currentRelays, currentFollows, effectiveFeedSettings(mode), { limit: initialFeedLimit, hashtag: currentHashtag });
     events.set(nextEvents);
     oldestFeedTimestamp = getOldestTimestamp(nextEvents);
     void refreshEventStats(nextEvents.map((event) => event.id));
@@ -136,7 +138,7 @@ export async function loadNewerFeed() {
 
   loadingNewerFeed.set(true);
   try {
-    const nextEvents = await fetchFeed(currentMode, currentRelays, currentFollows, currentSettings, {
+    const nextEvents = await fetchFeed(currentMode, currentRelays, currentFollows, effectiveFeedSettings(currentMode), {
       limit: initialFeedLimit,
       since: newestTimestamp + 1,
       hashtag: currentHashtag
@@ -179,7 +181,7 @@ async function restartLiveFeed(newestTimestamp?: number) {
     currentMode,
     currentRelays,
     currentFollows,
-    currentSettings,
+    effectiveFeedSettings(currentMode),
     { since: newestTimestamp ? newestTimestamp + 1 : Math.floor(Date.now() / 1000), hashtag: currentHashtag },
     (event) => {
       if (token !== liveFeedToken || isKnownFeedEvent(event.id)) return;
@@ -211,7 +213,7 @@ export async function loadMoreFeed(force = false) {
   try {
     const currentOldest = getOldestTimestamp(feedEventsForActiveHashtag(getStoreSnapshot(events))) ?? oldestFeedTimestamp;
     const olderThan = currentOldest ? currentOldest - 1 : undefined;
-    const nextEvents = await fetchFeed(currentMode, currentRelays, currentFollows, currentSettings, {
+    const nextEvents = await fetchFeed(currentMode, currentRelays, currentFollows, effectiveFeedSettings(currentMode), {
       limit: pageFeedLimit,
       until: olderThan,
       hashtag: currentHashtag
@@ -501,7 +503,8 @@ function readStoredCustomFeedSettings() {
       ...defaultCustomFeedSettings,
       ...saved,
       friendsOfFriends: typeof saved.friendsOfFriends === 'boolean' ? saved.friendsOfFriends : defaultCustomFeedSettings.friendsOfFriends,
-      keywords: Array.isArray(saved.keywords) ? saved.keywords.filter((keyword): keyword is string => typeof keyword === 'string') : []
+      keywords: Array.isArray(saved.keywords) ? saved.keywords.filter((keyword): keyword is string => typeof keyword === 'string') : [],
+      interests: Array.isArray(saved.interests) ? saved.interests.filter((interest): interest is string => typeof interest === 'string') : []
     };
   } catch {
     localStorage.removeItem(customFeedStorageKey);
@@ -575,11 +578,16 @@ function getStoreSnapshot<T>(store: { subscribe(run: (value: T) => void): () => 
 }
 
 function emptyStats(): EventStats {
-  return { replies: 0, reposts: 0, likes: 0, dislikes: 0, emoji: 0, zaps: 0 };
+  return { replies: 0, reposts: 0, likes: 0, dislikes: 0, emoji: 0 };
 }
 
 function hasCustomFeedFilters(settings: CustomFeedSettings) {
-  return settings.friendsOfFriends || settings.keywords.some((keyword) => keyword.trim());
+  return settings.friendsOfFriends || settings.keywords.some((keyword) => keyword.trim()) || settings.interests.some((interest) => interest.trim());
+}
+
+function effectiveFeedSettings(mode: FeedMode): CustomFeedSettings {
+  if (currentSessionValue && (mode === 'global' || mode === 'custom')) return currentSettings;
+  return { ...currentSettings, interests: [] };
 }
 
 function mergeRelayHints(urls: string[], startingScore = 76) {
