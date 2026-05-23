@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
+  import { page } from '$app/stores';
   import { Edit3 } from '@lucide/svelte';
   import MessagesView from '$lib/components/MessagesView.svelte';
   import NoteCard from '$lib/components/NoteCard.svelte';
@@ -8,13 +9,9 @@
 
   let loadMoreSentinel: HTMLDivElement;
   let observer: IntersectionObserver | undefined;
-  let activeHash = '';
+  $: activeHash = $page.url.hash;
 
   onMount(() => {
-    const syncHash = () => (activeHash = location.hash);
-    syncHash();
-    addEventListener('hashchange', syncHash);
-
     observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting && activeHash !== '#messages') void loadMoreFeed();
@@ -22,8 +19,6 @@
       { rootMargin: '700px 0px' }
     );
     if (loadMoreSentinel) observer.observe(loadMoreSentinel);
-
-    return () => removeEventListener('hashchange', syncHash);
   });
 
   onDestroy(() => observer?.disconnect());

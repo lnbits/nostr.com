@@ -464,12 +464,20 @@ label span, label strong { color: var(--text); }
 .search-box input:focus { outline: none; }
 .relay-row {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) max-content;
+  grid-template-columns: 10px 18px minmax(0, 1fr) max-content;
   gap: 8px;
   align-items: center;
   padding: 8px 0;
   color: var(--muted);
 }
+.relay-status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #9ca3af;
+}
+.relay-status.online { background: #24a148; }
+.relay-status.offline { background: #d04437; }
 .relay-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .relay-row strong {
   color: var(--muted);
