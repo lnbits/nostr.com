@@ -10,7 +10,13 @@
   --accent-strong: #2678a8;
   --danger: #b93a3a;
   --shadow: 0 18px 50px rgba(20, 20, 24, 0.12);
+  --native-status-offset: 0px;
+  --app-top-safe: max(env(safe-area-inset-top), var(--native-status-offset));
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+:root.native-shell {
+  --native-status-offset: 28px;
 }
 
 :root[data-theme='dark'] {
@@ -78,6 +84,10 @@ input, textarea, select {
   background: var(--surface);
   border-radius: 8px;
   padding: 12px;
+}
+input[type='checkbox'] {
+  width: auto;
+  accent-color: var(--accent);
 }
 textarea { min-height: 130px; resize: vertical; }
 label { display: grid; gap: 8px; color: var(--muted); }
@@ -1753,6 +1763,7 @@ label span, label strong { color: var(--text); }
 .success { color: #49c983; font-weight: 700; margin: 0; }
 .spin { animation: spin 1s linear infinite; }
 .settings-page, .thread-page, .profile-hero, .feed-list.narrow {
+  min-width: 0;
   max-width: 760px;
   margin: 0 auto;
   padding: 24px 18px;
@@ -1775,6 +1786,9 @@ label span, label strong { color: var(--text); }
   padding-top: 0;
 }
 .settings-page { display: grid; gap: 16px; }
+.settings-page .panel {
+  min-width: 0;
+}
 .thread-page {
   position: relative;
   display: grid;
@@ -1834,14 +1848,21 @@ label span, label strong { color: var(--text); }
 .add-row { grid-template-columns: 1fr auto; }
 .setting-grid {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
   gap: 12px;
   margin-bottom: 16px;
   color: var(--muted);
 }
-.setting-grid strong { color: var(--text); text-align: right; }
+.setting-grid strong {
+  min-width: 0;
+  color: var(--text);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
 .public-key-copy {
+  max-width: 100%;
   min-height: 0;
+  min-width: 0;
   justify-self: end;
   justify-content: flex-end;
   gap: 6px;
@@ -1851,6 +1872,8 @@ label span, label strong { color: var(--text); }
   background: transparent;
   font-weight: 800;
   text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .public-key-copy:hover {
   color: var(--accent);
@@ -2065,12 +2088,14 @@ label span, label strong { color: var(--text); }
   .shell { display: block; padding: 0 14px 34px; }
   .authed-shell { display: block; max-width: none; }
   .authed-main { border: 0; }
+  :root.native-shell .authed-main { padding-top: var(--app-top-safe); }
   .left-nav { display: none; }
   .rail { display: none; }
   .tabbar { display: grid; }
   .timeline { padding: 0 14px 34px; }
   .authed-main .timeline { padding: 0 14px 34px; }
-  .timeline-toolbar { top: calc(60px + env(safe-area-inset-top)); padding-inline: 0; border-bottom: 0; }
+  .feed-search { top: var(--app-top-safe); }
+  .timeline-toolbar { top: calc(60px + var(--app-top-safe)); padding-inline: 0; border-bottom: 0; }
   .authed-main .feed-list { padding: 0; }
   .messages-head { grid-template-columns: 1fr; }
   .dm-messages {
@@ -2120,7 +2145,7 @@ label span, label strong { color: var(--text); }
     width: 100%;
     padding: 0 10px 34px;
   }
-  .timeline-toolbar { top: calc(54px + env(safe-area-inset-top)); }
+  .timeline-toolbar { top: calc(54px + var(--app-top-safe)); }
   .note-card { grid-template-columns: 40px minmax(0, 1fr); }
   .note-body,
   .note-content,
@@ -2173,8 +2198,19 @@ label span, label strong { color: var(--text); }
     max-height: 280px;
   }
   .login-actions, .profile-title-row, .profile-edit-grid { grid-template-columns: 1fr; }
+  .setting-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+  .setting-grid strong,
+  .public-key-copy {
+    justify-self: start;
+    justify-content: flex-start;
+    text-align: left;
+  }
   .relay-editor {
-    grid-template-columns: 10px repeat(3, minmax(0, 1fr)) 44px;
+    position: relative;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) 44px;
     gap: 8px;
     padding: 10px;
     border: 1px solid color-mix(in srgb, var(--line) 54%, transparent);
@@ -2182,11 +2218,13 @@ label span, label strong { color: var(--text); }
     background: color-mix(in srgb, var(--surface) 58%, transparent);
   }
   .relay-editor > .settings-relay-status {
-    grid-column: 1;
-    grid-row: 1;
+    position: absolute;
+    top: 27px;
+    left: 20px;
   }
   .relay-editor > input {
-    grid-column: 2 / -1;
+    grid-column: 1 / -1;
+    padding-left: 32px;
   }
   .relay-editor label {
     justify-content: center;
@@ -2197,16 +2235,16 @@ label span, label strong { color: var(--text); }
     font-size: 14px;
   }
   .relay-editor label:nth-of-type(1) {
-    grid-column: 1 / 3;
+    grid-column: 1;
   }
   .relay-editor label:nth-of-type(2) {
-    grid-column: 3 / 4;
+    grid-column: 2;
   }
   .relay-editor label:nth-of-type(3) {
-    grid-column: 4 / 5;
+    grid-column: 3;
   }
   .relay-editor .icon-button {
-    grid-column: 5;
+    grid-column: 4;
     grid-row: 2;
     width: 44px;
     min-height: 38px;

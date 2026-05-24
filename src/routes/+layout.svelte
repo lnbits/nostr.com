@@ -19,12 +19,22 @@
     if (!embeddedPage) {
       void bootstrap();
       rightRailCollapsed = localStorage.getItem(rightRailStorageKey) === 'true';
+      void configureNativeChrome();
     }
   });
 
   function toggleRightRail() {
     rightRailCollapsed = !rightRailCollapsed;
     localStorage.setItem(rightRailStorageKey, String(rightRailCollapsed));
+  }
+
+  async function configureNativeChrome() {
+    const [{ Capacitor }, { StatusBar, Style }] = await Promise.all([import('@capacitor/core'), import('@capacitor/status-bar')]);
+    if (!Capacitor.isNativePlatform()) return;
+
+    document.documentElement.classList.add('native-shell');
+    await StatusBar.setOverlaysWebView({ overlay: false }).catch(() => undefined);
+    await StatusBar.setStyle({ style: Style.Default }).catch(() => undefined);
   }
 </script>
 

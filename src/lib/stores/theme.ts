@@ -9,6 +9,10 @@ const initialTheme = browser ? readThemeMode() : 'light';
 export const themeMode = writable<ThemeMode>(initialTheme);
 
 export function setThemeMode(mode: ThemeMode) {
+  if (isNativeShell()) {
+    themeMode.set('dark');
+    return;
+  }
   themeMode.set(mode);
 }
 
@@ -23,8 +27,13 @@ themeMode.subscribe((mode) => {
 });
 
 function readThemeMode(): ThemeMode {
+  if (isNativeShell()) return 'dark';
   const saved = localStorage.getItem(storageKey);
   if (saved === 'dark') return 'dark';
   if (saved !== 'light') localStorage.setItem(storageKey, 'light');
   return 'light';
+}
+
+function isNativeShell() {
+  return Boolean(browser && window.Capacitor?.isNativePlatform?.());
 }

@@ -1,5 +1,8 @@
 declare global {
   interface Window {
+    Capacitor?: {
+      isNativePlatform(): boolean;
+    };
     nostr?: {
       getPublicKey(): Promise<string>;
       signEvent(event: Record<string, unknown>): Promise<Record<string, unknown>>;

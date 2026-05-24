@@ -603,9 +603,11 @@ export async function signIn(mode: 'nip07' | 'private-key' | 'bunker' | 'guest',
           : createGuestSession();
   session.set(next);
   persistSession(next);
-  await hydrateSignedInFeedContext(next);
-  void refreshFeed();
-  void refreshNotifications();
+  activeHashtag.set('');
+  directMessages.set([]);
+  notifications.set([]);
+  loadingFeed.set(true);
+  void finishSignedInBootstrap(next);
 }
 
 export async function signOut() {
@@ -618,6 +620,8 @@ export async function signOut() {
   await hydrateGuestFeedContext();
   void refreshFeed('global');
   notifications.set([]);
+  directMessages.set([]);
+  activeMessagePeer.set('');
   mutedPubkeys.set([]);
   replyTarget.set(null);
   editTarget.set(null);
@@ -1009,8 +1013,22 @@ async function hydrateDefaultFeedContext() {
   session.subscribe((value) => (currentSession = value))();
   if (currentSession) {
     await hydrateSignedInFeedContext(currentSession);
+    selectPreferredSignedInFeed();
   } else {
     await hydrateGuestFeedContext();
+  }
+}
+
+async function finishSignedInBootstrap(next: Session) {
+  try {
+    await hydrateSignedInFeedContext(next);
+    if (!isCurrentSession(next)) return;
+    selectPreferredSignedInFeed();
+    await refreshFeed(currentMode);
+    void refreshNotifications();
+    void refreshMessages();
+  } finally {
+    if (isCurrentSession(next)) loadingFeed.set(false);
   }
 }
 
@@ -1026,6 +1044,16 @@ async function hydrateSignedInFeedContext(currentSession: Session) {
   follows.set(contacts.pubkeys);
   mutedPubkeys.set(muted);
   dropMutedEvents();
+}
+
+function selectPreferredSignedInFeed() {
+  activeHashtag.set('');
+  cachedOlderEvents = [];
+  feedMode.set(currentFollows.length ? 'follow' : 'global');
+}
+
+function isCurrentSession(next: Session) {
+  return currentSessionValue?.pubkey === next.pubkey && currentSessionValue.mode === next.mode;
 }
 
 async function hydrateGuestFeedContext() {
