@@ -1,6 +1,10 @@
 ![Nostr](static/banner.png)
 
+![Beta](https://img.shields.io/badge/status-beta-f59e0b)
+
 This Nostr social client is just one of the kazillion clients that exist.
+
+Built by the LNbits team.
 
 Learn more at [nostr.org](https://nostr.org).
 

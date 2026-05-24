@@ -302,7 +302,7 @@
           <button disabled={!$session || updatingMute} on:click={toggleMute}>
             {#if isMuted}<UserMinus size={17} /> Unmute{:else}<UserX size={17} /> Mute{/if}
           </button>
-          <button class="icon-button" disabled={!$session} aria-label="Message" on:click={() => { selectMessagePeer(pubkey); void goto(appPath('/#messages')); }}><MessageCircle size={19} /></button>
+          <button class="icon-button" disabled={!$session} aria-label="Message" on:click={() => { selectMessagePeer(pubkey); void goto(appPath('/messages')); }}><MessageCircle size={19} /></button>
         {/if}
       </div>
 

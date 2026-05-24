@@ -15,17 +15,15 @@
 
   const navItems = [
     { href: '/', label: 'Home', icon: Home },
-    { href: '/#notifications', label: 'Notifications', icon: Bell },
-    { href: '/#messages', label: 'Messages', icon: Mail }
+    { href: '/notifications', label: 'Notifications', icon: Bell },
+    { href: '/messages', label: 'Messages', icon: Mail }
   ];
 
   $: profileHref = $session ? `/profile/${$session.pubkey}` : '/';
-  $: currentHref = `${$page.url.pathname}${$page.url.hash}`;
 
   function isActive(href: string) {
-    if (href === '/') return $page.url.pathname === '/' && !$page.url.hash;
-    if (href.startsWith('/#')) return currentHref === href;
-    return $page.url.pathname === href;
+    if (href === '/') return $page.route.id === '/';
+    return $page.route.id === href;
   }
 </script>
 
@@ -42,13 +40,13 @@
       <a
         class:active={isActive(item.href)}
         href={appPath(item.href)}
-        on:click={item.href === '/' ? goHome : item.href === '/#messages' ? () => selectMessagePeer('') : undefined}
+        on:click={item.href === '/' ? goHome : item.href === '/messages' ? () => selectMessagePeer('') : undefined}
       >
         <svelte:component this={item.icon} size={26} />
         <span>{item.label}</span>
       </a>
     {/each}
-    <a class:active={$page.url.pathname.startsWith('/profile')} href={appPath(profileHref)}>
+    <a class:active={$page.route.id?.startsWith('/profile/')} href={appPath(profileHref)}>
       <UserRound size={26} />
       <span>Profile</span>
     </a>
@@ -56,7 +54,7 @@
       <Settings size={26} />
       <span>Settings</span>
     </a>
-    <a class:active={isActive('/#info')} href={appPath('/#info')}>
+    <a class:active={isActive('/info')} href={appPath('/info')}>
       <MoreHorizontal size={26} />
       <span>info</span>
     </a>

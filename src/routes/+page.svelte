@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import type { Component } from 'svelte';
   import { tick } from 'svelte';
   import { page } from '$app/stores';
+  import { goto } from '$app/navigation';
   import { ArrowUp } from '@lucide/svelte';
   import FeedSearchBar from '$lib/components/FeedSearchBar.svelte';
   import NoteCard from '$lib/components/NoteCard.svelte';
@@ -23,6 +23,7 @@
     activeHashtag
   } from '$lib/stores/app';
   import { topLevelFeedEvents } from '$lib/nostr/client';
+  import { appPath } from '$lib/paths';
 
   let loadMoreSentinel: HTMLDivElement;
   let observer: IntersectionObserver | undefined;
@@ -36,12 +37,8 @@
   let pullStartedAtTop = false;
   let hideNewerBubble = false;
   let hideNewerBubbleTimeout: ReturnType<typeof setTimeout> | undefined;
-  let InfoView: Component | undefined;
-  let MessagesView: Component | undefined;
-  let NotificationsView: Component | undefined;
   const pullThreshold = 78;
   const newerBubbleCooldownMs = 5000;
-  $: activeHash = $page.url.hash;
   $: hasReadRelays = $relays.some((relay) => relay.enabled && relay.read);
   $: feedEvents = hashtagFilteredEvents(topLevelFeedEvents($events), $activeHashtag);
   $: pullProgress = Math.min(1, pullDistance / pullThreshold);
@@ -51,15 +48,23 @@
     : $session && ($feedMode === 'follow' || $feedMode === 'custom') && !$follows.length
       ? 'Please follow someone'
       : 'Please connect to relays';
-  $: if (activeHash === '#messages') void loadMessagesView();
-  $: if (activeHash === '#notifications') void loadNotificationsView();
-  $: if (activeHash === '#info') void loadInfoView();
 
   onMount(() => {
+    const hashRoutes: Record<string, string> = {
+      '#messages': '/messages',
+      '#notifications': '/notifications',
+      '#info': '/info'
+    };
+    const legacyRoute = hashRoutes[$page.url.hash];
+    if (legacyRoute) {
+      void goto(appPath(legacyRoute), { replaceState: true });
+      return;
+    }
+
     previousScrollY = window.scrollY;
     observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && loadOlderArmed && !activeHash) {
+        if (entry.isIntersecting && loadOlderArmed) {
           loadOlderArmed = false;
           void loadMoreFeed();
         }
@@ -72,7 +77,7 @@
       const nextScrollY = window.scrollY;
       if (nextScrollY > previousScrollY) {
         loadOlderArmed = true;
-        if (!activeHash && isNearPageBottom()) {
+        if (isNearPageBottom()) {
           loadOlderArmed = false;
           void loadMoreFeed();
         }
@@ -133,7 +138,7 @@
     pullDistance = 0;
     wheelPullRaw = 0;
     hideFloatingNewerBubble();
-    if (!shouldTrigger || pullingNewer || activeHash || !canLoadNewerForFeed()) return;
+    if (!shouldTrigger || pullingNewer || !canLoadNewerForFeed()) return;
 
     pullingNewer = true;
     try {
@@ -148,7 +153,7 @@
   }
 
   function canPullForNewer() {
-    return !activeHash && canLoadNewerForFeed() && window.scrollY <= 2;
+    return canLoadNewerForFeed() && window.scrollY <= 2;
   }
 
   function canLoadNewerForFeed() {
@@ -180,43 +185,9 @@
     });
   }
 
-  async function loadInfoView() {
-    if (InfoView) return;
-    InfoView = (await import('$lib/components/InfoView.svelte')).default;
-  }
-
-  async function loadMessagesView() {
-    if (MessagesView) return;
-    MessagesView = (await import('$lib/components/MessagesView.svelte')).default;
-  }
-
-  async function loadNotificationsView() {
-    if (NotificationsView) return;
-    NotificationsView = (await import('$lib/components/NotificationsView.svelte')).default;
-  }
 </script>
 
-{#if activeHash === '#messages'}
-  {#if MessagesView}
-    <svelte:component this={MessagesView} />
-  {:else}
-    <section class="timeline status-view">Loading messages</section>
-  {/if}
-{:else if activeHash === '#notifications'}
-  {#if NotificationsView}
-    <svelte:component this={NotificationsView} />
-  {:else}
-    <section class="timeline status-view">Loading notifications</section>
-  {/if}
-{:else if activeHash === '#info'}
-  {#if InfoView}
-    <svelte:component this={InfoView} />
-  {:else}
-    <section class="timeline status-view">Loading info</section>
-  {/if}
-{:else}
-  {@render Timeline()}
-{/if}
+{@render Timeline()}
 
 {#snippet Timeline()}
   <section
