@@ -22,6 +22,8 @@
     error = '';
     try {
       await signIn(mode, mode === 'private-key' ? privateKey : bunker);
+      privateKey = '';
+      bunker = '';
       loginDialogOpen.set(false);
     } catch (err) {
       error = err instanceof Error ? err.message : 'Could not sign in.';
@@ -100,6 +102,7 @@ ${generatedKeys.nsec}
       };
       void refreshFeed('global');
       loginDialogOpen.set(false);
+      generatedKeys = null;
       void saveProfile(profileDraft).catch(() => undefined);
     } catch (err) {
       error = err instanceof Error ? err.message : 'Could not save profile.';

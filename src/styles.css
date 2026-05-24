@@ -661,6 +661,11 @@ label span, label strong { color: var(--text); }
   content-visibility: auto;
   contain-intrinsic-size: auto 190px;
 }
+.note-card.menu-open {
+  content-visibility: visible;
+  overflow: visible;
+  z-index: 14;
+}
 .note-card.featured {
   margin: 6px 0;
   padding: 14px 12px;

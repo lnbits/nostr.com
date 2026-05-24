@@ -17,6 +17,8 @@ export async function uploadToNostrBuild(session: Session, file: File, mediaType
     method: 'POST',
     headers: { Authorization: authorization },
     body: form
+  }).catch((err) => {
+    throw new Error(uploadNetworkErrorMessage(err));
   });
   const data = await parseUploadResponse(response);
   if (!response.ok) throw new Error(uploadErrorMessage(data) || `Upload failed with ${response.status}.`);
@@ -65,6 +67,11 @@ function uploadResponseTags(data: unknown): string[][] {
 
 function uploadErrorMessage(data: unknown) {
   return data && typeof data === 'object' && 'message' in data && typeof data.message === 'string' ? data.message : '';
+}
+
+function uploadNetworkErrorMessage(err: unknown) {
+  const detail = err instanceof Error && err.message ? ` ${err.message}` : '';
+  return `Could not reach nostr.build for upload. This is usually a network, CORS, or browser-blocking issue.${detail}`;
 }
 
 async function parseUploadResponse(response: Response) {

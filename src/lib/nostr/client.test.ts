@@ -317,4 +317,19 @@ describe('nostr client helpers', () => {
       'No write relays are enabled.'
     );
   });
+
+  it('refuses to publish the active private key in event content or tags', async () => {
+    const secret = bytesToHex(new Uint8Array(32).fill(2));
+    const session: Session = { mode: 'private-key', pubkey: loginWithPrivateKey(secret).pubkey, secret };
+
+    await expect(publishNote(session, `do not post ${secret}`, [])).rejects.toThrow('private signing material');
+    await expect(publishNote(session, 'hello', [], [['alt', nip19.nsecEncode(new Uint8Array(32).fill(2))]])).rejects.toThrow('private signing material');
+  });
+
+  it('refuses to publish nsec-looking private keys even when they are not the active key', async () => {
+    const session: Session = { mode: 'private-key', pubkey, secret: bytesToHex(new Uint8Array(32).fill(3)) };
+    const otherNsec = nip19.nsecEncode(new Uint8Array(32).fill(4));
+
+    await expect(publishNote(session, `oops ${otherNsec}`, [])).rejects.toThrow('nsec private key');
+  });
 });

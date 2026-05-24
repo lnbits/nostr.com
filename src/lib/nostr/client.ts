@@ -980,6 +980,7 @@ async function publishSignedEvent(event: NostrToolsEvent, relays = defaultRelays
 }
 
 export async function signEventTemplate(session: Session, draft: Pick<NostrToolsEvent, 'kind' | 'content' | 'tags' | 'created_at'>) {
+  assertNoSessionSecretLeak(session, draft);
   let event: NostrToolsEvent;
   if (session.mode === 'nip07' && window.nostr) {
     event = (await window.nostr.signEvent({ ...draft, pubkey: session.pubkey })) as unknown as NostrToolsEvent;
@@ -992,6 +993,23 @@ export async function signEventTemplate(session: Session, draft: Pick<NostrTools
   }
 
   return event;
+}
+
+function assertNoSessionSecretLeak(session: Session, draft: Pick<NostrToolsEvent, 'content' | 'tags'>) {
+  const serializedDraft = JSON.stringify({ content: draft.content, tags: draft.tags });
+  const leaked = sessionSecretValues(session).find((value) => serializedDraft.includes(value));
+  if (leaked) throw new Error('Refusing to publish because the event contains private signing material.');
+  if (containsNsec(serializedDraft)) throw new Error('Refusing to publish because the event contains an nsec private key.');
+}
+
+function sessionSecretValues(session: Session) {
+  return [session.secret, session.secret ? nip19.nsecEncode(hexToBytes(session.secret)) : '', session.bunkerClientSecret, session.bunkerSecret ?? ''].filter(
+    (value): value is string => typeof value === 'string' && value.length >= 12
+  );
+}
+
+function containsNsec(value: string) {
+  return /nsec1[023456789acdefghjklmnpqrstuvwxyz]{20,}/i.test(value);
 }
 
 function getBunkerSigner(session: Session) {

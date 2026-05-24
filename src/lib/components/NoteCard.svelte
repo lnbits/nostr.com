@@ -2,7 +2,7 @@
   import { onDestroy, onMount } from 'svelte';
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
-  import { Copy, ExternalLink, Flag, Heart, MessageCircle, MoreHorizontal, Pencil, Repeat2, Trash2, UserX, Zap } from '@lucide/svelte';
+  import { Copy, ExternalLink, Flag, Heart, Link, MessageCircle, MoreHorizontal, Pencil, Repeat2, Trash2, UserX, Zap } from '@lucide/svelte';
   import type { NostrEvent, Profile } from '$lib/nostr/types';
   import { extractMediaAttachments, extractQuotedNoteReferences, parseNoteText } from '$lib/nostr/media';
   import { fetchLikeAuthors, fetchProfiles, subscribeZapReceipts } from '$lib/nostr/client';
@@ -22,6 +22,8 @@
   let openImage: { url: string; alt?: string } | null = null;
   let menuOpen = false;
   let copiedEmbed = false;
+  let copiedEventId = false;
+  let copiedShareLink = false;
   let likePopoverOpen = false;
   let likeAuthors: string[] = [];
   let loadingLikeAuthors = false;
@@ -170,6 +172,10 @@
     return `${origin}${appPath(`/embed/${event.id}`)}`;
   }
 
+  function shareUrl() {
+    return `https://nostr.com/event/${event.id}`;
+  }
+
   async function copyEmbed() {
     const url = embedUrl();
     const iframeId = `nostr-embed-${event.id.slice(0, 12)}`;
@@ -185,6 +191,20 @@
     copiedEmbed = true;
     menuOpen = false;
     setTimeout(() => (copiedEmbed = false), 1400);
+  }
+
+  async function copyEventId() {
+    await copyText(event.id);
+    copiedEventId = true;
+    menuOpen = false;
+    setTimeout(() => (copiedEventId = false), 1400);
+  }
+
+  async function copyShareLink() {
+    await copyText(shareUrl());
+    copiedShareLink = true;
+    menuOpen = false;
+    setTimeout(() => (copiedShareLink = false), 1400);
   }
 
   async function muteAuthor() {
@@ -337,7 +357,7 @@
 
 <svelte:window on:pointerdown={closeMenuFromOutside} />
 
-<article class="note-card" class:featured class:embedded bind:this={noteElement}>
+<article class="note-card" class:featured class:embedded class:menu-open={menuOpen} bind:this={noteElement}>
   <a class="avatar" href={appPath(`/profile/${displayEvent.pubkey}`)} aria-label={`${name} profile`}>
     {#if avatar}
       <img src={avatar} alt="" loading="lazy" />
@@ -359,6 +379,8 @@
           {#if menuOpen}
             <div class="note-menu-popover">
               <button on:click={copyEmbed}><Copy size={16} /> Copy embed</button>
+              <button on:click={copyEventId}><Copy size={16} /> {copiedEventId ? 'Copied event id' : 'Copy event id'}</button>
+              <button on:click={copyShareLink}><Link size={16} /> {copiedShareLink ? 'Copied link' : 'Share link'}</button>
               {#if isOwnPost}
                 <button on:click={() => { menuOpen = false; startEdit(displayEvent); }}><Pencil size={16} /> Edit post</button>
               {/if}

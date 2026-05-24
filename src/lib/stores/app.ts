@@ -1024,7 +1024,14 @@ function hydrateSession() {
 
 function persistSession(next: Session) {
   if (!browser) return;
-  localStorage.setItem(sessionStorageKey, JSON.stringify(next));
+  if (next.mode === 'nip07' || next.mode === 'private-key') {
+    localStorage.setItem(
+      sessionStorageKey,
+      JSON.stringify(next.mode === 'nip07' ? ({ pubkey: next.pubkey, mode: next.mode } satisfies Session) : next)
+    );
+    return;
+  }
+  localStorage.removeItem(sessionStorageKey);
 }
 
 function readStoredSession() {
@@ -1032,7 +1039,14 @@ function readStoredSession() {
   if (!raw) return null;
   try {
     const saved = JSON.parse(raw) as Session;
-    return saved?.pubkey && saved?.mode ? saved : null;
+    if (!saved?.pubkey || !saved?.mode) return null;
+    if (saved.bunkerClientSecret || saved.bunkerSecret) {
+      localStorage.removeItem(sessionStorageKey);
+      return null;
+    }
+    if (saved.mode === 'nip07') return { pubkey: saved.pubkey, mode: saved.mode };
+    if (saved.mode === 'private-key' && saved.secret) return saved;
+    return null;
   } catch {
     localStorage.removeItem(sessionStorageKey);
     return null;
