@@ -6,7 +6,8 @@
     <meta name="theme-color" content="#0f172a" />
     <script>
       try {
-        const embedded = location.pathname.startsWith('/embed/');
+        const base = '%sveltekit.assets%';
+        const embedded = location.pathname.startsWith(`${base}/embed/`);
         const theme = embedded ? 'dark' : localStorage.getItem('nostr-theme');
         document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : 'light';
         if (!embedded && theme !== 'dark' && theme !== 'light') localStorage.setItem('nostr-theme', 'light');
@@ -14,8 +15,10 @@
         document.documentElement.dataset.theme = 'light';
       }
     </script>
-    <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="icon" href="/favicon.svg" />
+    <link rel="manifest" href="%sveltekit.assets%/manifest.webmanifest" />
+    <link rel="icon" href="%sveltekit.assets%/favicon.ico" sizes="any" />
+    <link rel="icon" href="%sveltekit.assets%/icon-32.png" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="%sveltekit.assets%/apple-touch-icon.png" />
     %sveltekit.head%
   </head>
   <body data-sveltekit-preload-data="hover">

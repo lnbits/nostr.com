@@ -3,6 +3,7 @@
   import { Save, Trash2, UserPlus, X } from '@lucide/svelte';
   import { follows, profiles, relays, saveFollowList } from '$lib/stores/app';
   import { fetchProfiles, resolveNip05Profile, searchProfiles } from '$lib/nostr/client';
+  import { appPath } from '$lib/paths';
   import type { Profile } from '$lib/nostr/types';
 
   export let open = false;
@@ -194,7 +195,7 @@
         {#each entries as pubkey}
           {@const profile = profileFor(pubkey)}
           <div class="follow-list-row">
-            <a class="follow-profile-link" href={`/profile/${pubkey}`} on:click={close}>
+            <a class="follow-profile-link" href={appPath(`/profile/${pubkey}`)} on:click={close}>
               <span class="avatar mini">
                 {#if profile.picture}<img src={profile.picture} alt="" />{:else}{profileLabel(profile).slice(0, 1).toUpperCase()}{/if}
               </span>

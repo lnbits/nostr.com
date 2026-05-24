@@ -9,6 +9,7 @@
   import { getCachedProfileEvents } from '$lib/nostr/cache';
   import { dedupeEvents, fetchProfileEvents, fetchProfiles, topLevelFeedEvents } from '$lib/nostr/client';
   import { uploadToNostrBuild } from '$lib/nostr/upload';
+  import { appPath } from '$lib/paths';
   import type { NostrEvent, Profile } from '$lib/nostr/types';
 
   const emptyProfile = (): Profile => ({
@@ -280,7 +281,7 @@
 
 <div class="profile-page">
   <section class="profile-hero">
-    <a class="page-back" href="/" aria-label="Back to feed"><ArrowLeft size={18} /> Back</a>
+    <a class="page-back" href={appPath('/')} aria-label="Back to feed"><ArrowLeft size={18} /> Back</a>
 
     <div class="profile-banner" style={`background-image: ${profile?.banner ? `url(${profile.banner})` : 'none'}`}></div>
 
@@ -301,7 +302,7 @@
           <button disabled={!$session || updatingMute} on:click={toggleMute}>
             {#if isMuted}<UserMinus size={17} /> Unmute{:else}<UserX size={17} /> Mute{/if}
           </button>
-          <button class="icon-button" disabled={!$session} aria-label="Message" on:click={() => { selectMessagePeer(pubkey); void goto('/#messages'); }}><MessageCircle size={19} /></button>
+          <button class="icon-button" disabled={!$session} aria-label="Message" on:click={() => { selectMessagePeer(pubkey); void goto(appPath('/#messages')); }}><MessageCircle size={19} /></button>
         {/if}
       </div>
 

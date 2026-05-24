@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { appPath } from '$lib/paths';
+
   const activeNips = [
     {
       id: 'NIP-01',
@@ -131,10 +133,10 @@
 
 <section class="info-view">
   <header class="info-head">
-    <a class="info-back" href="/" aria-label="Back to feed">← Feed</a>
+    <a class="info-back" href={appPath('/')} aria-label="Back to feed">← Feed</a>
     <div class="info-title-row">
       <h1>Info</h1>
-      <img src="/robot.png" alt="" class="info-robot" />
+      <img src={appPath('/robot.png')} alt="" class="info-robot" />
     </div>
     <p>
       Nostr is a completely free and open-source protocol that nobody controls. It enables

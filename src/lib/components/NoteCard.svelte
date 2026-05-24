@@ -8,6 +8,7 @@
   import { fetchLikeAuthors, fetchProfiles, subscribeZapReceipts } from '$lib/nostr/client';
   import { createZapInvoice, loadZapInfo, type ZapInfo } from '$lib/nostr/zap';
   import { deleteNote, editedEvents, eventStats, filterByHashtag, likedEvents, muteAccount, profiles, reactToNote, refreshEventStats, relays, reportNote, repostedEvents, repostNote, session, startEdit, startReply, watchVisibleNoteStats } from '$lib/stores/app';
+  import { appPath } from '$lib/paths';
   import QuotedNotePreview from './QuotedNotePreview.svelte';
 
   export let event: NostrEvent;
@@ -114,12 +115,12 @@
 
   function filterHashtag(tag: string) {
     filterByHashtag(tag);
-    if (browser) void goto('/');
+    if (browser) void goto(appPath('/'));
   }
 
   function openNote() {
     if (onOpen) onOpen(event);
-    else if (browser && !embedded) void goto(`/thread/${event.id}`);
+    else if (browser && !embedded) void goto(appPath(`/thread/${event.id}`));
   }
 
   function openFromNoteBody(pointerEvent: MouseEvent) {
@@ -165,8 +166,8 @@
   }
 
   function embedUrl() {
-    const base = browser ? window.location.origin : '';
-    return `${base}/embed/${event.id}`;
+    const origin = browser ? window.location.origin : '';
+    return `${origin}${appPath(`/embed/${event.id}`)}`;
   }
 
   async function copyEmbed() {
@@ -337,7 +338,7 @@
 <svelte:window on:pointerdown={closeMenuFromOutside} />
 
 <article class="note-card" class:featured class:embedded bind:this={noteElement}>
-  <a class="avatar" href={`/profile/${displayEvent.pubkey}`} aria-label={`${name} profile`}>
+  <a class="avatar" href={appPath(`/profile/${displayEvent.pubkey}`)} aria-label={`${name} profile`}>
     {#if avatar}
       <img src={avatar} alt="" loading="lazy" />
     {:else}
@@ -348,7 +349,7 @@
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
   <div class="note-body" role={embedded ? undefined : 'button'} tabindex={embedded ? undefined : 0} on:click={openFromNoteBody} on:keydown={openFromKeyboard}>
     <div class="note-meta">
-      <a href={`/profile/${displayEvent.pubkey}`}><strong>{name}</strong></a>
+      <a href={appPath(`/profile/${displayEvent.pubkey}`)}><strong>{name}</strong></a>
       <time datetime={timestamp.toISOString()} title={fullTime}>{time}</time>
       {#if !embedded}
         <div class="note-menu" bind:this={menuElement}>
@@ -367,7 +368,7 @@
               {#if !isOwnPost}
                 <button disabled={!$session} on:click={() => void muteAuthor()}><UserX size={16} /> Mute account</button>
               {/if}
-              <a href={`/embed/${event.id}`} target="_blank" rel="noreferrer"><ExternalLink size={16} /> Open embed</a>
+              <a href={appPath(`/embed/${event.id}`)} target="_blank" rel="noreferrer"><ExternalLink size={16} /> Open embed</a>
             </div>
           {/if}
         </div>
@@ -416,7 +417,7 @@
       </div>
     {/if}
     {#if embedded}
-      <a class="embed-open-link" href={`/thread/${event.id}?feed=global`} target="_blank" rel="noreferrer">View on Nostr</a>
+      <a class="embed-open-link" href={appPath(`/thread/${event.id}?feed=global`)} target="_blank" rel="noreferrer">View on Nostr</a>
     {:else}
       <div class="note-actions">
         <button aria-label="Reply" on:click={() => startReply(displayEvent)}><MessageCircle size={18} /><span>{counts.replies}</span></button>
@@ -431,7 +432,7 @@
                 <span>Loading</span>
               {:else if likeAuthors.length}
                 {#each likeAuthors as pubkey}
-                  <a href={`/profile/${pubkey}`}>{profileName(pubkey)}</a>
+                  <a href={appPath(`/profile/${pubkey}`)}>{profileName(pubkey)}</a>
                 {/each}
               {:else}
                 <span>No likes found yet</span>

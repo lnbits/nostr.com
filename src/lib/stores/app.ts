@@ -3,6 +3,7 @@ import { goto } from '$app/navigation';
 import { writable } from 'svelte/store';
 import { getCachedEvents, getCachedHashtagEvents, getCachedProfiles } from '$lib/nostr/cache';
 import { defaultCustomFeedSettings, defaultGuestNip05, defaultRelays, keywordsForInterests } from '$lib/nostr/config';
+import { appPath } from '$lib/paths';
 import { mergeDirectMessages } from './directMessages';
 import {
   createGuestSession,
@@ -607,7 +608,7 @@ export async function signOut() {
   activeHashtag.set('');
   feedMode.set('global');
   cachedOlderEvents = [];
-  if (browser) await goto('/');
+  if (browser) await goto(appPath('/'));
   await hydrateGuestFeedContext();
   void refreshFeed('global');
   notifications.set([]);
@@ -948,7 +949,7 @@ export function startCompose() {
   replyTarget.set(null);
   editTarget.set(null);
   activeHashtag.set('');
-  if (browser && (window.location.pathname !== '/' || window.location.hash)) void goto('/');
+  if (browser && (window.location.pathname !== appPath('/') || window.location.hash)) void goto(appPath('/'));
   composerOpen.set(true);
 }
 

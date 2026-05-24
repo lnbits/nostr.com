@@ -8,17 +8,18 @@
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
+    "icons": "node scripts/generate-icons.cjs",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "desktop:win": "npm run build && electron-builder --win nsis --x64 --publish never",
-    "desktop:mac": "npm run build && electron-builder --mac dmg --arm64 --publish never",
-    "desktop:linux": "npm run build && electron-builder --linux AppImage --x64 --publish never",
+    "desktop:win": "npm run icons && npm run build && electron-builder --win nsis --x64 --publish never",
+    "desktop:mac": "npm run icons && npm run build && electron-builder --mac dmg --arm64 --publish never",
+    "desktop:linux": "npm run icons && npm run build && electron-builder --linux AppImage --x64 --publish never",
     "cap:add:ios": "cap add ios",
     "cap:add:android": "cap add android",
-    "cap:sync": "npm run build && cap sync"
+    "cap:sync": "npm run icons && npm run build && cap sync && npm run icons"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.4",
@@ -45,8 +46,10 @@
       "package.json"
     ],
     "directories": {
+      "buildResources": "build-resources",
       "output": "release"
     },
+    "icon": "build-resources/icon",
     "mac": {
       "target": [
         {

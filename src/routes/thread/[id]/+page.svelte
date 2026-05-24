@@ -7,6 +7,7 @@
   import ThreadReplyTree from '$lib/components/ThreadReplyTree.svelte';
   import { deletedEventIds, eventStats, events, mergeEvents, profiles, refreshEventStats, relays, session } from '$lib/stores/app';
   import { eventStatsFromEvents, fetchMissingEvents, fetchProfiles, fetchThreadReplies } from '$lib/nostr/client';
+  import { appPath } from '$lib/paths';
   import type { NostrEvent } from '$lib/nostr/types';
 
   const initialThreadReplyLimit = 40;
@@ -141,7 +142,7 @@
 </script>
 
 <section class="thread-page">
-  <a class="page-back" href="/" aria-label="Back to feed"><ArrowLeft size={18} /> Back</a>
+  <a class="page-back" href={appPath('/')} aria-label="Back to feed"><ArrowLeft size={18} /> Back</a>
 
   {#if root}
     <div class="feed-list">

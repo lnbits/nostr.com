@@ -10,6 +10,7 @@
   } from '@lucide/svelte';
   import { page } from '$app/stores';
   import { goHome, selectMessagePeer, session, startCompose } from '$lib/stores/app';
+  import { appPath } from '$lib/paths';
   import ThemeToggle from './ThemeToggle.svelte';
 
   const navItems = [
@@ -30,7 +31,7 @@
 
 <aside class="left-nav" aria-label="Primary">
   <div class="left-nav-head">
-    <a class="left-logo" href="/" aria-label="Nostr home" on:click={goHome}>nostr</a>
+    <a class="left-logo" href={appPath('/')} aria-label="Nostr home" on:click={goHome}>nostr</a>
     <div class="nav-tools">
       <ThemeToggle />
     </div>
@@ -40,22 +41,22 @@
     {#each navItems as item}
       <a
         class:active={isActive(item.href)}
-        href={item.href}
+        href={appPath(item.href)}
         on:click={item.href === '/' ? goHome : item.href === '/#messages' ? () => selectMessagePeer('') : undefined}
       >
         <svelte:component this={item.icon} size={26} />
         <span>{item.label}</span>
       </a>
     {/each}
-    <a class:active={$page.url.pathname.startsWith('/profile')} href={profileHref}>
+    <a class:active={$page.url.pathname.startsWith('/profile')} href={appPath(profileHref)}>
       <UserRound size={26} />
       <span>Profile</span>
     </a>
-    <a class:active={isActive('/settings')} href="/settings">
+    <a class:active={isActive('/settings')} href={appPath('/settings')}>
       <Settings size={26} />
       <span>Settings</span>
     </a>
-    <a class:active={isActive('/#info')} href="/#info">
+    <a class:active={isActive('/#info')} href={appPath('/#info')}>
       <MoreHorizontal size={26} />
       <span>info</span>
     </a>

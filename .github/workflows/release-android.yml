@@ -25,8 +25,10 @@ jobs:
           java-version: 21
       - uses: android-actions/setup-android@v3
       - run: npm ci
+      - run: npm run icons
       - run: npm run build
       - run: npx cap add android
+      - run: npm run icons
       - run: npx cap sync android
       - run: ./gradlew assembleDebug
         working-directory: android

@@ -3,6 +3,7 @@
   import { MessageSquareText } from '@lucide/svelte';
   import { events, profiles, relays } from '$lib/stores/app';
   import { fetchMissingEvents, fetchProfiles } from '$lib/nostr/client';
+  import { appPath } from '$lib/paths';
   import type { NostrEvent, Profile } from '$lib/nostr/types';
 
   export let ids: string[] = [];
@@ -49,7 +50,7 @@
   <div class="quoted-note-list" class:compact>
     {#each quotedEvents as event (event.id)}
       {@const profile = $profiles[event.pubkey]}
-      <a class="quoted-note" href={`/thread/${event.id}`} aria-label="Open quoted note">
+      <a class="quoted-note" href={appPath(`/thread/${event.id}`)} aria-label="Open quoted note">
         <span class="avatar mini">
           {#if profile?.picture}
             <img src={profile.picture} alt="" loading="lazy" referrerpolicy="no-referrer" />
@@ -67,7 +68,7 @@
 {:else if cleanIds.length}
   <div class="quoted-note-list" class:compact>
     {#each cleanIds as id (id)}
-      <a class="quoted-note loading" href={`/thread/${id}`}>
+      <a class="quoted-note loading" href={appPath(`/thread/${id}`)}>
         <MessageSquareText size={18} />
         <span class="quoted-note-body">
           <strong>Quoted note</strong>

@@ -2,6 +2,7 @@
   import { goto } from '$app/navigation';
   import { SlidersHorizontal } from '@lucide/svelte';
   import { feedMode, selectFeedMode } from '$lib/stores/app';
+  import { appPath } from '$lib/paths';
   import type { FeedMode } from '$lib/nostr/types';
   import CustomFeedDialog from './CustomFeedDialog.svelte';
   import FollowListDialog from './FollowListDialog.svelte';
@@ -18,7 +19,7 @@
   function select(key: FeedMode) {
     if (disabled) return;
     selectFeedMode(key);
-    void goto('/');
+    void goto(appPath('/'));
   }
 
   let customDialogOpen = false;

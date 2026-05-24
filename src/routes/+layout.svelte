@@ -10,12 +10,13 @@
   import RightRail from '$lib/components/RightRail.svelte';
   import ThemeToggle from '$lib/components/ThemeToggle.svelte';
   import { startRelayStatusChecks } from '$lib/stores/relayStatus';
+  import { appPath } from '$lib/paths';
 
   const rightRailStorageKey = 'nostr-right-rail-collapsed';
   let rightRailCollapsed = false;
   let stopRelayStatusChecks = () => {};
   let relayStatusTimer: ReturnType<typeof setTimeout> | undefined;
-  $: embeddedPage = $page.url.pathname.startsWith('/embed/');
+  $: embeddedPage = $page.route.id?.startsWith('/embed/') ?? false;
 
   onMount(() => {
     if (!embeddedPage) {
@@ -59,11 +60,11 @@
   {:else}
     <header class="topbar">
       <div class="brand-row">
-        <a class="brand" href="/" aria-label="Nostr home" on:click={goHome}>
+        <a class="brand" href={appPath('/')} aria-label="Nostr home" on:click={goHome}>
           <strong>Nostr</strong>
           <span>controlled by users, not platforms</span>
         </a>
-        <a class="icon-button info-link" href="/#info" aria-label="Learn about Nostr">
+        <a class="icon-button info-link" href={appPath('/#info')} aria-label="Learn about Nostr">
           <Info size={18} />
         </a>
       </div>
@@ -84,14 +85,14 @@
 
   <nav class="tabbar" class:guest={!$session} aria-label="Primary">
     {#if $session}
-      <a href="/" aria-label="Home" on:click={goHome}><Home size={22} /></a>
-      <a href="/#notifications" aria-label="Notifications"><Bell size={22} /></a>
-      <a href="/#messages" aria-label="Messages" on:click={() => selectMessagePeer('')}><Mail size={22} /></a>
-      <a href="/settings" aria-label="Settings"><Settings size={22} /></a>
-      <a href={`/profile/${$session.pubkey}`} aria-label="Profile"><UserRound size={22} /></a>
+      <a href={appPath('/')} aria-label="Home" on:click={goHome}><Home size={22} /></a>
+      <a href={appPath('/#notifications')} aria-label="Notifications"><Bell size={22} /></a>
+      <a href={appPath('/#messages')} aria-label="Messages" on:click={() => selectMessagePeer('')}><Mail size={22} /></a>
+      <a href={appPath('/settings')} aria-label="Settings"><Settings size={22} /></a>
+      <a href={appPath(`/profile/${$session.pubkey}`)} aria-label="Profile"><UserRound size={22} /></a>
     {:else}
       <button class="tabbar-signin" on:click={() => loginDialogOpen.set(true)}><LogIn size={19} /> Sign in</button>
-      <a class="tabbar-info" href="/#info" aria-label="Info">i</a>
+      <a class="tabbar-info" href={appPath('/#info')} aria-label="Info">i</a>
     {/if}
   </nav>
 

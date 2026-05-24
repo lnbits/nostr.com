@@ -46,6 +46,7 @@ async function createWindow() {
     minWidth: 420,
     minHeight: 680,
     title: 'Nostr Social',
+    icon: path.join(__dirname, '..', 'build', 'icon-512.png'),
     backgroundColor: '#0f172a',
     webPreferences: {
       contextIsolation: true,

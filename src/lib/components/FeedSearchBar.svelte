@@ -4,6 +4,7 @@
   import { Hash, Loader2, Search, UserRound } from '@lucide/svelte';
   import { filterByHashtag, profiles, relays } from '$lib/stores/app';
   import { resolvePubkeyIdentifier, searchProfiles } from '$lib/nostr/client';
+  import { appPath } from '$lib/paths';
   import type { Profile } from '$lib/nostr/types';
 
   let query = '';
@@ -47,7 +48,7 @@
     const resolvedPubkey = await resolvePubkeyIdentifier(value, $relays).catch(() => '');
     if (resolvedPubkey) {
       query = '';
-      await goto(`/profile/${resolvedPubkey}`);
+      await goto(appPath(`/profile/${resolvedPubkey}`));
       return;
     }
     if (value.startsWith('@') && suggestedProfile) {
@@ -57,12 +58,12 @@
 
     filterByHashtag(value.replace(/^#/, ''));
     query = '';
-    await goto('/');
+    await goto(appPath('/'));
   }
 
   async function openProfile(pubkey: string) {
     query = '';
-    await goto(`/profile/${pubkey}`);
+    await goto(appPath(`/profile/${pubkey}`));
   }
 
   function profileSuggestions(value: string, items: Profile[]) {

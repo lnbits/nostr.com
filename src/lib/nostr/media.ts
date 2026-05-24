@@ -1,4 +1,5 @@
 import { nip19 } from 'nostr-tools';
+import { appPath } from '$lib/paths';
 import type { MediaAttachment, NostrEvent } from './types';
 
 const mediaUrlPattern = /https?:\/\/[^\s<>"']+\.(?:png|jpe?g|gif|webp|avif|mp4|webm|mov)(?:\?[^\s<>"']*)?/gi;
@@ -188,7 +189,7 @@ function parseMentions(content: string): NoteTextPart[] {
     const mentionIndex = match.index + prefix.length;
     if (mentionIndex > lastIndex) parts.push({ type: 'text', value: content.slice(lastIndex, mentionIndex) });
     const query = noteId ? `?note=${encodeURIComponent(noteId)}` : '';
-    parts.push({ type: 'mention', value: raw, href: `/profile/${encodeURIComponent(handle)}${query}` });
+    parts.push({ type: 'mention', value: raw, href: appPath(`/profile/${encodeURIComponent(handle)}${query}`) });
     lastIndex = mentionIndex + raw.length;
   }
 
@@ -198,8 +199,8 @@ function parseMentions(content: string): NoteTextPart[] {
 
 function indexedReferencePart(raw: string, tag: string[] | undefined): NoteTextPart {
   if (!tag || !tag[1]) return { type: 'text', value: raw };
-  if (tag[0] === 'p') return { type: 'nostr', value: raw, href: `/profile/${tag[1]}`, label: '@nostr' };
-  if (tag[0] === 'e') return { type: 'nostr', value: raw, href: `/thread/${tag[1]}`, label: 'note' };
+  if (tag[0] === 'p') return { type: 'nostr', value: raw, href: appPath(`/profile/${tag[1]}`), label: '@nostr' };
+  if (tag[0] === 'e') return { type: 'nostr', value: raw, href: appPath(`/thread/${tag[1]}`), label: 'note' };
   return { type: 'text', value: raw };
 }
 
@@ -248,10 +249,10 @@ function safeHttpUrl(value: string) {
 function hrefForNostrReference(value: string) {
   try {
     const decoded = nip19.decode(value);
-    if (decoded.type === 'npub') return `/profile/${decoded.data}`;
-    if (decoded.type === 'nprofile') return `/profile/${decoded.data.pubkey}`;
-    if (decoded.type === 'note') return `/thread/${decoded.data}`;
-    if (decoded.type === 'nevent') return `/thread/${decoded.data.id}`;
+    if (decoded.type === 'npub') return appPath(`/profile/${decoded.data}`);
+    if (decoded.type === 'nprofile') return appPath(`/profile/${decoded.data.pubkey}`);
+    if (decoded.type === 'note') return appPath(`/thread/${decoded.data}`);
+    if (decoded.type === 'nevent') return appPath(`/thread/${decoded.data.id}`);
   } catch {
     // Leave unknown or future NIP-19 values as external nostr URIs.
   }

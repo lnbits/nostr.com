@@ -2,6 +2,7 @@
   import { goto } from '$app/navigation';
   import { Heart, MessageCircle, RefreshCw, Repeat2, UserPlus, UserRound } from '@lucide/svelte';
   import { events, loadingNotifications, loginDialogOpen, mergeEvents, notifications, profiles, refreshNotifications, session } from '$lib/stores/app';
+  import { appPath } from '$lib/paths';
   import type { NotificationItem, Profile } from '$lib/nostr/types';
 
   function actorName(profile?: Profile, pubkey = '') {
@@ -35,12 +36,12 @@
   }
 
   function openNotification(item: NotificationItem) {
-    if (item.type === 'follow') void goto(`/profile/${item.event.pubkey}`);
+    if (item.type === 'follow') void goto(appPath(`/profile/${item.event.pubkey}`));
     else {
       events.update((existing) => mergeEvents([item.event, ...(item.targetEvent ? [item.targetEvent] : [])], existing));
       const targetId = item.targetId || item.event.id;
       const focus = item.type === 'reply' && targetId !== item.event.id ? `?focus=${item.event.id}` : '';
-      void goto(`/thread/${targetId}${focus}`);
+      void goto(appPath(`/thread/${targetId}${focus}`));
     }
   }
 </script>
