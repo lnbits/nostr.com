@@ -1,4 +1,4 @@
-# Nostr
+![Nostr](static/banner.png)
 
 This Nostr social client is just one of the kazillion clients that exist.
 
