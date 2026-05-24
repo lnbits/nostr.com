@@ -24,6 +24,7 @@ import {
   limitConsecutiveAuthors,
   loginWithBunker,
   loginWithNip07,
+  loginWithPomegranate,
   loginWithPrivateKey,
   normalizeRelayUrl,
   publishContactList,
@@ -44,7 +45,7 @@ import {
   subscribeNotifications,
   topLevelFeedEvents
 } from '$lib/nostr/client';
-import type { ContactListItem, CustomFeedSettings, DirectMessage, EventStats, FeedMode, NostrEvent, NotificationItem, Profile, RelayState, Session } from '$lib/nostr/types';
+import type { ContactListItem, CustomFeedSettings, DirectMessage, EventStats, FeedMode, LoginMode, NostrEvent, NotificationItem, Profile, RelayState, Session } from '$lib/nostr/types';
 
 const sessionStorageKey = 'nostr-session';
 const customFeedStorageKey = 'nostr-custom-feed-settings';
@@ -646,7 +647,7 @@ export async function sendDirectMessage(peer: string, content: string) {
   activeMessagePeer.set(recipient);
 }
 
-export async function signIn(mode: 'nip07' | 'private-key' | 'bunker' | 'guest', value = '') {
+export async function signIn(mode: LoginMode | 'guest', value = '') {
   const next =
     mode === 'nip07'
       ? await loginWithNip07()
@@ -654,7 +655,9 @@ export async function signIn(mode: 'nip07' | 'private-key' | 'bunker' | 'guest',
         ? loginWithPrivateKey(value)
         : mode === 'bunker'
           ? await loginWithBunker(value)
-          : createGuestSession();
+          : mode === 'pomegranate'
+            ? await loginWithPomegranate(value)
+            : createGuestSession();
   session.set(next);
   persistSession(next);
   activeHashtag.set('');

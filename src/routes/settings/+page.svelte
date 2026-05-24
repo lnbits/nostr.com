@@ -57,6 +57,7 @@
     if (mode === 'private-key') return 'Local key';
     if (mode === 'nip07') return 'Browser extension';
     if (mode === 'bunker') return 'Remote signer';
+    if (mode === 'pomegranate') return 'Pomegranate';
     return 'Signed in';
   }
 

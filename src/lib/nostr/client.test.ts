@@ -14,7 +14,9 @@ import {
   limitConsecutiveAuthors,
   loginWithBunker,
   loginWithPrivateKey,
+  normalizePomegranateCentralUrl,
   parseProfileEvents,
+  pomegranateBunkerUrl,
   publishNote,
   topLevelFeedEvents
 } from './client';
@@ -284,6 +286,23 @@ describe('nostr client helpers', () => {
 
   it('rejects invalid bunker sessions before trying to sign', async () => {
     await expect(loginWithBunker('bunker://not-a-valid-pubkey?relay=wss://relay.example')).rejects.toThrow('Enter a valid bunker:// URI.');
+  });
+
+  it('normalizes Pomegranate central URLs', () => {
+    expect(normalizePomegranateCentralUrl('localhost:5033/')).toBe('http://localhost:5033');
+    expect(normalizePomegranateCentralUrl('localhost:5033/profile')).toBe('http://localhost:5033');
+    expect(normalizePomegranateCentralUrl('central.example/path')).toBe('https://central.example');
+    expect(normalizePomegranateCentralUrl('https://central.example/profile')).toBe('https://central.example');
+    expect(() => normalizePomegranateCentralUrl('')).toThrow('Enter a Pomegranate central URL.');
+    expect(() => normalizePomegranateCentralUrl('https://')).toThrow('Enter a valid Pomegranate central URL.');
+  });
+
+  it('builds Pomegranate bunker URLs from profile handlers', () => {
+    const handler = 'c'.repeat(64);
+
+    expect(pomegranateBunkerUrl('https://central.example', handler)).toBe(`bunker://${handler}?relay=wss%3A%2F%2Fcentral.example`);
+    expect(pomegranateBunkerUrl('http://localhost:5033', handler)).toBe(`bunker://${handler}?relay=ws%3A%2F%2Flocalhost%3A5033`);
+    expect(() => pomegranateBunkerUrl('https://central.example', 'not-a-pubkey')).toThrow('valid handler public key');
   });
 
   it('parses profile metadata events and ignores malformed records', () => {

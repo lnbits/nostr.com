@@ -9,6 +9,17 @@ import type { ContactListDetails, ContactListItem, CustomFeedSettings, DirectMes
 const pool = new SimplePool();
 const bunkerSigners = new Map<string, nip46.BunkerSigner>();
 type SubCloser = { close: (reason?: string) => void };
+type PomegranateProfile = { name: string; handler_pubkey: string; email?: string };
+type PomegranateAccount = { pubkey: string; email?: string };
+
+class PomegranateRequestError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string
+  ) {
+    super(message);
+  }
+}
 
 export function activeRelayUrls(relays: RelayState[], intent: 'read' | 'write') {
   const urls = relays
@@ -103,6 +114,135 @@ export async function loginWithBunker(uri: string): Promise<Session> {
   };
   bunkerSigners.set(bunkerSignerKey(session), signer);
   return session;
+}
+
+export async function loginWithPomegranate(centralInput: string): Promise<Session> {
+  const centralUrl = normalizePomegranateCentralUrl(centralInput);
+  const token = await authenticatePomegranateCentral(centralUrl);
+  const account = await fetchPomegranateAccount(centralUrl, token);
+  const profile = await ensurePomegranateDefaultProfile(centralUrl, token);
+  const bunker = pomegranateBunkerUrl(centralUrl, profile.handler_pubkey);
+  const session = await loginWithBunker(bunker);
+  if (account.pubkey && account.pubkey !== session.pubkey) throw new Error('Pomegranate account key did not match the remote signer.');
+  return {
+    ...session,
+    mode: 'pomegranate',
+    pomegranateCentral: centralUrl,
+    pomegranateEmail: pomegranateEmailFromToken(token) || account.email || profile.email,
+    pomegranateProfile: profile.name
+  };
+}
+
+export function normalizePomegranateCentralUrl(input: string) {
+  const trimmed = input.trim();
+  if (!trimmed) throw new Error('Enter a Pomegranate central URL.');
+  const hasProtocol = /^https?:\/\//i.test(trimmed);
+  const value = hasProtocol ? trimmed : trimmed.replace(/\/+$/, '');
+  const withProtocol = hasProtocol ? value : `${isLocalPomegranateHost(value) ? 'http' : 'https'}://${value}`;
+  try {
+    const url = new URL(withProtocol);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('Pomegranate central URL must use http or https.');
+    return url.origin;
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('must use')) throw error;
+    throw new Error('Enter a valid Pomegranate central URL.');
+  }
+}
+
+export function pomegranateBunkerUrl(centralUrl: string, handlerPubkey: string) {
+  if (!/^[0-9a-f]{64}$/i.test(handlerPubkey)) throw new Error('Pomegranate profile is missing a valid handler public key.');
+  const url = new URL(centralUrl);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  url.pathname = '';
+  url.search = '';
+  url.hash = '';
+  return `bunker://${handlerPubkey}?relay=${encodeURIComponent(url.toString().replace(/\/$/, ''))}`;
+}
+
+function isLocalPomegranateHost(value: string) {
+  const host = value.split('/')[0];
+  return /^localhost(?::\d+)?$/i.test(host) || /^127(?:\.\d{1,3}){3}(?::\d+)?$/.test(host);
+}
+
+async function authenticatePomegranateCentral(centralUrl: string) {
+  if (typeof window === 'undefined') throw new Error('Pomegranate login is only available in the browser.');
+  return new Promise<string>((resolve, reject) => {
+    const popup = window.open(`${centralUrl}/login/google`, 'pomegranate-login', 'width=560,height=720');
+    if (!popup) {
+      reject(new Error('Pomegranate login popup was blocked.'));
+      return;
+    }
+    let settled = false;
+    const cleanup = () => {
+      settled = true;
+      clearTimeout(timeout);
+      clearInterval(closedCheck);
+      window.removeEventListener('message', onMessage);
+    };
+    const finish = (token: string) => {
+      cleanup();
+      popup.close();
+      resolve(token);
+    };
+    const fail = (message: string) => {
+      cleanup();
+      reject(new Error(message));
+    };
+    const timeout = setTimeout(() => fail('Pomegranate login timed out.'), 120_000);
+    const closedCheck = setInterval(() => {
+      if (!settled && popup.closed) fail('Pomegranate login was closed before approval.');
+    }, 500);
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== centralUrl) return;
+      const token = typeof event.data?.token === 'string' ? event.data.token : '';
+      if (token) finish(token);
+    };
+    window.addEventListener('message', onMessage);
+  });
+}
+
+async function fetchPomegranateAccount(centralUrl: string, token: string) {
+  try {
+    return await pomegranateFetch<PomegranateAccount>(centralUrl, '/account', token);
+  } catch (error) {
+    if (error instanceof PomegranateRequestError && error.status === 404) {
+      throw new Error('No Pomegranate account was found for this login. Create or recover it in Pomegranate first.');
+    }
+    throw error;
+  }
+}
+
+async function ensurePomegranateDefaultProfile(centralUrl: string, token: string) {
+  const profiles = await pomegranateFetch<PomegranateProfile[]>(centralUrl, '/profiles', token);
+  const existing = profiles.find((profile) => profile.name === 'default') ?? profiles[0];
+  if (existing) return existing;
+  return pomegranateFetch<PomegranateProfile>(centralUrl, '/profiles', token, {
+    method: 'POST',
+    body: JSON.stringify({ name: 'default' })
+  });
+}
+
+async function pomegranateFetch<T>(centralUrl: string, path: string, token: string, init: RequestInit = {}) {
+  const response = await fetch(`${centralUrl}${path}`, {
+    ...init,
+    headers: {
+      Authorization: `Token ${token}`,
+      ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+      ...init.headers
+    }
+  });
+  if (!response.ok) throw new PomegranateRequestError(response.status, `Pomegranate request failed (${response.status}).`);
+  return response.json() as Promise<T>;
+}
+
+function pomegranateEmailFromToken(token: string) {
+  try {
+    if (typeof atob !== 'function') return '';
+    const decoded = JSON.parse(atob(token)) as { tags?: string[][] };
+    return decoded.tags?.find((tag) => tag[0] === 'email' && tag[1])?.[1] ?? '';
+  } catch {
+    return '';
+  }
 }
 
 export function filterSpam(events: NostrEvent[], mutedPubkeys = new Set<string>()) {
@@ -840,14 +980,14 @@ async function toNip17DirectMessage(event: NostrEvent, session: Session): Promis
 }
 
 export function canDecryptNip04(session: Session) {
-  return session.mode === 'private-key' || session.mode === 'bunker' || Boolean(typeof window !== 'undefined' && window.nostr?.nip04);
+  return session.mode === 'private-key' || isRemoteSignerSession(session) || Boolean(typeof window !== 'undefined' && window.nostr?.nip04);
 }
 
 async function decryptNip04(session: Session, peer: string, ciphertext: string) {
   if (!peer) return undefined;
   if (session.secret) return nip04.decrypt(hexToBytes(session.secret), peer, ciphertext);
   if (typeof window !== 'undefined' && session.mode === 'nip07' && window.nostr?.nip04) return window.nostr.nip04.decrypt(peer, ciphertext);
-  if (session.mode === 'bunker') return getBunkerSigner(session).nip04Decrypt(peer, ciphertext);
+  if (isRemoteSignerSession(session)) return getBunkerSigner(session).nip04Decrypt(peer, ciphertext);
   return undefined;
 }
 
@@ -863,7 +1003,7 @@ async function unwrapNip17Event(event: NostrEvent, session: Session) {
 async function decryptNip44(session: Session, peer: string, ciphertext: string) {
   let plaintext: string | undefined;
   if (typeof window !== 'undefined' && session.mode === 'nip07' && window.nostr?.nip44) plaintext = await window.nostr.nip44.decrypt(peer, ciphertext);
-  if (session.mode === 'bunker') plaintext = await getBunkerSigner(session).nip44Decrypt(peer, ciphertext);
+  if (isRemoteSignerSession(session)) plaintext = await getBunkerSigner(session).nip44Decrypt(peer, ciphertext);
   if (!plaintext) throw new Error('NIP-44 decrypt is not available for this session.');
   return JSON.parse(plaintext) as unknown;
 }
@@ -872,7 +1012,7 @@ async function encryptNip44(session: Session, peer: string, payload: unknown) {
   const plaintext = JSON.stringify(payload);
   if (session.secret) return nip44.encrypt(plaintext, nip44.getConversationKey(hexToBytes(session.secret), peer));
   if (typeof window !== 'undefined' && session.mode === 'nip07' && window.nostr?.nip44) return window.nostr.nip44.encrypt(peer, plaintext);
-  if (session.mode === 'bunker') return getBunkerSigner(session).nip44Encrypt(peer, plaintext);
+  if (isRemoteSignerSession(session)) return getBunkerSigner(session).nip44Encrypt(peer, plaintext);
   throw new Error('NIP-44 encrypt is not available for this session.');
 }
 
@@ -936,7 +1076,7 @@ async function wrapNip17DirectMessage(session: Session, recipient: { publicKey: 
       const seal = await signEventTemplate(session, {
         kind: 13,
         content: await encryptNip44(session, target.publicKey, rumor),
-        created_at: randomPastNow(),
+        created_at: session.mode === 'pomegranate' ? now() : randomPastNow(),
         tags: []
       });
       const randomKey = generateSecretKey();
@@ -986,7 +1126,7 @@ export async function signEventTemplate(session: Session, draft: Pick<NostrTools
     event = (await window.nostr.signEvent({ ...draft, pubkey: session.pubkey })) as unknown as NostrToolsEvent;
   } else if (session.secret) {
     event = finalizeEvent(draft, hexToBytes(session.secret));
-  } else if (session.mode === 'bunker') {
+  } else if (isRemoteSignerSession(session)) {
     event = (await getBunkerSigner(session).signEvent(draft)) as NostrToolsEvent;
   } else {
     throw new Error('No signer is available for this session.');
@@ -1010,6 +1150,10 @@ function sessionSecretValues(session: Session) {
 
 function containsNsec(value: string) {
   return /nsec1[023456789acdefghjklmnpqrstuvwxyz]{20,}/i.test(value);
+}
+
+function isRemoteSignerSession(session: Session) {
+  return session.mode === 'bunker' || session.mode === 'pomegranate';
 }
 
 function getBunkerSigner(session: Session) {

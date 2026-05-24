@@ -3,9 +3,10 @@
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
   import { Copy, ExternalLink, Flag, Heart, Link, MessageCircle, MoreHorizontal, Pencil, Repeat2, Trash2, UserX, Zap } from '@lucide/svelte';
+  import { nip19 } from 'nostr-tools';
   import type { NostrEvent, Profile } from '$lib/nostr/types';
   import { extractMediaAttachments, extractQuotedNoteReferences, parseNoteText } from '$lib/nostr/media';
-  import { fetchLikeAuthors, fetchProfiles, subscribeZapReceipts } from '$lib/nostr/client';
+  import { activeRelayUrls, fetchLikeAuthors, fetchProfiles, subscribeZapReceipts } from '$lib/nostr/client';
   import { createZapInvoice, loadZapInfo, type ZapInfo } from '$lib/nostr/zap';
   import { deleteNote, editedEvents, eventStats, filterByHashtag, likedEvents, mergeProfileRecords, muteAccount, profiles, reactToNote, refreshEventStats, relays, reportNote, repostedEvents, repostNote, session, startEdit, startReply, watchVisibleNoteStats } from '$lib/stores/app';
   import { appPath } from '$lib/paths';
@@ -173,7 +174,20 @@
   }
 
   function shareUrl() {
-    return `https://nostr.com/event/${event.id}`;
+    return `https://nostr.com/${shareCode()}`;
+  }
+
+  function shareCode() {
+    const relayHints = activeRelayUrls($relays, 'read').slice(0, 5);
+    if (isAddressableEvent(displayEvent.kind)) {
+      const identifier = displayEvent.tags.find((tag) => tag[0] === 'd' && tag[1])?.[1] ?? '';
+      return nip19.naddrEncode({ identifier, pubkey: displayEvent.pubkey, kind: displayEvent.kind, relays: relayHints });
+    }
+    return nip19.neventEncode({ id: displayEvent.id, author: displayEvent.pubkey, kind: displayEvent.kind, relays: relayHints });
+  }
+
+  function isAddressableEvent(kind: number) {
+    return kind >= 30000 && kind < 40000;
   }
 
   async function copyEmbed() {

@@ -8,6 +8,7 @@
 
   let privateKey = '';
   let bunker = '';
+  let pomegranateCentral = '';
   let error = '';
   let mode: 'sign-in' | 'create' = 'sign-in';
   let generatedKeys: { npub: string; nsec: string; secret: string; pubkey: string } | null = null;
@@ -18,16 +19,24 @@
   let interestsOpen = false;
   let savingProfile = false;
 
-  async function login(mode: 'nip07' | 'private-key' | 'bunker') {
+  async function login(mode: 'nip07' | 'private-key' | 'bunker' | 'pomegranate') {
     error = '';
     try {
-      await signIn(mode, mode === 'private-key' ? privateKey : bunker);
+      await signIn(mode, loginValue(mode));
       privateKey = '';
       bunker = '';
+      pomegranateCentral = '';
       loginDialogOpen.set(false);
     } catch (err) {
       error = err instanceof Error ? err.message : 'Could not sign in.';
     }
+  }
+
+  function loginValue(mode: 'nip07' | 'private-key' | 'bunker' | 'pomegranate') {
+    if (mode === 'private-key') return privateKey;
+    if (mode === 'bunker') return bunker;
+    if (mode === 'pomegranate') return pomegranateCentral;
+    return '';
   }
 
   function showCreateKeys() {
@@ -153,7 +162,7 @@ ${generatedKeys.nsec}
       </button>
     {/if}
   {:else}
-    <p>NIP-07, local private key, and NIP-46 bunker signing are active.</p>
+    <p>NIP-07, local private key, NIP-46 bunker, and Pomegranate signing are active.</p>
 
     <div class="login-actions">
       <button class="primary" on:click={() => login('nip07')}><PlugZap size={18} /> NIP-07</button>
@@ -171,6 +180,12 @@ ${generatedKeys.nsec}
       <input bind:value={bunker} autocomplete="off" spellcheck="false" placeholder="bunker://..." />
     </label>
     <button on:click={() => login('bunker')}><PlugZap size={18} /> Connect bunker</button>
+
+    <label>
+      <span>Pomegranate central URL</span>
+      <input bind:value={pomegranateCentral} autocomplete="off" spellcheck="false" placeholder="https://pomegranate.example" />
+    </label>
+    <button on:click={() => login('pomegranate')}><PlugZap size={18} /> Connect Pomegranate</button>
   {/if}
 
   {#if error}

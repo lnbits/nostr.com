@@ -1,5 +1,5 @@
 export type FeedMode = 'follow' | 'global' | 'custom';
-export type LoginMode = 'nip07' | 'private-key' | 'bunker';
+export type LoginMode = 'nip07' | 'private-key' | 'bunker' | 'pomegranate';
 
 export interface NostrEvent {
   id: string;
@@ -75,6 +75,9 @@ export interface Session {
   bunkerRelays?: string[];
   bunkerRemotePubkey?: string;
   bunkerSecret?: string | null;
+  pomegranateCentral?: string;
+  pomegranateEmail?: string;
+  pomegranateProfile?: string;
 }
 
 export interface NotificationItem {
