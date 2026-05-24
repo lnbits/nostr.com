@@ -1,7 +1,9 @@
 import { browser } from '$app/environment';
+import { goto } from '$app/navigation';
 import { writable } from 'svelte/store';
 import { getCachedEvents, getCachedHashtagEvents, getCachedProfiles } from '$lib/nostr/cache';
 import { defaultCustomFeedSettings, defaultGuestNip05, defaultRelays, keywordsForInterests } from '$lib/nostr/config';
+import { mergeDirectMessages } from './directMessages';
 import {
   createGuestSession,
   fetchDirectMessages,
@@ -390,7 +392,7 @@ export async function refreshMessages() {
   loadingMessages.set(true);
   try {
     const messages = await fetchDirectMessages(currentSession, currentRelays);
-    directMessages.update((existing) => mergeDirectMessages(messages, existing));
+    directMessages.update((existing) => mergeDirectMessages(messages, existing, currentSessionValue?.pubkey));
   } finally {
     loadingMessages.set(false);
   }
@@ -424,7 +426,7 @@ export async function sendDirectMessage(peer: string, content: string) {
     encrypted: wraps[0]?.content ?? '',
     content: clean
   };
-  directMessages.update((existing) => mergeDirectMessages([message], existing));
+  directMessages.update((existing) => mergeDirectMessages([message], existing, currentSession.pubkey));
   activeMessagePeer.set(recipient);
 }
 
@@ -557,45 +559,6 @@ export function mergeEvents(incoming: NostrEvent[], existing: NostrEvent[]) {
   return limited.slice(0, maxFeedEvents);
 }
 
-function mergeDirectMessages(incoming: DirectMessage[], existing: DirectMessage[]) {
-  const merged: DirectMessage[] = [];
-  for (const message of [...existing, ...incoming]
-    .map(normalizeDirectMessage)
-    .filter((message): message is DirectMessage => Boolean(message && message.peer !== normalizePubkey(currentSessionValue?.pubkey ?? '')))) {
-    const index = merged.findIndex((existingMessage) => existingMessage.id === message.id || isSameDirectMessage(existingMessage, message));
-    if (index >= 0) {
-      merged[index] = preferDirectMessage(merged[index], message);
-    } else {
-      merged.push(message);
-    }
-  }
-  return merged.sort((a, b) => b.created_at - a.created_at).slice(0, 400);
-}
-
-function normalizeDirectMessage(message: DirectMessage) {
-  const peer = normalizePubkey(message.peer);
-  const from = normalizePubkey(message.from);
-  const to = message.to
-    .split(',')
-    .map(normalizePubkey)
-    .filter(Boolean)
-    .join(',');
-  if (!peer || !from) return null;
-  return { ...message, peer, from, to };
-}
-
-function isSameDirectMessage(a: DirectMessage, b: DirectMessage) {
-  if (a.protocol !== b.protocol || a.peer !== b.peer || a.from !== b.from) return false;
-  if (!a.content || a.content !== b.content) return false;
-  return Math.abs(a.created_at - b.created_at) <= 3;
-}
-
-function preferDirectMessage(existing: DirectMessage, incoming: DirectMessage) {
-  if (!existing.encrypted && incoming.encrypted) return incoming;
-  if (!existing.content && incoming.content) return incoming;
-  return existing;
-}
-
 function normalizePubkey(value: string) {
   const clean = value.trim().toLowerCase();
   return /^[0-9a-f]{64}$/.test(clean) ? clean : '';
@@ -661,6 +624,8 @@ export function startCompose() {
     return;
   }
   replyTarget.set(null);
+  activeHashtag.set('');
+  if (browser && (window.location.pathname !== '/' || window.location.hash)) void goto('/');
   composerOpen.set(true);
 }
 

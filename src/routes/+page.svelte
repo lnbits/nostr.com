@@ -3,6 +3,7 @@
   import { tick } from 'svelte';
   import { page } from '$app/stores';
   import { ArrowUp } from '@lucide/svelte';
+  import FeedSearchBar from '$lib/components/FeedSearchBar.svelte';
   import InfoView from '$lib/components/InfoView.svelte';
   import MessagesView from '$lib/components/MessagesView.svelte';
   import NoteCard from '$lib/components/NoteCard.svelte';
@@ -206,6 +207,9 @@
           <ArrowUp size={20} />
         </button>
       </div>
+    {/if}
+    {#if $session}
+      <FeedSearchBar />
     {/if}
     <section class="feed-list" aria-label="Feed">
       {#if feedEvents.length}

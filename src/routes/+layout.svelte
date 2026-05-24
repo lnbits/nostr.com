@@ -1,24 +1,31 @@
 <script lang="ts">
   import '../styles.css';
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import { page } from '$app/stores';
   import { Bell, Home, Info, LogIn, Mail, Settings, UserRound } from '@lucide/svelte';
-  import { bootstrap, goHome, loginDialogOpen, selectMessagePeer, session } from '$lib/stores/app';
+  import { bootstrap, goHome, loginDialogOpen, relays, selectMessagePeer, session } from '$lib/stores/app';
   import Composer from '$lib/components/Composer.svelte';
   import LeftNav from '$lib/components/LeftNav.svelte';
   import LoginDialog from '$lib/components/LoginDialog.svelte';
   import RightRail from '$lib/components/RightRail.svelte';
   import ThemeToggle from '$lib/components/ThemeToggle.svelte';
+  import { startRelayStatusChecks } from '$lib/stores/relayStatus';
 
   const rightRailStorageKey = 'nostr-right-rail-collapsed';
   let rightRailCollapsed = false;
+  let stopRelayStatusChecks = () => {};
   $: embeddedPage = $page.url.pathname.startsWith('/embed/');
 
   onMount(() => {
     if (!embeddedPage) {
       void bootstrap();
+      stopRelayStatusChecks = startRelayStatusChecks(relays);
       rightRailCollapsed = localStorage.getItem(rightRailStorageKey) === 'true';
     }
+  });
+
+  onDestroy(() => {
+    stopRelayStatusChecks();
   });
 
   function toggleRightRail() {

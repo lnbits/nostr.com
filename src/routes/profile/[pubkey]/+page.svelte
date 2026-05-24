@@ -2,10 +2,10 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import { ArrowLeft, Check, Copy, Globe2, MessageCircle, Pencil, Save, Upload, UserPlus, X } from '@lucide/svelte';
+  import { ArrowLeft, Check, Copy, Globe2, MessageCircle, Pencil, Save, UserMinus, Upload, UserPlus, X } from '@lucide/svelte';
   import { nip19 } from 'nostr-tools';
   import NoteCard from '$lib/components/NoteCard.svelte';
-  import { events, mergeEvents, profiles, relays, saveProfile, selectMessagePeer, session } from '$lib/stores/app';
+  import { events, follows, mergeEvents, profiles, relays, saveFollowList, saveProfile, selectMessagePeer, session } from '$lib/stores/app';
   import { getCachedProfileEvents } from '$lib/nostr/cache';
   import { dedupeEvents, fetchProfileEvents, fetchProfiles, getNip98AuthorizationHeader, topLevelFeedEvents } from '$lib/nostr/client';
   import type { NostrEvent, Profile } from '$lib/nostr/types';
@@ -31,6 +31,7 @@
   $: pubkey = normalizePubkey($page.params.pubkey ?? '');
   $: profile = $profiles[pubkey];
   $: isOwnProfile = Boolean($session?.pubkey === pubkey);
+  $: isFollowing = $follows.includes(pubkey);
   $: userItems = profileEvents.flatMap(profileTimelineItem);
   $: userEvents = userItems.map((item) => item.event);
   $: npub = /^[0-9a-f]{64}$/i.test(pubkey) ? nip19.npubEncode(pubkey) : '';
@@ -43,6 +44,7 @@
   let error = '';
   let uploadMessage = '';
   let uploading: 'picture' | 'banner' | '' = '';
+  let updatingFollow = false;
   let editorOpen = false;
   let draft: Profile = emptyProfile();
   let profileEvents: NostrEvent[] = [];
@@ -89,6 +91,20 @@
       error = err instanceof Error ? err.message : 'Could not update profile.';
     } finally {
       saving = false;
+    }
+  }
+
+  async function toggleFollow() {
+    if (!$session || !pubkey || isOwnProfile || updatingFollow) return;
+    updatingFollow = true;
+    error = '';
+    try {
+      const nextFollows = isFollowing ? $follows.filter((item) => item !== pubkey) : [...$follows, pubkey];
+      await saveFollowList(nextFollows);
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Could not update follow list.';
+    } finally {
+      updatingFollow = false;
     }
   }
 
@@ -262,11 +278,7 @@
 </script>
 
 <section class="profile-hero">
-  <a class="mobile-floating-back" href="/" aria-label="Back to feed"><ArrowLeft size={20} /></a>
-
-  {#if !$session}
-    <a class="info-back" href="/">← Feed</a>
-  {/if}
+  <a class="page-back" href="/" aria-label="Back to feed"><ArrowLeft size={18} /> Back</a>
 
   <div class="profile-banner" style={`background-image: ${profile?.banner ? `url(${profile.banner})` : 'none'}`}></div>
 
@@ -275,31 +287,34 @@
       {#if profile?.picture}<img src={profile.picture} alt="" />{:else}<span>{avatarInitial}</span>{/if}
     </div>
 
+    <div class="profile-banner-actions">
+      {#if isOwnProfile}
+        <button class="profile-edit-inline" on:click={() => (editorOpen = true)} aria-label="Edit profile">
+          <Pencil size={14} /> Edit profile
+        </button>
+      {:else}
+        <button disabled={!$session || updatingFollow} on:click={toggleFollow}>
+          {#if isFollowing}<UserMinus size={17} /> Unfollow{:else}<UserPlus size={17} /> Follow{/if}
+        </button>
+        <button class="icon-button" disabled={!$session} aria-label="Message" on:click={() => { selectMessagePeer(pubkey); void goto('/#messages'); }}><MessageCircle size={19} /></button>
+      {/if}
+    </div>
+
     <div class="profile-copy">
       <div class="profile-title-row">
         <div>
           {#if displayName}<h1>{displayName}</h1>{/if}
-          {#if profile?.name && profile.display_name}
-            <p>@{profile.name}</p>
-          {/if}
-        </div>
-        {#if !isOwnProfile}
-          <div class="profile-actions">
-            <button disabled={!$session}><UserPlus size={18} /> Follow</button>
-            <button class="icon-button" disabled={!$session} aria-label="Message" on:click={() => { selectMessagePeer(pubkey); void goto('/#messages'); }}><MessageCircle size={19} /></button>
+          <div class="profile-identity-line">
+            {#if profile?.name && profile.display_name}
+              <span>@{profile.name}</span>
+            {/if}
+            {#if npub}
+              <button class="npub-inline-copy" on:click={copyNpub} aria-label="Copy public key">
+                {#if copied}<Check size={13} /> Copied{:else}<span>{shortNpub}</span><Copy size={13} />{/if}
+              </button>
+            {/if}
           </div>
-        {/if}
-      </div>
-
-      <div class="profile-key-actions">
-        <button class="npub-pill" on:click={copyNpub} aria-label="Copy public key">
-          {#if copied}<Check size={17} /> Copied{:else}<Copy size={17} /> <span>{npub}</span>{/if}
-        </button>
-        {#if isOwnProfile}
-          <button class="icon-button" on:click={() => (editorOpen = true)} aria-label="Edit profile">
-            <Pencil size={18} />
-          </button>
-        {/if}
+        </div>
       </div>
 
       {#if profile?.about}

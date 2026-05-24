@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { onDestroy, onMount } from 'svelte';
   import { Check, Copy, LogOut, Moon, Plus, RefreshCw, Save, SlidersHorizontal, Sun, Trash2 } from '@lucide/svelte';
   import { nip19 } from 'nostr-tools';
   import { customFeedSettings, feedMode, loadingFeed, refreshFeed, relays, session, signOut } from '$lib/stores/app';
   import { normalizeRelayUrl } from '$lib/nostr/client';
   import { setThemeMode, themeMode, type ThemeMode } from '$lib/stores/theme';
   import FeedTabs from '$lib/components/FeedTabs.svelte';
+  import { relayStatus } from '$lib/stores/relayStatus';
 
   const themes: { mode: ThemeMode; label: string; icon: typeof Sun }[] = [
     { mode: 'light', label: 'Light', icon: Sun },
@@ -14,21 +14,7 @@
 
   let newRelay = 'wss://';
   let copiedPublicKey = false;
-  let mounted = false;
-  let relayStatus: Record<string, 'checking' | 'online' | 'offline'> = {};
-  let cleanupChecks: Array<() => void> = [];
   $: sessionNpub = $session ? encodeNpub($session.pubkey) : '';
-  $: enabledRelayUrls = $relays.filter((relay) => relay.enabled).map((relay) => relay.url);
-  $: if (mounted) checkRelays(enabledRelayUrls);
-
-  onMount(() => {
-    mounted = true;
-    checkRelays(enabledRelayUrls);
-  });
-
-  onDestroy(() => {
-    cleanupChecks.forEach((cleanup) => cleanup());
-  });
 
   function addRelay() {
     const url = normalizeRelayUrl(newRelay);
@@ -89,41 +75,6 @@
     setTimeout(() => (copiedPublicKey = false), 1400);
   }
 
-  function checkRelays(urls: string[]) {
-    cleanupChecks.forEach((cleanup) => cleanup());
-    cleanupChecks = [];
-    relayStatus = Object.fromEntries(urls.map((url) => [url, 'checking']));
-
-    for (const url of urls) {
-      try {
-        const socket = new WebSocket(url);
-        let opened = false;
-        const timeout = setTimeout(() => {
-          if (!opened) relayStatus = { ...relayStatus, [url]: 'offline' };
-          socket.close();
-        }, 3500);
-
-        socket.onopen = () => {
-          opened = true;
-          relayStatus = { ...relayStatus, [url]: 'online' };
-          socket.close();
-        };
-        socket.onerror = () => {
-          if (!opened) relayStatus = { ...relayStatus, [url]: 'offline' };
-        };
-        socket.onclose = () => {
-          clearTimeout(timeout);
-          if (!opened) relayStatus = { ...relayStatus, [url]: 'offline' };
-        };
-        cleanupChecks.push(() => {
-          clearTimeout(timeout);
-          socket.close();
-        });
-      } catch {
-        relayStatus = { ...relayStatus, [url]: 'offline' };
-      }
-    }
-  }
 </script>
 
 <div class="settings-page">
@@ -184,10 +135,10 @@
     {#each $relays as relay, index}
       <div class="relay-editor">
         <span
-          class:online={relay.enabled && relayStatus[relay.url] === 'online'}
-          class:offline={relay.enabled && relayStatus[relay.url] === 'offline'}
+          class:online={relay.enabled && $relayStatus[relay.url] === 'online'}
+          class:offline={relay.enabled && $relayStatus[relay.url] === 'offline'}
           class="relay-status settings-relay-status"
-          aria-label={`${relay.url} ${relay.enabled ? relayStatus[relay.url] ?? 'checking' : 'disabled'}`}
+          aria-label={`${relay.url} ${relay.enabled ? $relayStatus[relay.url] ?? 'checking' : 'disabled'}`}
         ></span>
         <input bind:value={relay.url} />
         <label><input type="checkbox" bind:checked={relay.enabled} /> Enabled</label>

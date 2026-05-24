@@ -512,6 +512,78 @@ label span, label strong { color: var(--text); }
 .icon-button.small { width: 32px; min-height: 32px; flex-basis: 32px; border: 0; }
 .feed-list { display: grid; }
 .authed-main .feed-list { padding: 0 18px; }
+.feed-search {
+  position: sticky;
+  top: 0;
+  z-index: 12;
+  display: grid;
+  gap: 8px;
+  padding: 10px 18px;
+  background: var(--bg);
+}
+.feed-search-form {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 22px;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  border: 1px solid color-mix(in srgb, var(--line) 58%, transparent);
+  border-radius: 999px;
+  padding: 0 14px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+}
+.feed-search-form input {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+.feed-search-form input:focus {
+  outline: none;
+}
+.feed-search-results {
+  display: grid;
+  gap: 4px;
+  border: 1px solid color-mix(in srgb, var(--line) 58%, transparent);
+  border-radius: 8px;
+  padding: 6px;
+  background: var(--panel);
+}
+.feed-search-results button,
+.feed-search-empty {
+  min-height: 46px;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+  border: 0;
+  border-radius: 8px;
+  padding: 6px 8px;
+  color: var(--text);
+  background: transparent;
+  text-align: left;
+}
+.feed-search-results button:hover {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+.feed-search-results strong,
+.feed-search-results small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.feed-search-results small,
+.feed-search-empty {
+  color: var(--muted);
+  font-size: 13px;
+}
+.avatar.mini.search-kind {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 15%, var(--surface));
+}
 .newer-feed-bubble-wrap {
   position: sticky;
   top: calc(10px + env(safe-area-inset-top));
@@ -1202,8 +1274,23 @@ label span, label strong { color: var(--text); }
   color: var(--text);
   border-color: var(--text);
 }
-.mobile-floating-back {
-  display: none;
+.page-back {
+  width: fit-content;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid color-mix(in srgb, var(--line) 74%, transparent);
+  border-radius: 999px;
+  padding: 0 12px 0 10px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 14px;
+  font-weight: 800;
+}
+.page-back:hover {
+  color: var(--text);
+  border-color: var(--text);
 }
 .info-head h1 {
   margin: 0;
@@ -1481,10 +1568,10 @@ label span, label strong { color: var(--text); }
   align-content: start;
   gap: 10px;
 }
-.nested-replies {
-  margin-left: 56px;
-  padding-left: 14px;
-  border-left: 2px solid color-mix(in srgb, var(--line) 28%, transparent);
+.thread-reply.nested {
+  margin-left: 16px;
+  padding-left: 10px;
+  border-left: 1px solid color-mix(in srgb, var(--line) 30%, transparent);
 }
 .thread-back {
   width: fit-content;
@@ -1555,19 +1642,55 @@ label span, label strong { color: var(--text); }
 }
 .profile-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: start;
   margin-top: -58px;
   padding: 0 0 4px;
 }
 .avatar.xlarge {
+  grid-column: 1;
   width: 104px;
   height: 104px;
   border: 5px solid var(--bg);
   font-size: 34px;
 }
+.profile-banner-actions {
+  grid-column: 2;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-self: end;
+  align-self: start;
+  margin-top: 58px;
+}
+.profile-banner-actions > button:not(.icon-button),
+.profile-edit-inline {
+  min-height: 0;
+  gap: 5px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+}
+.profile-banner-actions .icon-button {
+  min-height: 0;
+  width: auto;
+  flex-basis: auto;
+  border: 0;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+}
+.profile-banner-actions > button:not(:disabled):hover,
+.profile-edit-inline:hover,
+.profile-banner-actions .icon-button:not(:disabled):hover {
+  color: var(--accent);
+}
 .profile-copy {
+  grid-column: 1 / -1;
   min-width: 0;
   display: grid;
   gap: 12px;
@@ -1585,15 +1708,31 @@ label span, label strong { color: var(--text); }
   line-height: 1.08;
   overflow-wrap: anywhere;
 }
-.profile-title-row p {
-  margin: 5px 0 0;
+.profile-identity-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 8px;
+  margin-top: 5px;
   color: var(--muted);
   font-size: 14px;
 }
-.profile-actions {
-  display: flex;
-  gap: 8px;
+.npub-inline-copy {
+  min-height: 0;
+  display: inline-flex;
   align-items: center;
+  gap: 4px;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 500;
+}
+.npub-inline-copy:hover {
+  color: var(--accent);
 }
 .profile-key-actions {
   min-width: 0;
@@ -1795,7 +1934,7 @@ label span, label strong { color: var(--text); }
   .dm-media-grid video {
     max-height: 280px;
   }
-  .login-actions, .profile-card, .profile-title-row, .profile-edit-grid { grid-template-columns: 1fr; }
+  .login-actions, .profile-title-row, .profile-edit-grid { grid-template-columns: 1fr; }
   .relay-editor {
     grid-template-columns: 10px repeat(3, minmax(0, 1fr)) 44px;
     gap: 8px;
@@ -1837,31 +1976,10 @@ label span, label strong { color: var(--text); }
   }
   .upload-url-row { grid-template-columns: 1fr; }
   .profile-card { margin-top: -44px; }
+  .profile-card { grid-template-columns: minmax(0, 1fr) auto; }
+  .profile-banner-actions { margin-top: 44px; }
   .profile-copy { padding-top: 0; }
-  .profile-actions { justify-content: flex-start; }
   .nip-row { grid-template-columns: 1fr; gap: 4px; }
   .avatar.xlarge { width: 88px; height: 88px; font-size: 28px; }
   .settings-page, .thread-page, .profile-hero, .feed-list.narrow { padding: 18px 14px; }
-  .mobile-floating-back {
-    position: absolute;
-    z-index: 18;
-    top: 12px;
-    left: 12px;
-    width: 42px;
-    height: 42px;
-    min-height: 42px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid color-mix(in srgb, var(--text) 54%, transparent);
-    border-radius: 50%;
-    color: var(--text);
-    background: color-mix(in srgb, var(--bg) 82%, transparent);
-    box-shadow: 0 10px 28px color-mix(in srgb, #000 28%, transparent);
-    backdrop-filter: blur(10px);
-  }
-  .profile-hero > .info-back,
-  .thread-page > .info-back {
-    display: none;
-  }
 }

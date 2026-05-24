@@ -371,10 +371,11 @@ export async function fetchMissingEvents(ids: string[], relays = defaultRelays) 
   return clean;
 }
 
-export async function fetchThreadReplies(rootId: string, relays = defaultRelays, limit = 80) {
-  if (!/^[0-9a-f]{64}$/i.test(rootId)) return [];
+export async function fetchThreadReplies(rootId: string | string[], relays = defaultRelays, limit = 80) {
+  const ids = (Array.isArray(rootId) ? rootId : [rootId]).filter((id) => /^[0-9a-f]{64}$/i.test(id));
+  if (!ids.length) return [];
   const relayUrls = activeRelayUrls(relays, 'read');
-  const events = verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [1], '#e': [rootId], limit }, 5000));
+  const events = verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [1], '#e': ids, limit }, 5000));
   const clean = dedupeEvents(filterSpam(events));
   await cacheEvents(clean);
   return clean;
