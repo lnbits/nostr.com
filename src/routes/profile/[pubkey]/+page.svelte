@@ -2,10 +2,10 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import { ArrowLeft, Check, Copy, Globe2, MessageCircle, Pencil, Save, UserMinus, Upload, UserPlus, X } from '@lucide/svelte';
+  import { ArrowLeft, Check, Copy, Globe2, MessageCircle, Pencil, Save, UserMinus, UserX, Upload, UserPlus, X } from '@lucide/svelte';
   import { nip19 } from 'nostr-tools';
   import NoteCard from '$lib/components/NoteCard.svelte';
-  import { events, follows, mergeEvents, profiles, refreshEventStats, relays, saveFollowList, saveProfile, selectMessagePeer, session } from '$lib/stores/app';
+  import { deletedEventIds, events, follows, mergeEvents, mutedPubkeys, muteAccount, profiles, refreshEventStats, relays, saveFollowList, saveProfile, selectMessagePeer, session, unmuteAccount } from '$lib/stores/app';
   import { getCachedProfileEvents } from '$lib/nostr/cache';
   import { dedupeEvents, fetchProfileEvents, fetchProfiles, topLevelFeedEvents } from '$lib/nostr/client';
   import { uploadToNostrBuild } from '$lib/nostr/upload';
@@ -23,16 +23,17 @@
     lud16: '',
     lud06: ''
   });
-  const initialProfileEventLimit = 120;
-  const profileEventPageLimit = 120;
-  const targetProfileEventCount = 24;
-  const maxAutomaticProfilePages = 4;
+  const initialProfileEventLimit = 60;
+  const profileEventPageLimit = 60;
+  const targetProfileEventCount = 12;
+  const maxAutomaticProfilePages = 1;
   type ProfileTimelineItem = { id: string; event: NostrEvent };
 
   $: pubkey = normalizePubkey($page.params.pubkey ?? '');
   $: profile = $profiles[pubkey];
   $: isOwnProfile = Boolean($session?.pubkey === pubkey);
   $: isFollowing = $follows.includes(pubkey);
+  $: isMuted = $mutedPubkeys.includes(pubkey);
   $: userItems = profileEvents.flatMap(profileTimelineItem);
   $: userEvents = userItems.map((item) => item.event);
   $: npub = /^[0-9a-f]{64}$/i.test(pubkey) ? nip19.npubEncode(pubkey) : '';
@@ -46,6 +47,7 @@
   let uploadMessage = '';
   let uploading: 'picture' | 'banner' | '' = '';
   let updatingFollow = false;
+  let updatingMute = false;
   let editorOpen = false;
   let draft: Profile = emptyProfile();
   let profileEvents: NostrEvent[] = [];
@@ -53,6 +55,8 @@
   let profileLoadMoreSentinel: HTMLDivElement;
   let profileObserver: IntersectionObserver | undefined;
   let loadingMoreProfile = false;
+  let loadingProfile = true;
+  let triedProfileRelays = false;
   let hasMoreProfile = true;
   let profilePaginationCursor: number | undefined;
   let pictureInput: HTMLInputElement;
@@ -63,6 +67,9 @@
   $: if (pubkey && pubkey !== hydratedPubkey) {
     hydratedPubkey = pubkey;
     void hydrateProfile(pubkey);
+  }
+  $: if ($deletedEventIds.size && profileEvents.some((event) => $deletedEventIds.has(event.id))) {
+    profileEvents = profileEvents.filter((event) => !$deletedEventIds.has(event.id));
   }
 
   onMount(() => {
@@ -109,17 +116,37 @@
     }
   }
 
+  async function toggleMute() {
+    if (!$session || !pubkey || isOwnProfile || updatingMute) return;
+    updatingMute = true;
+    error = '';
+    try {
+      if (isMuted) await unmuteAccount(pubkey);
+      else await muteAccount(pubkey);
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Could not update mute list.';
+    } finally {
+      updatingMute = false;
+    }
+  }
+
   async function hydrateProfile(nextPubkey: string) {
     hasMoreProfile = true;
+    loadingProfile = true;
+    triedProfileRelays = false;
     loadingMoreProfile = false;
     profilePaginationCursor = undefined;
+    profileEvents = [];
     const cachedProfileEvents = await getCachedProfileEvents(nextPubkey, initialProfileEventLimit);
+    if (nextPubkey !== pubkey) return;
     profileEvents = cleanProfileEvents([...cachedProfileEvents, ...$events.filter((event) => event.pubkey === nextPubkey)]);
     void refreshProfileStats();
     const [found, fetchedProfileEvents] = await Promise.all([
       $profiles[nextPubkey] ? Promise.resolve([]) : fetchProfiles([nextPubkey], $relays).catch(() => []),
       fetchProfileEvents(nextPubkey, $relays, initialProfileEventLimit).catch(() => [])
     ]);
+    if (nextPubkey !== pubkey) return;
+    triedProfileRelays = true;
     const [profile] = found;
     if (profile) profiles.update((existing) => ({ ...existing, [profile.pubkey]: profile }));
     if (fetchedProfileEvents.length) {
@@ -127,6 +154,7 @@
       addProfileEvents(fetchedProfileEvents);
     }
     updateProfilePaginationCursor([...cachedProfileEvents, ...fetchedProfileEvents]);
+    loadingProfile = false;
     void autoFillProfileEvents(nextPubkey);
   }
 
@@ -238,143 +266,154 @@
   }
 </script>
 
-<section class="profile-hero">
-  <a class="page-back" href="/" aria-label="Back to feed"><ArrowLeft size={18} /> Back</a>
+<div class="profile-page">
+  <section class="profile-hero">
+    <a class="page-back" href="/" aria-label="Back to feed"><ArrowLeft size={18} /> Back</a>
 
-  <div class="profile-banner" style={`background-image: ${profile?.banner ? `url(${profile.banner})` : 'none'}`}></div>
+    <div class="profile-banner" style={`background-image: ${profile?.banner ? `url(${profile.banner})` : 'none'}`}></div>
 
-  <div class="profile-card">
-    <div class="avatar xlarge">
-      {#if profile?.picture}<img src={profile.picture} alt="" />{:else}<span>{avatarInitial}</span>{/if}
-    </div>
+    <div class="profile-card">
+      <div class="avatar xlarge">
+        {#if profile?.picture}<img src={profile.picture} alt="" />{:else}<span>{avatarInitial}</span>{/if}
+      </div>
 
-    <div class="profile-banner-actions">
-      {#if isOwnProfile}
-        <button class="profile-edit-inline" on:click={() => (editorOpen = true)} aria-label="Edit profile">
-          <Pencil size={14} /> Edit profile
-        </button>
-      {:else}
-        <button disabled={!$session || updatingFollow} on:click={toggleFollow}>
-          {#if isFollowing}<UserMinus size={17} /> Unfollow{:else}<UserPlus size={17} /> Follow{/if}
-        </button>
-        <button class="icon-button" disabled={!$session} aria-label="Message" on:click={() => { selectMessagePeer(pubkey); void goto('/#messages'); }}><MessageCircle size={19} /></button>
-      {/if}
-    </div>
+      <div class="profile-banner-actions">
+        {#if isOwnProfile}
+          <button class="profile-edit-inline" on:click={() => (editorOpen = true)} aria-label="Edit profile">
+            <Pencil size={14} /> Edit profile
+          </button>
+        {:else}
+          <button disabled={!$session || updatingFollow} on:click={toggleFollow}>
+            {#if isFollowing}<UserMinus size={17} /> Unfollow{:else}<UserPlus size={17} /> Follow{/if}
+          </button>
+          <button disabled={!$session || updatingMute} on:click={toggleMute}>
+            {#if isMuted}<UserMinus size={17} /> Unmute{:else}<UserX size={17} /> Mute{/if}
+          </button>
+          <button class="icon-button" disabled={!$session} aria-label="Message" on:click={() => { selectMessagePeer(pubkey); void goto('/#messages'); }}><MessageCircle size={19} /></button>
+        {/if}
+      </div>
 
-    <div class="profile-copy">
-      <div class="profile-title-row">
-        <div>
-          {#if displayName}<h1>{displayName}</h1>{/if}
-          <div class="profile-identity-line">
-            {#if profile?.name && profile.display_name}
-              <span>@{profile.name}</span>
-            {/if}
-            {#if npub}
-              <button class="npub-inline-copy" on:click={copyNpub} aria-label="Copy public key">
-                {#if copied}<Check size={13} /> Copied{:else}<span>{shortNpub}</span><Copy size={13} />{/if}
-              </button>
-            {/if}
+      <div class="profile-copy">
+        <div class="profile-title-row">
+          <div>
+            {#if displayName}<h1>{displayName}</h1>{/if}
+            <div class="profile-identity-line">
+              {#if profile?.name && profile.display_name}
+                <span>@{profile.name}</span>
+              {/if}
+              {#if npub}
+                <button class="npub-inline-copy" on:click={copyNpub} aria-label="Copy public key">
+                  {#if copied}<Check size={13} /> Copied{:else}<span>{shortNpub}</span><Copy size={13} />{/if}
+                </button>
+              {/if}
+            </div>
           </div>
         </div>
-      </div>
 
-      {#if profile?.about}
-        <p class="profile-about">{profile.about}</p>
-      {/if}
+        {#if profile?.about}
+          <p class="profile-about">{profile.about}</p>
+        {/if}
 
-      <div class="profile-meta">
-        {#if profile?.nip05}<span>{profile.nip05}</span>{/if}
-        {#if profile?.website}<a href={profile.website} target="_blank" rel="noreferrer"><Globe2 size={16} /> {profile.website.replace(/^https?:\/\//, '')}</a>{/if}
-        {#if profile?.lud16}<span>{profile.lud16}</span>{/if}
+        <div class="profile-meta">
+          {#if profile?.nip05}<span>{profile.nip05}</span>{/if}
+          {#if profile?.website}<a href={profile.website} target="_blank" rel="noreferrer"><Globe2 size={16} /> {profile.website.replace(/^https?:\/\//, '')}</a>{/if}
+          {#if profile?.lud16}<span>{profile.lud16}</span>{/if}
+        </div>
       </div>
     </div>
-  </div>
 
-  {#if isOwnProfile && editorOpen}
-    <div
-      class="dialog-backdrop"
-      role="presentation"
-      on:click={(event) => {
-        if (event.target === event.currentTarget) editorOpen = false;
-      }}
-    >
-    <form class="dialog-panel profile-editor profile-editor-dialog" on:submit|preventDefault={submitProfile}>
-      <div class="editor-head">
-        <h2>Edit profile</h2>
-        <button class="icon-button" type="button" on:click={() => (editorOpen = false)} aria-label="Close profile editor">
-          <X size={19} />
-        </button>
+    {#if isOwnProfile && editorOpen}
+      <div
+        class="dialog-backdrop"
+        role="presentation"
+        on:click={(event) => {
+          if (event.target === event.currentTarget) editorOpen = false;
+        }}
+      >
+      <form class="dialog-panel profile-editor profile-editor-dialog" on:submit|preventDefault={submitProfile}>
+        <div class="editor-head">
+          <h2>Edit profile</h2>
+          <button class="icon-button" type="button" on:click={() => (editorOpen = false)} aria-label="Close profile editor">
+            <X size={19} />
+          </button>
+        </div>
+
+        <div class="profile-edit-grid">
+          <label>
+            <span>Display name</span>
+            <input bind:value={draft.display_name} placeholder="Ben Arc" />
+          </label>
+          <label>
+            <span>Username</span>
+            <input bind:value={draft.name} placeholder="benarc" />
+          </label>
+          <label class="wide">
+            <span>About</span>
+            <textarea bind:value={draft.about} placeholder="What should people know about you?"></textarea>
+          </label>
+          <label class="wide">
+            <span>Profile image URL</span>
+            <div class="upload-url-row">
+              <input bind:value={draft.picture} placeholder="https://..." />
+              <input class="visually-hidden" type="file" accept="image/*" bind:this={pictureInput} on:change={(event) => uploadProfileMedia(event.currentTarget.files?.[0], 'picture')} />
+              <button type="button" disabled={uploading !== ''} on:click={() => pictureInput.click()}><Upload size={17} /> {uploading === 'picture' ? 'Uploading' : 'Upload'}</button>
+            </div>
+          </label>
+          <label class="wide">
+            <span>Banner image URL</span>
+            <div class="upload-url-row">
+              <input bind:value={draft.banner} placeholder="https://..." />
+              <input class="visually-hidden" type="file" accept="image/*" bind:this={bannerInput} on:change={(event) => uploadProfileMedia(event.currentTarget.files?.[0], 'banner')} />
+              <button type="button" disabled={uploading !== ''} on:click={() => bannerInput.click()}><Upload size={17} /> {uploading === 'banner' ? 'Uploading' : 'Upload'}</button>
+            </div>
+          </label>
+          <label>
+            <span>NIP-05</span>
+            <input bind:value={draft.nip05} placeholder="name@example.com" />
+          </label>
+          <label>
+            <span>Website</span>
+            <input bind:value={draft.website} placeholder="https://example.com" />
+          </label>
+          <label>
+            <span>Lightning address</span>
+            <input bind:value={draft.lud16} placeholder="name@getalby.com" />
+          </label>
+          <label>
+            <span>LNURL</span>
+            <input bind:value={draft.lud06} placeholder="lnurl1..." />
+          </label>
+        </div>
+
+        {#if uploadMessage}<p class="muted-copy">{uploadMessage}</p>{/if}
+        {#if error}<p class="error">{error}</p>{/if}
+        <div class="dialog-actions">
+          <button type="button" on:click={() => (editorOpen = false)}>Cancel</button>
+          <button class="primary" disabled={saving} type="submit"><Save size={18} /> {saving ? 'Saving' : 'Save profile'}</button>
+        </div>
+      </form>
       </div>
-
-      <div class="profile-edit-grid">
-        <label>
-          <span>Display name</span>
-          <input bind:value={draft.display_name} placeholder="Ben Arc" />
-        </label>
-        <label>
-          <span>Username</span>
-          <input bind:value={draft.name} placeholder="benarc" />
-        </label>
-        <label class="wide">
-          <span>About</span>
-          <textarea bind:value={draft.about} placeholder="What should people know about you?"></textarea>
-        </label>
-        <label class="wide">
-          <span>Profile image URL</span>
-          <div class="upload-url-row">
-            <input bind:value={draft.picture} placeholder="https://..." />
-            <input class="visually-hidden" type="file" accept="image/*" bind:this={pictureInput} on:change={(event) => uploadProfileMedia(event.currentTarget.files?.[0], 'picture')} />
-            <button type="button" disabled={uploading !== ''} on:click={() => pictureInput.click()}><Upload size={17} /> {uploading === 'picture' ? 'Uploading' : 'Upload'}</button>
-          </div>
-        </label>
-        <label class="wide">
-          <span>Banner image URL</span>
-          <div class="upload-url-row">
-            <input bind:value={draft.banner} placeholder="https://..." />
-            <input class="visually-hidden" type="file" accept="image/*" bind:this={bannerInput} on:change={(event) => uploadProfileMedia(event.currentTarget.files?.[0], 'banner')} />
-            <button type="button" disabled={uploading !== ''} on:click={() => bannerInput.click()}><Upload size={17} /> {uploading === 'banner' ? 'Uploading' : 'Upload'}</button>
-          </div>
-        </label>
-        <label>
-          <span>NIP-05</span>
-          <input bind:value={draft.nip05} placeholder="name@example.com" />
-        </label>
-        <label>
-          <span>Website</span>
-          <input bind:value={draft.website} placeholder="https://example.com" />
-        </label>
-        <label>
-          <span>Lightning address</span>
-          <input bind:value={draft.lud16} placeholder="name@getalby.com" />
-        </label>
-        <label>
-          <span>LNURL</span>
-          <input bind:value={draft.lud06} placeholder="lnurl1..." />
-        </label>
-      </div>
-
-      {#if uploadMessage}<p class="muted-copy">{uploadMessage}</p>{/if}
-      {#if error}<p class="error">{error}</p>{/if}
-      <div class="dialog-actions">
-        <button type="button" on:click={() => (editorOpen = false)}>Cancel</button>
-        <button class="primary" disabled={saving} type="submit"><Save size={18} /> {saving ? 'Saving' : 'Save profile'}</button>
-      </div>
-    </form>
-    </div>
-  {/if}
-</section>
-
-<section class="feed-list narrow">
-  {#each userItems as item (item.id)}
-    <NoteCard event={item.event} profile={$profiles[item.event.pubkey] ?? (item.event.pubkey === pubkey ? profile : undefined)} />
-  {:else}
-    <div class="empty-state"><strong>No notes for this profile yet</strong><span>Trying relays for this profile’s posts.</span></div>
-  {/each}
-  <div class="load-more-sentinel profile-load-more-sentinel" bind:this={profileLoadMoreSentinel}>
-    {#if loadingMoreProfile}
-      <span>Loading older profile notes</span>
-    {:else if userEvents.length}
-      <span>Scroll down for older profile notes</span>
     {/if}
-  </div>
-</section>
+  </section>
+
+  <section class="feed-list narrow">
+    {#if userItems.length}
+      {#each userItems as item (item.id)}
+        <NoteCard event={item.event} profile={$profiles[item.event.pubkey] ?? (item.event.pubkey === pubkey ? profile : undefined)} />
+      {/each}
+    {:else if loadingProfile}
+      <div class="empty-state"><strong>Loading profile notes</strong><span>Checking relays for this profile’s posts.</span></div>
+    {:else if triedProfileRelays}
+      <div class="empty-state"><strong>No notes for this profile yet</strong><span>No posts were returned by the connected relays.</span></div>
+    {:else}
+      <div class="empty-state"><strong>No notes for this profile yet</strong><span>Connect to relays to check this profile’s posts.</span></div>
+    {/if}
+    <div class="load-more-sentinel profile-load-more-sentinel" bind:this={profileLoadMoreSentinel}>
+      {#if loadingMoreProfile}
+        <span>Loading older profile notes</span>
+      {:else if userEvents.length}
+        <span>Scroll down for older profile notes</span>
+      {/if}
+    </div>
+  </section>
+</div>

@@ -14,17 +14,21 @@
   const rightRailStorageKey = 'nostr-right-rail-collapsed';
   let rightRailCollapsed = false;
   let stopRelayStatusChecks = () => {};
+  let relayStatusTimer: ReturnType<typeof setTimeout> | undefined;
   $: embeddedPage = $page.url.pathname.startsWith('/embed/');
 
   onMount(() => {
     if (!embeddedPage) {
       void bootstrap();
-      stopRelayStatusChecks = startRelayStatusChecks(relays);
+      relayStatusTimer = setTimeout(() => {
+        stopRelayStatusChecks = startRelayStatusChecks(relays);
+      }, 1500);
       rightRailCollapsed = localStorage.getItem(rightRailStorageKey) === 'true';
     }
   });
 
   onDestroy(() => {
+    clearTimeout(relayStatusTimer);
     stopRelayStatusChecks();
   });
 
@@ -70,7 +74,9 @@
 
     <main class="guest-main">
       <div class="shell">
-        <slot />
+        <div class="guest-content">
+          <slot />
+        </div>
         <RightRail />
       </div>
     </main>

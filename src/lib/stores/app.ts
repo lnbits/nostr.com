@@ -10,6 +10,7 @@ import {
   fetchContactListDetails,
   fetchFeed,
   fetchEventStats,
+  fetchMuteList,
   fetchProfiles,
   fetchNotifications,
   fetchRelayInfoDocuments,
@@ -23,6 +24,8 @@ import {
   loginWithPrivateKey,
   normalizeRelayUrl,
   publishContactList,
+  publishDeletion,
+  publishMuteList,
   publishNote,
   publishProfile,
   publishReaction,
@@ -55,6 +58,7 @@ export const profiles = writable<Record<string, Profile>>({});
 export const relays = writable<RelayState[]>(defaultRelays);
 export const session = writable<Session | null>(initialSession);
 export const follows = writable<string[]>([]);
+export const mutedPubkeys = writable<string[]>([]);
 export const customFeedSettings = writable<CustomFeedSettings>(initialCustomFeedSettings);
 export const activeHashtag = writable<string>('');
 export const online = writable(true);
@@ -63,6 +67,9 @@ export const directMessages = writable<DirectMessage[]>([]);
 export const activeMessagePeer = writable<string>('');
 export const eventStats = writable<Record<string, EventStats>>({});
 export const likedEvents = writable<Set<string>>(new Set());
+export const repostedEvents = writable<Set<string>>(new Set());
+export const deletedEventIds = writable<Set<string>>(new Set());
+export const editedEvents = writable<Record<string, NostrEvent>>({});
 export const loadingFeed = writable(false);
 export const loadingNewerFeed = writable(false);
 export const loadingMessages = writable(false);
@@ -72,14 +79,17 @@ export const hasMoreFeed = writable(true);
 export const composerOpen = writable(false);
 export const loginDialogOpen = writable(false);
 export const replyTarget = writable<NostrEvent | null>(null);
+export const editTarget = writable<NostrEvent | null>(null);
 
 let currentRelays = defaultRelays;
 let currentFollows: string[] = [];
+let currentMutedPubkeys = new Set<string>();
 let currentSettings = defaultCustomFeedSettings;
 let currentMode: FeedMode = 'global';
 let currentHashtag = '';
 let currentSessionValue: Session | null = initialSession;
 let currentContactItems: ContactListItem[] = [];
+let currentDeletedEventIds = new Set<string>();
 let oldestFeedTimestamp: number | undefined;
 let liveFeedSub: { close: (reason?: string) => void } | undefined;
 let liveFeedToken = 0;
@@ -89,8 +99,12 @@ let liveStatsKey = '';
 let cachedOlderEvents: NostrEvent[] = [];
 const visibleStatIds = new Set<string>();
 const seenLiveStatEvents = new Set<string>();
+const seenLiveReactionAuthors = new Set<string>();
+const seenLiveRepostAuthors = new Set<string>();
 const requestedStats = new Map<string, number>();
 const statsRetryMs = 60_000;
+const pendingLikeToggles = new Set<string>();
+const pendingRepostToggles = new Set<string>();
 
 relays.subscribe((value) => {
   currentRelays = value;
@@ -98,6 +112,7 @@ relays.subscribe((value) => {
   if (visibleStatIds.size) scheduleVisibleStatsSubscription();
 });
 follows.subscribe((value) => (currentFollows = value));
+mutedPubkeys.subscribe((value) => (currentMutedPubkeys = new Set(value)));
 customFeedSettings.subscribe((value) => {
   currentSettings = value;
   if (browser) localStorage.setItem(customFeedStorageKey, JSON.stringify(value));
@@ -105,6 +120,7 @@ customFeedSettings.subscribe((value) => {
 feedMode.subscribe((value) => (currentMode = value));
 activeHashtag.subscribe((value) => (currentHashtag = value));
 session.subscribe((value) => (currentSessionValue = value));
+deletedEventIds.subscribe((value) => (currentDeletedEventIds = value));
 
 export async function bootstrap() {
   if (!browser) return;
@@ -113,16 +129,26 @@ export async function bootstrap() {
   addEventListener('offline', () => online.set(false));
 
   const [cachedEvents, cachedProfiles] = await Promise.all([getCachedEvents(cachedFeedBufferLimit), getCachedProfiles()]);
-  const cachedTopLevelEvents = cachedEventsForMode(currentMode, topLevelFeedEvents(filterSpam(cachedEvents)), cachedFeedBufferLimit);
+  const cachedTopLevelEvents = cachedEventsForMode(currentMode, topLevelFeedEvents(filterSpam(cachedEvents, currentMutedPubkeys)), cachedFeedBufferLimit);
   const visibleEvents = cachedTopLevelEvents.slice(0, initialFeedLimit);
   cachedOlderEvents = cachedTopLevelEvents.slice(initialFeedLimit);
   events.set(visibleEvents);
   oldestFeedTimestamp = getOldestTimestamp(visibleEvents);
   profiles.set(Object.fromEntries(cachedProfiles.map((profile) => [profile.pubkey, profile])));
-  await hydrateDefaultFeedContext();
+
+  const relayCountBeforeContext = currentRelays.length;
+  const contextReady = hydrateDefaultFeedContext();
   void refreshRelayInfo();
   void refreshFeed();
-  void refreshNotifications();
+  void contextReady
+    .then(() => {
+      void refreshRelayInfo();
+      if (currentRelays.length !== relayCountBeforeContext || currentMode !== 'global' || currentHashtag) void refreshFeed();
+      void refreshNotifications();
+    })
+    .catch(() => {
+      void refreshNotifications();
+    });
 }
 
 export async function refreshFeed(mode = currentMode) {
@@ -142,7 +168,7 @@ export async function refreshFeed(mode = currentMode) {
   }
 
   try {
-    const nextEvents = await fetchFeed(fetchMode, currentRelays, currentFollows, effectiveFeedSettings(fetchMode), { limit: initialFeedLimit, hashtag: currentHashtag });
+    const nextEvents = filterMutedEvents(await fetchFeed(fetchMode, currentRelays, currentFollows, effectiveFeedSettings(fetchMode), { limit: initialFeedLimit, hashtag: currentHashtag }));
     if (nextEvents.length) {
       events.set(nextEvents);
       oldestFeedTimestamp = getOldestTimestamp(nextEvents);
@@ -182,7 +208,7 @@ function cachedEventsForMode(mode: FeedMode, items: NostrEvent[], limit = initia
 
 async function getCachedFeedCandidates(mode: FeedMode, limit = cachedFeedBufferLimit) {
   const cachedEvents = currentHashtag ? await getCachedHashtagEvents(currentHashtag, limit) : await getCachedEvents(limit);
-  return topLevelFeedEvents(filterSpam(cachedEventsForMode(mode, topLevelFeedEvents(filterSpam(cachedEvents)), limit)));
+  return topLevelFeedEvents(filterSpam(cachedEventsForMode(mode, topLevelFeedEvents(filterSpam(cachedEvents, currentMutedPubkeys)), limit), currentMutedPubkeys));
 }
 
 async function primeCachedFeedBuffers(mode: FeedMode, visibleEvents: NostrEvent[]) {
@@ -226,16 +252,23 @@ export async function loadNewerFeed() {
 
   loadingNewerFeed.set(true);
   try {
-    const nextEvents = await fetchFeed(fetchMode, currentRelays, currentFollows, effectiveFeedSettings(fetchMode), {
+    const nextEvents = filterMutedEvents(await fetchFeed(fetchMode, currentRelays, currentFollows, effectiveFeedSettings(fetchMode), {
       limit: initialFeedLimit,
       since: newestTimestamp + 1,
       hashtag: currentHashtag
-    });
+    }));
     if (!nextEvents.length) return [];
-    pendingNewerEvents.update((existing) => mergeEvents(nextEvents, existing));
+    const existingIds = new Set(getStoreSnapshot(events).map((event) => event.id));
+    const freshEvents = nextEvents.filter((event) => !existingIds.has(event.id));
+    if (!freshEvents.length) return [];
+    events.update((existing) => {
+      const merged = mergeEvents(freshEvents, existing);
+      oldestFeedTimestamp = getOldestTimestamp(feedEventsForActiveHashtag(merged));
+      return merged;
+    });
     void refreshEventStats(nextEvents.map((event) => event.id));
     void hydrateMissingProfiles(nextEvents, 60);
-    return nextEvents;
+    return freshEvents;
   } finally {
     loadingNewerFeed.set(false);
   }
@@ -266,8 +299,12 @@ function stopLiveStats(reason = 'stopping visible stats subscription') {
 
 export function watchVisibleNoteStats(id: string, visible: boolean) {
   if (!browser || !/^[0-9a-f]{64}$/i.test(id)) return;
-  if (visible) visibleStatIds.add(id);
-  else visibleStatIds.delete(id);
+  if (visible) {
+    visibleStatIds.add(id);
+    void refreshEventStats([id]);
+  } else {
+    visibleStatIds.delete(id);
+  }
   scheduleVisibleStatsSubscription();
 }
 
@@ -293,22 +330,35 @@ async function restartVisibleStatsSubscription() {
 }
 
 function mergeLiveStatEvent(ids: string[], event: NostrEvent) {
+  const targetIds = statTargetIdsForLocalUse(event, ids);
+  if (event.kind === 7 && targetIds.every((id) => seenLiveReactionAuthors.has(`${id}:${event.pubkey}`))) return;
+  if ((event.kind === 6 || event.kind === 16) && targetIds.every((id) => seenLiveRepostAuthors.has(`${id}:${event.pubkey}`))) return;
+
   const stats = eventStatsFromEvents(ids, [event]);
   eventStats.update((existing) => {
     const next = { ...existing };
     for (const [id, stat] of Object.entries(stats)) {
-      if (!stat.replies && !stat.reposts && !stat.likes && !stat.dislikes && !stat.emoji) continue;
+      if (!stat.replies && !stat.reposts && !stat.likes && !stat.zaps && !stat.zapSats && !stat.dislikes && !stat.emoji) continue;
+      if (event.kind === 7) seenLiveReactionAuthors.add(`${id}:${event.pubkey}`);
+      if (event.kind === 6 || event.kind === 16) seenLiveRepostAuthors.add(`${id}:${event.pubkey}`);
       const previous = next[id] ?? emptyStats();
       next[id] = {
         replies: previous.replies + stat.replies,
         reposts: previous.reposts + stat.reposts,
         likes: previous.likes + stat.likes,
+        zaps: previous.zaps + stat.zaps,
+        zapSats: previous.zapSats + stat.zapSats,
         dislikes: previous.dislikes + stat.dislikes,
         emoji: previous.emoji + stat.emoji
       };
     }
     return next;
   });
+}
+
+function statTargetIdsForLocalUse(event: NostrEvent, ids: string[]) {
+  const wanted = new Set(ids);
+  return event.tags.filter((tag) => tag[0] === 'e' && wanted.has(tag[1])).map((tag) => tag[1]);
 }
 
 async function restartLiveFeed(mode = currentMode, newestTimestamp?: number) {
@@ -325,7 +375,7 @@ async function restartLiveFeed(mode = currentMode, newestTimestamp?: number) {
     effectiveFeedSettings(mode),
     { since: newestTimestamp ? newestTimestamp + 1 : Math.floor(Date.now() / 1000), hashtag: currentHashtag },
     (event) => {
-      if (token !== liveFeedToken || isKnownFeedEvent(event.id)) return;
+      if (token !== liveFeedToken || isKnownFeedEvent(event.id) || currentMutedPubkeys.has(event.pubkey)) return;
       pendingNewerEvents.update((existing) => mergeEvents([event], existing));
       void refreshEventStats([event.id]);
       void hydrateMissingProfiles([event], 8);
@@ -375,11 +425,11 @@ export async function loadMoreFeed(force = false) {
     revealCachedOlderFeed();
     const currentOldest = getOldestTimestamp(feedEventsForActiveHashtag(getStoreSnapshot(events))) ?? oldestFeedTimestamp;
     const olderThan = currentOldest ? currentOldest - 1 : undefined;
-    const nextEvents = await fetchFeed(fetchMode, currentRelays, currentFollows, effectiveFeedSettings(fetchMode), {
+    const nextEvents = filterMutedEvents(await fetchFeed(fetchMode, currentRelays, currentFollows, effectiveFeedSettings(fetchMode), {
       limit: pageFeedLimit,
       until: olderThan,
       hashtag: currentHashtag
-    });
+    }));
     const existingIds = new Set(getStoreSnapshot(events).map((event) => event.id));
     const freshEvents = nextEvents.filter((event) => !existingIds.has(event.id));
     if (!freshEvents.length) {
@@ -415,11 +465,17 @@ function mergeStats(existing: Record<string, EventStats>, incoming: Record<strin
       replies: Math.max(previous.replies, stat.replies),
       reposts: Math.max(previous.reposts, stat.reposts),
       likes: Math.max(previous.likes, stat.likes),
+      zaps: Math.max(previous.zaps, stat.zaps),
+      zapSats: Math.max(previous.zapSats, stat.zapSats),
       dislikes: Math.max(previous.dislikes, stat.dislikes),
       emoji: Math.max(previous.emoji, stat.emoji)
     };
   }
   return next;
+}
+
+function filterMutedEvents(items: NostrEvent[]) {
+  return currentMutedPubkeys.size ? items.filter((event) => !currentMutedPubkeys.has(event.pubkey)) : items;
 }
 
 export function filterByHashtag(tag: string) {
@@ -431,7 +487,7 @@ export function filterByHashtag(tag: string) {
 }
 
 async function hydrateCachedHashtagFeed(tag: string) {
-  const cached = topLevelFeedEvents(filterSpam(await getCachedHashtagEvents(tag, cachedFeedBufferLimit)));
+  const cached = topLevelFeedEvents(filterSpam(await getCachedHashtagEvents(tag, cachedFeedBufferLimit), currentMutedPubkeys));
   if (!cached.length || tag !== currentHashtag) return;
   const visibleEvents = cached.slice(0, initialFeedLimit);
   cachedOlderEvents = cached.slice(initialFeedLimit);
@@ -488,7 +544,7 @@ export async function refreshNotifications() {
 
   loadingNotifications.set(true);
   try {
-    const nextNotifications = await fetchNotifications(currentSession.pubkey, currentRelays).catch(() => []);
+    const nextNotifications = (await fetchNotifications(currentSession.pubkey, currentRelays).catch(() => [])).filter((item) => !currentMutedPubkeys.has(item.event.pubkey));
     notifications.set(nextNotifications);
     const pubkeys = [...new Set(nextNotifications.map((item) => item.event.pubkey))];
     await hydrateMissingProfiles(pubkeys.map((pubkey) => ({ id: pubkey, pubkey, created_at: 0, kind: 0, tags: [], content: '' })), 80);
@@ -548,9 +604,16 @@ export async function signIn(mode: 'nip07' | 'private-key' | 'bunker' | 'guest',
 export async function signOut() {
   session.set(null);
   if (browser) localStorage.removeItem(sessionStorageKey);
+  activeHashtag.set('');
+  feedMode.set('global');
+  cachedOlderEvents = [];
+  if (browser) await goto('/');
   await hydrateGuestFeedContext();
-  void refreshFeed();
+  void refreshFeed('global');
   notifications.set([]);
+  mutedPubkeys.set([]);
+  replyTarget.set(null);
+  editTarget.set(null);
 }
 
 export async function postNote(content: string, parent?: NostrEvent) {
@@ -559,21 +622,108 @@ export async function postNote(content: string, parent?: NostrEvent) {
   if (!currentSession) throw new Error('Sign in before posting.');
   const tags = parent ? replyTags(parent) : [];
   const event = await publishNote(currentSession, content, currentRelays, tags);
+  seenLiveStatEvents.add(event.id);
   events.update((existing) => mergeEvents([event], existing));
+  if (parent) mergeLocalReplyStats(event);
   replyTarget.set(null);
+}
+
+export async function editNote(content: string, target: NostrEvent) {
+  const currentSession = requireSession('Sign in before editing.');
+  if (target.pubkey !== currentSession.pubkey) throw new Error('You can only edit your own posts.');
+  const optimisticEvent = { ...target, content, created_at: Math.floor(Date.now() / 1000) };
+  editedEvents.update((existing) => ({ ...existing, [target.id]: optimisticEvent }));
+  events.update((existing) => existing.map((item) => (item.id === target.id ? optimisticEvent : item)));
+  pendingNewerEvents.update((existing) => existing.map((item) => (item.id === target.id ? optimisticEvent : item)));
+  cachedOlderEvents = cachedOlderEvents.map((item) => (item.id === target.id ? optimisticEvent : item));
+  replyTarget.set(null);
+  editTarget.set(null);
+  await publishNote(currentSession, content, currentRelays, target.tags);
+  await publishDeletion(currentSession, target, currentRelays, 'Edited by author');
+}
+
+export async function deleteNote(target: NostrEvent) {
+  const currentSession = requireSession('Sign in before deleting.');
+  if (target.pubkey !== currentSession.pubkey) throw new Error('You can only delete your own posts.');
+  deletedEventIds.update((existing) => new Set(existing).add(target.id));
+  editedEvents.update((existing) => {
+    const next = { ...existing };
+    delete next[target.id];
+    return next;
+  });
+  events.update((existing) => existing.filter((item) => item.id !== target.id));
+  pendingNewerEvents.update((existing) => existing.filter((item) => item.id !== target.id));
+  cachedOlderEvents = cachedOlderEvents.filter((item) => item.id !== target.id);
+  if (getStoreSnapshot(replyTarget)?.id === target.id) replyTarget.set(null);
+  if (getStoreSnapshot(editTarget)?.id === target.id) editTarget.set(null);
+  await publishDeletion(currentSession, target, currentRelays, 'Deleted by author');
 }
 
 export async function repostNote(target: NostrEvent) {
   const currentSession = requireSession('Sign in before reposting.');
-  const event = await publishRepost(currentSession, target, currentRelays);
-  events.update((existing) => mergeEvents([event], existing));
-  eventStats.update((existing) => ({
-    ...existing,
-    [target.id]: {
-      ...(existing[target.id] ?? emptyStats()),
-      reposts: (existing[target.id]?.reposts ?? 0) + 1
-    }
-  }));
+  const pendingKey = `${target.id}:${currentSession.pubkey}`;
+  if (pendingRepostToggles.has(pendingKey)) return;
+  pendingRepostToggles.add(pendingKey);
+
+  const alreadyReposted = getStoreSnapshot(repostedEvents).has(target.id);
+  if (alreadyReposted) {
+    repostedEvents.update((existing) => {
+      const next = new Set(existing);
+      next.delete(target.id);
+      return next;
+    });
+    eventStats.update((existing) => {
+      const previous = existing[target.id] ?? emptyStats();
+      return {
+        ...existing,
+        [target.id]: {
+          ...previous,
+          reposts: Math.max(0, previous.reposts - 1)
+        }
+      };
+    });
+    seenLiveRepostAuthors.delete(pendingKey);
+    pendingRepostToggles.delete(pendingKey);
+    return;
+  }
+
+  repostedEvents.update((existing) => new Set(existing).add(target.id));
+  seenLiveRepostAuthors.add(pendingKey);
+  eventStats.update((existing) => {
+    const previous = existing[target.id] ?? emptyStats();
+    return {
+      ...existing,
+      [target.id]: {
+        ...previous,
+        reposts: previous.reposts + 1
+      }
+    };
+  });
+
+  try {
+    const event = await publishRepost(currentSession, target, currentRelays);
+    events.update((existing) => mergeEvents([event], existing));
+  } catch (err) {
+    repostedEvents.update((existing) => {
+      const next = new Set(existing);
+      next.delete(target.id);
+      return next;
+    });
+    seenLiveRepostAuthors.delete(pendingKey);
+    eventStats.update((existing) => {
+      const previous = existing[target.id] ?? emptyStats();
+      return {
+        ...existing,
+        [target.id]: {
+          ...previous,
+          reposts: Math.max(0, previous.reposts - 1)
+        }
+      };
+    });
+    throw err;
+  } finally {
+    pendingRepostToggles.delete(pendingKey);
+  }
 }
 
 export async function reactToNote(target: NostrEvent, content = '+') {
@@ -583,8 +733,11 @@ export async function reactToNote(target: NostrEvent, content = '+') {
     return;
   }
 
-  let alreadyLiked = false;
-  likedEvents.subscribe((value) => (alreadyLiked = value.has(target.id)))();
+  const pendingKey = `${target.id}:${currentSession.pubkey}`;
+  if (pendingLikeToggles.has(pendingKey)) return;
+  pendingLikeToggles.add(pendingKey);
+
+  const alreadyLiked = getStoreSnapshot(likedEvents).has(target.id);
 
   if (alreadyLiked) {
     likedEvents.update((existing) => {
@@ -602,11 +755,12 @@ export async function reactToNote(target: NostrEvent, content = '+') {
         }
       };
     });
+    pendingLikeToggles.delete(pendingKey);
     return;
   }
 
-  await publishReaction(currentSession, target, currentRelays, content);
   likedEvents.update((existing) => new Set(existing).add(target.id));
+  seenLiveReactionAuthors.add(pendingKey);
   eventStats.update((existing) => {
     const previous = existing[target.id] ?? emptyStats();
     return {
@@ -619,11 +773,65 @@ export async function reactToNote(target: NostrEvent, content = '+') {
       }
     };
   });
+
+  try {
+    await publishReaction(currentSession, target, currentRelays, content);
+  } catch (err) {
+    likedEvents.update((existing) => {
+      const next = new Set(existing);
+      next.delete(target.id);
+      return next;
+    });
+    seenLiveReactionAuthors.delete(pendingKey);
+    eventStats.update((existing) => {
+      const previous = existing[target.id] ?? emptyStats();
+      return {
+        ...existing,
+        [target.id]: {
+          ...previous,
+          likes: Math.max(0, previous.likes - 1)
+        }
+      };
+    });
+    throw err;
+  } finally {
+    pendingLikeToggles.delete(pendingKey);
+  }
 }
 
 export async function reportNote(target: NostrEvent, reportType = 'spam') {
   const currentSession = requireSession('Sign in before reporting.');
   await publishReport(currentSession, target, currentRelays, reportType);
+}
+
+export async function muteAccount(pubkey: string) {
+  const currentSession = requireSession('Sign in before muting.');
+  if (!/^[0-9a-f]{64}$/i.test(pubkey) || pubkey === currentSession.pubkey) return;
+  const previous = getStoreSnapshot(mutedPubkeys);
+  const next = [...new Set([...previous, pubkey])];
+  mutedPubkeys.set(next);
+  dropMutedEvents();
+  try {
+    await publishMuteList(currentSession, next, currentRelays);
+  } catch (err) {
+    mutedPubkeys.set(previous);
+    throw err;
+  }
+}
+
+export async function unmuteAccount(pubkey: string) {
+  const currentSession = requireSession('Sign in before unmuting.');
+  const clean = normalizePubkey(pubkey);
+  if (!clean) return;
+  const previous = getStoreSnapshot(mutedPubkeys);
+  const next = previous.filter((item) => item !== clean);
+  mutedPubkeys.set(next);
+  try {
+    await publishMuteList(currentSession, next, currentRelays);
+  } catch (err) {
+    mutedPubkeys.set(previous);
+    throw err;
+  }
 }
 
 export async function saveProfile(nextProfile: Profile) {
@@ -655,7 +863,7 @@ export async function saveRelayListMetadata() {
 export function mergeEvents(incoming: NostrEvent[], existing: NostrEvent[]) {
   const byId = new Map<string, NostrEvent>();
   [...existing, ...incoming].forEach((event) => byId.set(event.id, event));
-  const merged = [...byId.values()].sort((a, b) => b.created_at - a.created_at);
+  const merged = [...byId.values()].filter((event) => !currentDeletedEventIds.has(event.id)).sort((a, b) => b.created_at - a.created_at);
   const limited = currentMode === 'global' ? limitCryptoTopicDensity(limitConsecutiveAuthors(merged, 2), 10) : merged;
   return limited.slice(0, maxFeedEvents);
 }
@@ -714,6 +922,19 @@ export function startReply(event: NostrEvent) {
     return;
   }
   replyTarget.set(event);
+  editTarget.set(null);
+  composerOpen.set(true);
+}
+
+export function startEdit(event: NostrEvent) {
+  const currentSession = getStoreSnapshot(session);
+  if (!currentSession) {
+    loginDialogOpen.set(true);
+    return;
+  }
+  if (event.pubkey !== currentSession.pubkey) return;
+  replyTarget.set(null);
+  editTarget.set(event);
   composerOpen.set(true);
 }
 
@@ -725,6 +946,7 @@ export function startCompose() {
     return;
   }
   replyTarget.set(null);
+  editTarget.set(null);
   activeHashtag.set('');
   if (browser && (window.location.pathname !== '/' || window.location.hash)) void goto('/');
   composerOpen.set(true);
@@ -788,10 +1010,15 @@ async function hydrateDefaultFeedContext() {
 async function hydrateSignedInFeedContext(currentSession: Session) {
   const relayList = await fetchRelayListMetadata(currentSession.pubkey, currentRelays).catch(() => []);
   mergeRelayHints(relayList.map((relay) => relay.url), 90);
-  const contacts = await fetchContactListDetails(currentSession.pubkey, currentRelays).catch(() => ({ pubkeys: [], relayHints: [], items: [] }));
+  const [contacts, muted] = await Promise.all([
+    fetchContactListDetails(currentSession.pubkey, currentRelays).catch(() => ({ pubkeys: [], relayHints: [], items: [] })),
+    fetchMuteList(currentSession.pubkey, currentRelays).catch(() => [])
+  ]);
   currentContactItems = contacts.items;
   mergeRelayHints(contacts.relayHints, 74);
   follows.set(contacts.pubkeys);
+  mutedPubkeys.set(muted);
+  dropMutedEvents();
 }
 
 async function hydrateGuestFeedContext() {
@@ -805,6 +1032,35 @@ async function hydrateGuestFeedContext() {
   }
   currentContactItems = [];
   follows.set([]);
+  mutedPubkeys.set([]);
+}
+
+function dropMutedEvents() {
+  if (!currentMutedPubkeys.size) return;
+  events.update((existing) => filterMutedEvents(existing));
+  pendingNewerEvents.update((existing) => filterMutedEvents(existing));
+  cachedOlderEvents = filterMutedEvents(cachedOlderEvents);
+  notifications.update((existing) => existing.filter((item) => !currentMutedPubkeys.has(item.event.pubkey)));
+}
+
+function mergeLocalReplyStats(reply: NostrEvent) {
+  const targetIds = [...new Set(reply.tags.flatMap((tag) => (tag[0] === 'e' && tag[1] ? [tag[1]] : [])))];
+  if (!targetIds.length) return;
+
+  const stats = eventStatsFromEvents(targetIds, [reply]);
+  eventStats.update((existing) => {
+    const next = { ...existing };
+    for (const id of targetIds) {
+      const stat = stats[id];
+      if (!stat?.replies) continue;
+      const previous = next[id] ?? emptyStats();
+      next[id] = {
+        ...previous,
+        replies: previous.replies + stat.replies
+      };
+    }
+    return next;
+  });
 }
 
 function replyTags(parent: NostrEvent) {
@@ -831,7 +1087,7 @@ function getStoreSnapshot<T>(store: { subscribe(run: (value: T) => void): () => 
 }
 
 function emptyStats(): EventStats {
-  return { replies: 0, reposts: 0, likes: 0, dislikes: 0, emoji: 0 };
+  return { replies: 0, reposts: 0, likes: 0, zaps: 0, zapSats: 0, dislikes: 0, emoji: 0 };
 }
 
 function effectiveFeedSettings(mode: FeedMode): CustomFeedSettings {

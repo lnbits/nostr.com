@@ -14,7 +14,7 @@ export function activeRelayUrls(relays: RelayState[], intent: 'read' | 'write') 
   const urls = relays
     .filter((relay) => relay.enabled && relay[intent])
     .sort((a, b) => b.score - a.score)
-    .slice(0, intent === 'read' ? 8 : 3)
+    .slice(0, intent === 'read' ? 10 : 3)
     .map((relay) => normalizeRelayUrl(relay.url))
     .filter(Boolean);
   return [...new Set(urls)];
@@ -369,12 +369,27 @@ export async function subscribeEventStats(ids: string[], relays = defaultRelays,
   const relayUrls = activeRelayUrls(relays, 'read');
   if (!relayUrls.length) return undefined;
 
-  const filter: Filter = { kinds: [1, 6, 7, 16], '#e': cleanIds, since: Math.floor(Date.now() / 1000) };
+  const filter: Filter = { kinds: [1, 6, 7, 16, 9735], '#e': cleanIds, since: Math.floor(Date.now() / 1000) };
   return pool.subscribeMany(relayUrls, filter, {
     label: 'visible-note-stats',
     onevent(event) {
       const [clean] = verifiedRelayEvents([event as NostrEvent]);
       if (clean) onEvent(clean);
+    }
+  });
+}
+
+export async function subscribeZapReceipts(invoice: string, recipientPubkey: string, relays = defaultRelays, onEvent: (event: NostrEvent) => void) {
+  const relayUrls = activeRelayUrls(relays, 'read');
+  if (!relayUrls.length || !invoice || !/^[0-9a-f]{64}$/i.test(recipientPubkey)) return undefined;
+
+  const filter: Filter = { kinds: [9735], '#p': [recipientPubkey], since: Math.floor(Date.now() / 1000) - 10 };
+  return pool.subscribeMany(relayUrls, filter, {
+    label: 'zap-receipts',
+    onevent(event) {
+      const [clean] = verifiedRelayEvents([event as NostrEvent]);
+      const bolt11 = clean?.tags.find((tag) => tag[0] === 'bolt11')?.[1];
+      if (clean && bolt11?.toLowerCase() === invoice.toLowerCase()) onEvent(clean);
     }
   });
 }
@@ -489,7 +504,7 @@ export async function fetchDirectMessages(session: Session, relays = defaultRela
 
 export async function fetchEventStats(ids: string[], relays = defaultRelays) {
   const uniqueIds = [...new Set(ids)].filter(Boolean).slice(0, 80);
-  const emptyStats = () => ({ replies: 0, reposts: 0, likes: 0, dislikes: 0, emoji: 0 });
+  const emptyStats = () => ({ replies: 0, reposts: 0, likes: 0, zaps: 0, zapSats: 0, dislikes: 0, emoji: 0 });
   const stats: Record<string, EventStats> = Object.fromEntries(uniqueIds.map((id) => [id, emptyStats()]));
   if (!uniqueIds.length) return stats;
 
@@ -497,7 +512,8 @@ export async function fetchEventStats(ids: string[], relays = defaultRelays) {
   const filters: Filter[] = [
     { kinds: [1], '#e': uniqueIds, limit: Math.min(500, uniqueIds.length * 20) },
     { kinds: [6, 16], '#e': uniqueIds, limit: Math.min(500, uniqueIds.length * 20) },
-    { kinds: [7], '#e': uniqueIds, limit: Math.min(800, uniqueIds.length * 35) }
+    { kinds: [7], '#e': uniqueIds, limit: Math.min(800, uniqueIds.length * 35) },
+    { kinds: [9735], '#e': uniqueIds, limit: Math.min(500, uniqueIds.length * 20) }
   ];
   const countStats: Record<string, Partial<EventStats>> = await fetchCountStats(uniqueIds, relayUrls).catch(() => ({}));
   const events = dedupeEvents(verifiedRelayEvents((await Promise.all(filters.map((filter) => queryShortLived(relayUrls, filter, 4500)))).flat()));
@@ -510,6 +526,8 @@ export async function fetchEventStats(ids: string[], relays = defaultRelays) {
       replies: Math.max(fromEvents.replies, fromCount?.replies ?? 0),
       reposts: Math.max(fromEvents.reposts, fromCount?.reposts ?? 0),
       likes: Math.max(fromEvents.likes, fromCount?.likes ?? 0),
+      zaps: Math.max(fromEvents.zaps, fromCount?.zaps ?? 0),
+      zapSats: fromEvents.zapSats,
       dislikes: fromEvents.dislikes,
       emoji: fromEvents.emoji
     };
@@ -520,12 +538,13 @@ export async function fetchEventStats(ids: string[], relays = defaultRelays) {
 
 export function eventStatsFromEvents(ids: string[], events: NostrEvent[]) {
   const uniqueIds = [...new Set(ids)].filter(Boolean);
-  const emptyStats = () => ({ replies: 0, reposts: 0, likes: 0, dislikes: 0, emoji: 0 });
+  const emptyStats = () => ({ replies: 0, reposts: 0, likes: 0, zaps: 0, zapSats: 0, dislikes: 0, emoji: 0 });
   const stats: Record<string, EventStats> = Object.fromEntries(uniqueIds.map((id) => [id, emptyStats()]));
   const seen = {
     replies: new Set<string>(),
     reposts: new Set<string>(),
-    likes: new Set<string>()
+    likes: new Set<string>(),
+    zaps: new Set<string>()
   };
 
   for (const event of events) {
@@ -543,6 +562,13 @@ export function eventStatsFromEvents(ids: string[], events: NostrEvent[]) {
         if (!reaction || reaction === '+') stats[id].likes += 1;
         else if (reaction === '-') stats[id].dislikes += 1;
         else stats[id].emoji += 1;
+      } else if (event.kind === 9735) {
+        const bolt11 = event.tags.find((tag) => tag[0] === 'bolt11')?.[1] ?? event.id;
+        if (!seen.zaps.has(`${id}:${bolt11}`)) {
+          seen.zaps.add(`${id}:${bolt11}`);
+          stats[id].zaps += 1;
+          stats[id].zapSats += zapReceiptAmountSats(event);
+        }
       }
     }
   }
@@ -633,6 +659,15 @@ export async function fetchContactListDetails(pubkey: string, relays = defaultRe
   return extractContactListDetails(events[0]);
 }
 
+export async function fetchMuteList(pubkey: string, relays = defaultRelays) {
+  if (!/^[0-9a-f]{64}$/i.test(pubkey)) return [];
+  const relayUrls = activeRelayUrls(relays, 'read');
+  const [event] = verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [10000], authors: [pubkey], limit: 1 }, 4000)).sort(
+    (a, b) => b.created_at - a.created_at
+  );
+  return extractMutePubkeys(event);
+}
+
 export async function fetchRelayListMetadata(pubkey: string, relays = defaultRelays) {
   const relayUrls = activeRelayUrls(relays, 'read');
   const [event] = verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [10002], authors: [pubkey], limit: 1 }, 4000)).sort(
@@ -701,6 +736,11 @@ export async function publishRepost(session: Session, target: NostrEvent, relays
 
 export async function publishReport(session: Session, target: NostrEvent, relays = defaultRelays, reportType = 'spam', content = '') {
   return publishEventTemplate(session, { kind: 1984, content, tags: [['e', target.id, reportType], ['p', target.pubkey, reportType]], created_at: now() }, relays);
+}
+
+export async function publishDeletion(session: Session, target: NostrEvent, relays = defaultRelays, reason = 'Edited by author') {
+  if (target.pubkey !== session.pubkey) throw new Error('You can only delete your own events.');
+  return publishEventTemplate(session, { kind: 5, content: reason, tags: [['e', target.id], ['k', String(target.kind)]], created_at: now() }, relays);
 }
 
 async function toNip04DirectMessage(event: NostrEvent, session: Session): Promise<DirectMessage> {
@@ -801,6 +841,11 @@ export async function publishContactList(session: Session, pubkeys: string[], re
   return publishEventTemplate(session, { kind: 3, content: '', tags, created_at: now() }, relays);
 }
 
+export async function publishMuteList(session: Session, pubkeys: string[], relays = defaultRelays) {
+  const tags = [...new Set(pubkeys)].filter((pubkey) => /^[0-9a-f]{64}$/i.test(pubkey) && pubkey !== session.pubkey).map((pubkey) => ['p', pubkey]);
+  return publishEventTemplate(session, { kind: 10000, content: '', tags, created_at: now() }, relays);
+}
+
 export async function publishRelayListMetadata(session: Session, relays = defaultRelays) {
   const tags = relays
     .filter((relay) => relay.enabled)
@@ -874,7 +919,7 @@ async function publishSignedEvent(event: NostrToolsEvent, relays = defaultRelays
   await Promise.any(pool.publish(urls, event));
 }
 
-async function signEventTemplate(session: Session, draft: Pick<NostrToolsEvent, 'kind' | 'content' | 'tags' | 'created_at'>) {
+export async function signEventTemplate(session: Session, draft: Pick<NostrToolsEvent, 'kind' | 'content' | 'tags' | 'created_at'>) {
   let event: NostrToolsEvent;
   if (session.mode === 'nip07' && window.nostr) {
     event = (await window.nostr.signEvent({ ...draft, pubkey: session.pubkey })) as unknown as NostrToolsEvent;
@@ -997,6 +1042,11 @@ export function extractContactListDetails(event?: NostrEvent): ContactListDetail
   return { pubkeys: [...pubkeys], relayHints: [...relayHints], items };
 }
 
+export function extractMutePubkeys(event?: NostrEvent) {
+  if (!event) return [];
+  return [...new Set(event.tags.filter((tag) => tag[0] === 'p' && /^[0-9a-f]{64}$/i.test(tag[1])).map((tag) => tag[1]))];
+}
+
 function sanitizeRelayHints(urls: string[]) {
   return [...new Set(urls.map(normalizeRelayUrl).filter(Boolean))];
 }
@@ -1019,6 +1069,18 @@ function statTargetIds(event: NostrEvent, ids: string[]) {
   return referencedEventIds(event, ids);
 }
 
+function zapReceiptAmountSats(event: NostrEvent) {
+  const description = event.tags.find((tag) => tag[0] === 'description')?.[1];
+  if (!description) return 0;
+  try {
+    const request = JSON.parse(description) as Pick<NostrEvent, 'tags'>;
+    const amountMsats = Number(request.tags?.find((tag) => tag[0] === 'amount')?.[1] ?? 0);
+    return Number.isFinite(amountMsats) ? Math.floor(amountMsats / 1000) : 0;
+  } catch {
+    return 0;
+  }
+}
+
 function reactionTargetId(event: NostrEvent) {
   const eTags = event.tags.filter((tag) => tag[0] === 'e' && tag[1]);
   return eTags.at(-1)?.[1] ?? '';
@@ -1038,16 +1100,19 @@ async function fetchCountStats(ids: string[], relayUrls: string[]) {
 }
 
 async function countStatsForId(id: string, relayUrls: string[]): Promise<EventStats | undefined> {
-  const [replies, reposts, likes] = await Promise.all([
+  const [replies, reposts, likes, zaps] = await Promise.all([
     relayCount(relayUrls, { kinds: [1], '#e': [id] }),
     relayCount(relayUrls, { kinds: [6, 16], '#e': [id] }),
-    relayCount(relayUrls, { kinds: [7], '#e': [id] })
+    relayCount(relayUrls, { kinds: [7], '#e': [id] }),
+    relayCount(relayUrls, { kinds: [9735], '#e': [id] })
   ]);
-  if ([replies, reposts, likes].every((value) => value === undefined)) return undefined;
+  if ([replies, reposts, likes, zaps].every((value) => value === undefined)) return undefined;
   return {
     replies: replies ?? 0,
     reposts: reposts ?? 0,
     likes: likes ?? 0,
+    zaps: zaps ?? 0,
+    zapSats: 0,
     dislikes: 0,
     emoji: 0
   };

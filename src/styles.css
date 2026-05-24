@@ -242,6 +242,10 @@ label span, label strong { color: var(--text); }
   margin: 0 auto;
   padding: 0 18px 42px;
 }
+.guest-content,
+.profile-page {
+  min-width: 0;
+}
 .timeline { min-width: 0; max-width: 680px; margin: 0 auto; padding: 0 18px 42px; }
 .shell .timeline { max-width: none; margin: 0; padding: 0; }
 .authed-main .timeline { max-width: none; padding: 0; }
@@ -605,7 +609,7 @@ label span, label strong { color: var(--text); }
 .newer-feed-bubble-wrap {
   position: sticky;
   top: calc(10px + env(safe-area-inset-top));
-  z-index: 9;
+  z-index: 35;
   display: grid;
   place-items: center;
   height: 0;
@@ -621,6 +625,9 @@ label span, label strong { color: var(--text); }
   color: var(--bg);
   box-shadow: var(--shadow);
   pointer-events: auto;
+}
+.authed-main .newer-feed-bubble-wrap {
+  top: calc(68px + env(safe-area-inset-top));
 }
 .note-card {
   display: grid;
@@ -677,6 +684,9 @@ label span, label strong { color: var(--text); }
 .note-menu {
   position: relative;
   justify-self: end;
+}
+.note-menu-popover .danger-menu-item {
+  color: var(--danger);
 }
 .note-menu-popover {
   position: absolute;
@@ -927,6 +937,13 @@ label span, label strong { color: var(--text); }
 .note-actions button.liked {
   color: #f2559a;
 }
+.note-actions button.reposted {
+  color: #49c983;
+}
+.note-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
 .note-actions .report-action {
   margin-left: auto;
 }
@@ -1170,6 +1187,44 @@ label span, label strong { color: var(--text); }
   justify-content: flex-end;
   gap: 10px;
   margin-top: 16px;
+}
+.zap-dialog {
+  display: grid;
+  gap: 10px;
+}
+.zap-dialog label {
+  font-weight: 700;
+}
+.zap-amount-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+.zap-amount-row input {
+  min-width: 0;
+}
+.zap-limits {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.zap-qr {
+  width: min(280px, 100%);
+  justify-self: center;
+  margin-top: 6px;
+  padding: 10px;
+  background: #fff;
+  border-color: var(--line);
+}
+.zap-qr img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+.zap-actions {
+  justify-content: center;
+  margin-top: 4px;
 }
 .custom-feed-form {
   display: grid;
@@ -1695,6 +1750,7 @@ label span, label strong { color: var(--text); }
 }
 .empty-state strong { color: var(--text); }
 .error { color: var(--danger); margin: 0; }
+.success { color: #49c983; font-weight: 700; margin: 0; }
 .spin { animation: spin 1s linear infinite; }
 .settings-page, .thread-page, .profile-hero, .feed-list.narrow {
   max-width: 760px;

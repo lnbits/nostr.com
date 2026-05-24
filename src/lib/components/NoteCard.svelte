@@ -2,11 +2,12 @@
   import { onDestroy, onMount } from 'svelte';
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
-  import { Copy, ExternalLink, Flag, Heart, MessageCircle, MoreHorizontal, Repeat2 } from '@lucide/svelte';
+  import { Copy, ExternalLink, Flag, Heart, MessageCircle, MoreHorizontal, Pencil, Repeat2, Trash2, UserX, Zap } from '@lucide/svelte';
   import type { NostrEvent, Profile } from '$lib/nostr/types';
   import { extractMediaAttachments, extractQuotedNoteReferences, parseNoteText } from '$lib/nostr/media';
-  import { fetchLikeAuthors, fetchProfiles } from '$lib/nostr/client';
-  import { eventStats, filterByHashtag, likedEvents, profiles, reactToNote, relays, reportNote, repostNote, startReply, watchVisibleNoteStats } from '$lib/stores/app';
+  import { fetchLikeAuthors, fetchProfiles, subscribeZapReceipts } from '$lib/nostr/client';
+  import { createZapInvoice, loadZapInfo, type ZapInfo } from '$lib/nostr/zap';
+  import { deleteNote, editedEvents, eventStats, filterByHashtag, likedEvents, muteAccount, profiles, reactToNote, refreshEventStats, relays, reportNote, repostedEvents, repostNote, session, startEdit, startReply, watchVisibleNoteStats } from '$lib/stores/app';
   import QuotedNotePreview from './QuotedNotePreview.svelte';
 
   export let event: NostrEvent;
@@ -26,7 +27,23 @@
   let reportDialogOpen = false;
   let reporting = false;
   let reportError = '';
+  let deleteDialogOpen = false;
+  let deleting = false;
+  let deleteError = '';
+  let zapDialogOpen = false;
+  let zapInfo: ZapInfo | null = null;
+  let zapLookupKey = '';
+  let zapChecking = false;
+  let zapAmount = '21';
+  let zapInvoice = '';
+  let zapQr = '';
+  let zapLoading = false;
+  let zapError = '';
+  let zapCopied = false;
+  let zapPaid = false;
+  let zapReceiptSub: { close: (reason?: string) => void } | undefined;
   let noteElement: HTMLElement;
+  let menuElement: HTMLElement;
   let noteObserver: IntersectionObserver | undefined;
   let statsVisible = false;
   let statsEventId = event.id;
@@ -48,6 +65,7 @@
   onDestroy(() => {
     noteObserver?.disconnect();
     if (statsVisible) watchVisibleNoteStats(statsEventId, false);
+    zapReceiptSub?.close('note destroyed');
   });
 
   $: if (browser && !embedded && event.id !== statsEventId) {
@@ -58,19 +76,27 @@
     statsEventId = event.id;
   }
 
-  $: name = profile?.display_name || profile?.name || event.pubkey.slice(0, 10);
+  $: displayEvent = $editedEvents[event.id] ?? event;
+  $: name = profile?.display_name || profile?.name || displayEvent.pubkey.slice(0, 10);
   $: avatar = profile?.picture;
-  $: mediaAttachments = extractMediaAttachments(event);
-  $: quotedNoteReferences = extractQuotedNoteReferences(event.content, event.tags);
+  $: mediaAttachments = extractMediaAttachments(displayEvent);
+  $: quotedNoteReferences = extractQuotedNoteReferences(displayEvent.content, displayEvent.tags);
   $: quotedNoteRawValues = quotedNoteReferences.map((reference) => reference.raw);
-  $: isLong = event.content.length > previewLength;
-  $: visibleContent = !isLong || expanded ? event.content : event.content.slice(0, previewLength).trimEnd();
-  $: contentParts = parseNoteText(visibleContent, [...mediaAttachments.map((media) => media.url), ...quotedNoteRawValues], event.tags);
-  $: counts = $eventStats[event.id] ?? { replies: 0, reposts: 0, likes: 0, dislikes: 0, emoji: 0 };
+  $: isLong = displayEvent.content.length > previewLength;
+  $: visibleContent = !isLong || expanded ? displayEvent.content : displayEvent.content.slice(0, previewLength).trimEnd();
+  $: contentParts = parseNoteText(visibleContent, [...mediaAttachments.map((media) => media.url), ...quotedNoteRawValues], displayEvent.tags);
+  $: counts = $eventStats[event.id] ?? { replies: 0, reposts: 0, likes: 0, zaps: 0, zapSats: 0, dislikes: 0, emoji: 0 };
   $: liked = $likedEvents.has(event.id);
+  $: reposted = $repostedEvents.has(event.id);
+  $: isOwnPost = $session?.pubkey === event.pubkey;
+  $: canZap = Boolean(zapInfo && $session);
+  $: zapTitle = !$session ? 'Sign in to zap' : zapInfo ? 'Zap this post' : zapChecking ? 'Checking zap support' : 'This user has not enabled zaps';
   $: timestamp = new Date(event.created_at * 1000);
   $: time = formatNoteTime(timestamp);
   $: fullTime = timestamp.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+  $: if (browser && !embedded && statsVisible) {
+    void refreshZapInfo();
+  }
 
   function formatNoteTime(date: Date, now = new Date()) {
     const elapsedMs = Math.max(0, now.getTime() - date.getTime());
@@ -109,6 +135,11 @@
 
   function isInteractiveTarget(target: EventTarget | null) {
     return target instanceof Element && Boolean(target.closest('a, button, input, textarea, video, .note-actions, .media-grid, .note-menu, .reaction-popover, .quoted-note'));
+  }
+
+  function closeMenuFromOutside(pointerEvent: PointerEvent) {
+    if (!menuOpen || !menuElement || !(pointerEvent.target instanceof Node) || menuElement.contains(pointerEvent.target)) return;
+    menuOpen = false;
   }
 
   async function toggleLikePopover() {
@@ -155,6 +186,11 @@
     setTimeout(() => (copiedEmbed = false), 1400);
   }
 
+  async function muteAuthor() {
+    menuOpen = false;
+    await muteAccount(event.pubkey);
+  }
+
   function updateStatsVisibility(visible: boolean) {
     if (visible === statsVisible) return;
     statsVisible = visible;
@@ -173,10 +209,135 @@
       reporting = false;
     }
   }
+
+  async function confirmDelete() {
+    deleting = true;
+    deleteError = '';
+    try {
+      deleteDialogOpen = false;
+      await deleteNote(displayEvent);
+    } catch (err) {
+      deleteError = err instanceof Error ? err.message : 'Could not delete this post.';
+    } finally {
+      deleting = false;
+    }
+  }
+
+  async function refreshZapInfo() {
+    const key = `${event.id}:${profile?.lud16 ?? ''}:${profile?.lud06 ?? ''}`;
+    if (key === zapLookupKey || !profile) return;
+    zapLookupKey = key;
+    zapInfo = null;
+    zapChecking = true;
+    try {
+      zapInfo = await loadZapInfo(event, profile, $relays);
+    } catch {
+      zapInfo = null;
+    } finally {
+      zapChecking = false;
+    }
+  }
+
+  function openZapDialog() {
+    if (!canZap) return;
+    zapDialogOpen = true;
+    zapInvoice = '';
+    zapQr = '';
+    zapError = '';
+    zapCopied = false;
+    zapPaid = false;
+    zapReceiptSub?.close('new zap dialog');
+    zapReceiptSub = undefined;
+  }
+
+  async function generateZapInvoice() {
+    if (!zapInfo || !$session) return;
+    zapLoading = true;
+    zapError = '';
+    zapInvoice = '';
+    zapQr = '';
+    try {
+      const result = await createZapInvoice($session, event, zapInfo, Number(zapAmount), $relays);
+      zapInvoice = result.invoice;
+      const { default: QRCode } = await import('qrcode');
+      zapQr = await QRCode.toDataURL(result.invoice, { margin: 1, width: 260, errorCorrectionLevel: 'M' });
+      zapReceiptSub?.close('new zap invoice');
+      zapReceiptSub = await subscribeZapReceipts(result.invoice, zapInfo.recipientPubkey, $relays, () => {
+        zapPaid = true;
+        setTimeout(() => {
+          zapDialogOpen = false;
+          zapPaid = false;
+          zapInvoice = '';
+          zapQr = '';
+          zapReceiptSub?.close('zap paid');
+          zapReceiptSub = undefined;
+          void refreshEventStats([event.id], true);
+        }, 700);
+      }).catch(() => undefined);
+    } catch (err) {
+      zapError = err instanceof Error ? err.message : 'Could not create a zap invoice.';
+    } finally {
+      zapLoading = false;
+    }
+  }
+
+  function openLightningIntent() {
+    if (!browser || !zapInvoice) return;
+    const link = document.createElement('a');
+    link.href = lightningHref(zapInvoice);
+    link.rel = 'noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+
+  async function copyZapInvoice() {
+    if (!zapInvoice) return;
+    try {
+      await copyText(zapInvoice);
+      zapCopied = true;
+      setTimeout(() => (zapCopied = false), 1400);
+    } catch {
+      zapError = 'Could not copy the invoice from this browser.';
+    }
+  }
+
+  function lightningHref(invoice: string) {
+    return `lightning:${invoice}`;
+  }
+
+  function formatZapTotal(sats: number, fallbackCount: number) {
+    const value = sats || fallbackCount;
+    if (!value) return '0';
+    if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(value >= 10_000_000 ? 0 : 1)}m`;
+    if (value >= 1000) return `${(value / 1000).toFixed(value >= 10_000 ? 0 : 1)}k`;
+    return String(value);
+  }
+
+  async function copyText(value: string) {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+      return;
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = value;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    textarea.style.top = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    const copied = document.execCommand('copy');
+    textarea.remove();
+    if (!copied) throw new Error('Copy failed.');
+  }
 </script>
 
+<svelte:window on:pointerdown={closeMenuFromOutside} />
+
 <article class="note-card" class:featured class:embedded bind:this={noteElement}>
-  <a class="avatar" href={`/profile/${event.pubkey}`} aria-label={`${name} profile`}>
+  <a class="avatar" href={`/profile/${displayEvent.pubkey}`} aria-label={`${name} profile`}>
     {#if avatar}
       <img src={avatar} alt="" loading="lazy" />
     {:else}
@@ -187,16 +348,25 @@
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
   <div class="note-body" role={embedded ? undefined : 'button'} tabindex={embedded ? undefined : 0} on:click={openFromNoteBody} on:keydown={openFromKeyboard}>
     <div class="note-meta">
-      <a href={`/profile/${event.pubkey}`}><strong>{name}</strong></a>
+      <a href={`/profile/${displayEvent.pubkey}`}><strong>{name}</strong></a>
       <time datetime={timestamp.toISOString()} title={fullTime}>{time}</time>
       {#if !embedded}
-        <div class="note-menu">
+        <div class="note-menu" bind:this={menuElement}>
           <button class="icon-button small" aria-label="More actions" aria-expanded={menuOpen} on:click={() => (menuOpen = !menuOpen)}>
             {#if copiedEmbed}<Copy size={16} />{:else}<MoreHorizontal size={18} />{/if}
           </button>
           {#if menuOpen}
             <div class="note-menu-popover">
               <button on:click={copyEmbed}><Copy size={16} /> Copy embed</button>
+              {#if isOwnPost}
+                <button on:click={() => { menuOpen = false; startEdit(displayEvent); }}><Pencil size={16} /> Edit post</button>
+              {/if}
+              {#if isOwnPost}
+                <button class="danger-menu-item" on:click={() => { menuOpen = false; deleteDialogOpen = true; }}><Trash2 size={16} /> Delete post</button>
+              {/if}
+              {#if !isOwnPost}
+                <button disabled={!$session} on:click={() => void muteAuthor()}><UserX size={16} /> Mute account</button>
+              {/if}
               <a href={`/embed/${event.id}`} target="_blank" rel="noreferrer"><ExternalLink size={16} /> Open embed</a>
             </div>
           {/if}
@@ -249,10 +419,10 @@
       <a class="embed-open-link" href={`/thread/${event.id}?feed=global`} target="_blank" rel="noreferrer">View on Nostr</a>
     {:else}
       <div class="note-actions">
-        <button aria-label="Reply" on:click={() => startReply(event)}><MessageCircle size={18} /><span>{counts.replies}</span></button>
-        <button aria-label="Repost" on:click={() => void repostNote(event)}><Repeat2 size={18} /><span>{counts.reposts}</span></button>
+        <button aria-label="Reply" on:click={() => startReply(displayEvent)}><MessageCircle size={18} /><span>{counts.replies}</span></button>
+        <button class:reposted aria-label={reposted ? 'Undo repost' : 'Repost'} aria-pressed={reposted} on:click={() => void repostNote(displayEvent)}><Repeat2 size={18} /><span>{counts.reposts}</span></button>
         <span class="like-action">
-          <button class:liked aria-label={liked ? 'Unlike' : 'Like'} aria-pressed={liked} on:click={() => void reactToNote(event)}><Heart size={18} fill={liked ? 'currentColor' : 'none'} /></button>
+          <button class:liked aria-label={liked ? 'Unlike' : 'Like'} aria-pressed={liked} on:click={() => void reactToNote(displayEvent)}><Heart size={18} fill={liked ? 'currentColor' : 'none'} /></button>
           <button class="reaction-count" aria-label="Show likes" aria-expanded={likePopoverOpen} on:click={toggleLikePopover}>{counts.likes}</button>
           {#if likePopoverOpen}
             <div class="reaction-popover">
@@ -269,6 +439,7 @@
             </div>
           {/if}
         </span>
+        <button class="zap-action" aria-label="Zap" title={zapTitle} disabled={!canZap} on:click={openZapDialog}><Zap size={17} /><span>{formatZapTotal(counts.zapSats, counts.zaps)}</span></button>
         <button class="report-action" aria-label="Report" on:click={() => (reportDialogOpen = true)}><Flag size={17} /></button>
       </div>
     {/if}
@@ -287,6 +458,49 @@
         <button disabled={reporting} on:click={() => (reportDialogOpen = false)}>Cancel</button>
         <button class="danger-button" disabled={reporting} on:click={confirmReport}><Flag size={17} /> {reporting ? 'Reporting' : 'Report'}</button>
       </div>
+    </div>
+  </div>
+{/if}
+
+{#if deleteDialogOpen}
+  <div class="dialog-backdrop" role="presentation" tabindex="-1" on:click={(event) => event.target === event.currentTarget && !deleting && (deleteDialogOpen = false)}>
+    <div class="dialog-panel compact report-dialog" role="dialog" aria-modal="true" aria-labelledby={`delete-title-${event.id}`}>
+      <div class="dialog-head">
+        <h2 id={`delete-title-${event.id}`}>Delete post</h2>
+      </div>
+      <p>Delete this post from your profile and publish a deletion request to relays?</p>
+      {#if deleteError}<p class="error">{deleteError}</p>{/if}
+      <div class="dialog-actions">
+        <button disabled={deleting} on:click={() => (deleteDialogOpen = false)}>Cancel</button>
+        <button class="danger-button" disabled={deleting} on:click={confirmDelete}><Trash2 size={17} /> {deleting ? 'Deleting' : 'Delete'}</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if zapDialogOpen && zapInfo}
+  <div class="dialog-backdrop" role="presentation" tabindex="-1" on:click={(event) => event.target === event.currentTarget && !zapLoading && (zapDialogOpen = false)}>
+    <div class="dialog-panel compact zap-dialog" role="dialog" aria-modal="true" aria-labelledby={`zap-title-${event.id}`}>
+      <div class="dialog-head">
+        <h2 id={`zap-title-${event.id}`}>Zap post</h2>
+        <button class="icon-button small" aria-label="Close zap dialog" disabled={zapLoading} on:click={() => (zapDialogOpen = false)}>×</button>
+      </div>
+      <label for={`zap-amount-${event.id}`}>Amount in sats</label>
+      <div class="zap-amount-row">
+        <input id={`zap-amount-${event.id}`} inputmode="numeric" min="1" type="number" bind:value={zapAmount} />
+        <button disabled={zapLoading} on:click={generateZapInvoice}><Zap size={17} /> {zapLoading ? 'Creating' : 'Create'}</button>
+      </div>
+      <p class="zap-limits">Min {Math.ceil(zapInfo.minSendable / 1000)} sats · max {Math.floor(zapInfo.maxSendable / 1000)} sats</p>
+      {#if zapError}<p class="error">{zapError}</p>{/if}
+      {#if zapQr}
+        <a class="zap-qr" href={lightningHref(zapInvoice)} aria-label="Open invoice in lightning wallet" on:click|preventDefault={openLightningIntent}>
+          <img src={zapQr} alt="Lightning invoice QR" />
+        </a>
+        {#if zapPaid}<p class="success">Payment received.</p>{/if}
+        <div class="dialog-actions zap-actions">
+          <button on:click={copyZapInvoice}>{zapCopied ? 'Copied' : 'Copy'}</button>
+        </div>
+      {/if}
     </div>
   </div>
 {/if}

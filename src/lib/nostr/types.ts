@@ -100,6 +100,8 @@ export interface EventStats {
   replies: number;
   reposts: number;
   likes: number;
+  zaps: number;
+  zapSats: number;
   dislikes: number;
   emoji: number;
 }

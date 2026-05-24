@@ -164,10 +164,20 @@ describe('nostr client helpers', () => {
     const duplicateLike = event({ id: '7'.repeat(64), kind: 7, pubkey: 'c'.repeat(64), content: '+', tags: [['e', root.id]] });
     const dislike = event({ id: '8'.repeat(64), kind: 7, pubkey: 'd'.repeat(64), content: '-', tags: [['e', root.id]] });
     const emoji = event({ id: '9'.repeat(64), kind: 7, pubkey: 'e'.repeat(64), content: '🔥', tags: [['e', root.id]] });
+    const zap = event({
+      id: 'a'.repeat(64),
+      kind: 9735,
+      pubkey: 'f'.repeat(64),
+      tags: [
+        ['e', root.id],
+        ['bolt11', 'lnbc1test'],
+        ['description', JSON.stringify({ tags: [['amount', '21000'], ['e', root.id]] })]
+      ]
+    });
 
-    expect(eventStatsFromEvents([root.id, mentioned.id], [reply, legacyReply, repost, like, duplicateLike, dislike, emoji])).toEqual({
-      [root.id]: { replies: 2, reposts: 1, likes: 1, dislikes: 1, emoji: 1 },
-      [mentioned.id]: { replies: 0, reposts: 0, likes: 0, dislikes: 0, emoji: 0 }
+    expect(eventStatsFromEvents([root.id, mentioned.id], [reply, legacyReply, repost, like, duplicateLike, dislike, emoji, zap])).toEqual({
+      [root.id]: { replies: 2, reposts: 1, likes: 1, zaps: 1, zapSats: 21, dislikes: 1, emoji: 1 },
+      [mentioned.id]: { replies: 0, reposts: 0, likes: 0, zaps: 0, zapSats: 0, dislikes: 0, emoji: 0 }
     });
   });
 

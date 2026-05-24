@@ -74,7 +74,7 @@
   }
 
   function profileMatches(profile: Profile, needle: string) {
-    return [profile.name, profile.display_name, profile.nip05, profile.pubkey].filter(Boolean).some((value) => value?.toLowerCase().includes(needle));
+    return [profile.name, profile.display_name, profile.nip05, profile.pubkey].filter(isString).some((value) => value.toLowerCase().includes(needle));
   }
 
   function mergeProfiles(first: Profile[], second: Profile[]) {
@@ -84,7 +84,15 @@
   }
 
   function profileLabel(profile: Profile) {
-    return profile.display_name || profile.name || profile.nip05 || `${profile.pubkey.slice(0, 10)}...`;
+    return firstString(profile.display_name, profile.name, profile.nip05) || `${profile.pubkey.slice(0, 10)}...`;
+  }
+
+  function isString(value: unknown): value is string {
+    return typeof value === 'string' && value.trim().length > 0;
+  }
+
+  function firstString(...values: unknown[]) {
+    return values.find(isString) ?? '';
   }
 </script>
 

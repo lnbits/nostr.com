@@ -1,13 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import type { Component } from 'svelte';
   import { tick } from 'svelte';
   import { page } from '$app/stores';
   import { ArrowUp } from '@lucide/svelte';
   import FeedSearchBar from '$lib/components/FeedSearchBar.svelte';
-  import InfoView from '$lib/components/InfoView.svelte';
-  import MessagesView from '$lib/components/MessagesView.svelte';
   import NoteCard from '$lib/components/NoteCard.svelte';
-  import NotificationsView from '$lib/components/NotificationsView.svelte';
   import {
     events,
     feedMode,
@@ -38,6 +36,9 @@
   let pullStartedAtTop = false;
   let hideNewerBubble = false;
   let hideNewerBubbleTimeout: ReturnType<typeof setTimeout> | undefined;
+  let InfoView: Component | undefined;
+  let MessagesView: Component | undefined;
+  let NotificationsView: Component | undefined;
   const pullThreshold = 78;
   const newerBubbleCooldownMs = 5000;
   $: activeHash = $page.url.hash;
@@ -50,6 +51,9 @@
     : $session && ($feedMode === 'follow' || $feedMode === 'custom') && !$follows.length
       ? 'Please follow someone'
       : 'Please connect to relays';
+  $: if (activeHash === '#messages') void loadMessagesView();
+  $: if (activeHash === '#notifications') void loadNotificationsView();
+  $: if (activeHash === '#info') void loadInfoView();
 
   onMount(() => {
     previousScrollY = window.scrollY;
@@ -137,8 +141,7 @@
         await revealBufferedNewer(false);
         return;
       }
-      const fetched = await loadNewerFeed();
-      if (fetched?.length) await revealBufferedNewer(false);
+      await loadNewerFeed();
     } finally {
       pullingNewer = false;
     }
@@ -176,14 +179,41 @@
       return new RegExp(`(^|\\s)#${normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(event.content);
     });
   }
+
+  async function loadInfoView() {
+    if (InfoView) return;
+    InfoView = (await import('$lib/components/InfoView.svelte')).default;
+  }
+
+  async function loadMessagesView() {
+    if (MessagesView) return;
+    MessagesView = (await import('$lib/components/MessagesView.svelte')).default;
+  }
+
+  async function loadNotificationsView() {
+    if (NotificationsView) return;
+    NotificationsView = (await import('$lib/components/NotificationsView.svelte')).default;
+  }
 </script>
 
 {#if activeHash === '#messages'}
-  <MessagesView />
+  {#if MessagesView}
+    <svelte:component this={MessagesView} />
+  {:else}
+    <section class="timeline status-view">Loading messages</section>
+  {/if}
 {:else if activeHash === '#notifications'}
-  <NotificationsView />
+  {#if NotificationsView}
+    <svelte:component this={NotificationsView} />
+  {:else}
+    <section class="timeline status-view">Loading notifications</section>
+  {/if}
 {:else if activeHash === '#info'}
-  <InfoView />
+  {#if InfoView}
+    <svelte:component this={InfoView} />
+  {:else}
+    <section class="timeline status-view">Loading info</section>
+  {/if}
 {:else}
   {@render Timeline()}
 {/if}
@@ -201,6 +231,9 @@
     on:touchcancel={finishPullForNewer}
     on:wheel={wheelPullForNewer}
   >
+    {#if $session}
+      <FeedSearchBar />
+    {/if}
     <div class="pull-newer-zone" aria-hidden="true">
       <ArrowUp size={18} />
     </div>
@@ -210,9 +243,6 @@
           <ArrowUp size={20} />
         </button>
       </div>
-    {/if}
-    {#if $session}
-      <FeedSearchBar />
     {/if}
     <section class="feed-list" aria-label="Feed">
       {#if feedEvents.length}

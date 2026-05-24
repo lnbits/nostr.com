@@ -13,10 +13,6 @@
       description: 'Legacy encrypted direct messages between users; useful for compatibility, but can leak metadata.'
     },
     {
-      id: 'NIP-17',
-      description: 'Modern private messages, read and published as gift-wrapped events when the active signer can handle NIP-44 payloads.'
-    },
-    {
       id: 'NIP-05',
       description: 'Human-readable identifiers like name@example.com that resolve to Nostr public keys and relay hints.'
     },
@@ -25,12 +21,20 @@
       description: 'Browser extension login and signing, so users can publish without giving the app their private key.'
     },
     {
+      id: 'NIP-09',
+      description: 'Deletion requests, used when editing your own short notes by publishing the corrected note and disowning the old one.'
+    },
+    {
       id: 'NIP-10',
       description: 'Thread and reply markers for building conversations around notes and publishing marked replies.'
     },
     {
       id: 'NIP-11',
       description: 'Relay information documents, used to understand relay capabilities, limits, and supported NIPs.'
+    },
+    {
+      id: 'NIP-17',
+      description: 'Modern private messages, read and published as gift-wrapped events when the active signer can handle NIP-44 payloads.'
     },
     {
       id: 'NIP-18',
@@ -43,6 +47,10 @@
     {
       id: 'NIP-21',
       description: 'nostr: URI links, so Nostr references in notes can be opened from the client.'
+    },
+    {
+      id: 'NIP-24',
+      description: 'Extra profile metadata fields such as display names, banners, websites, and other common profile details.'
     },
     {
       id: 'NIP-25',
@@ -61,6 +69,10 @@
       description: 'Expiration timestamps, used to hide expired events from feeds.'
     },
     {
+      id: 'NIP-44',
+      description: 'Versioned encryption, used by modern NIP-17/NIP-59 direct messages when the active signer supports it.'
+    },
+    {
       id: 'NIP-45',
       description: 'Relay COUNT queries, used best-effort for reply, repost, and reaction totals when relays support it.'
     },
@@ -73,8 +85,20 @@
       description: 'Relay search, used here to suggest profiles while editing follow lists.'
     },
     {
+      id: 'NIP-51',
+      description: 'Standard lists, used for mute lists so hidden accounts stay out of feeds and notifications.'
+    },
+    {
       id: 'NIP-56',
       description: 'Reports, used to publish report events for spam, abuse, and unsafe content.'
+    },
+    {
+      id: 'NIP-57',
+      description: 'Lightning zaps, used to request invoices, render QR codes, and listen for zap receipts when the recipient supports them.'
+    },
+    {
+      id: 'NIP-59',
+      description: 'Gift wraps and seals, used to route modern private messages without exposing the inner chat event publicly.'
     },
     {
       id: 'NIP-65',
@@ -83,6 +107,10 @@
     {
       id: 'NIP-92',
       description: 'Media attachments, used to read imeta tags such as alt text, dimensions, blurhash, and fallback URLs.'
+    },
+    {
+      id: 'NIP-94',
+      description: 'File metadata responses, used when upload services return Nostr file metadata alongside media URLs.'
     },
     {
       id: 'NIP-96',

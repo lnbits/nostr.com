@@ -5,9 +5,12 @@
   import { ArrowLeft } from '@lucide/svelte';
   import NoteCard from '$lib/components/NoteCard.svelte';
   import ThreadReplyTree from '$lib/components/ThreadReplyTree.svelte';
-  import { eventStats, events, mergeEvents, profiles, refreshEventStats, relays, session } from '$lib/stores/app';
+  import { deletedEventIds, eventStats, events, mergeEvents, profiles, refreshEventStats, relays, session } from '$lib/stores/app';
   import { eventStatsFromEvents, fetchMissingEvents, fetchProfiles, fetchThreadReplies } from '$lib/nostr/client';
   import type { NostrEvent } from '$lib/nostr/types';
+
+  const initialThreadReplyLimit = 40;
+  const nestedThreadReplyLimit = 80;
 
   $: id = $page.params.id;
   $: focusedReplyId = $page.url.searchParams.get('focus') ?? '';
@@ -29,7 +32,7 @@
   function mergeThreadEvents(incoming: NostrEvent[], existing: NostrEvent[]) {
     const byId = new Map<string, NostrEvent>();
     [...existing, ...incoming].forEach((event) => byId.set(event.id, event));
-    return [...byId.values()].sort((a, b) => b.created_at - a.created_at);
+    return [...byId.values()].filter((event) => !$deletedEventIds.has(event.id)).sort((a, b) => b.created_at - a.created_at);
   }
 
   function threadReplyEvents(items: NostrEvent[], rootId: string) {
@@ -82,12 +85,12 @@
         localThreadEvents = mergeThreadEvents([found], localThreadEvents);
         events.update((existing) => mergeEvents([found], existing));
       }
-      const fetchedReplies = await fetchThreadReplies(id, $relays).catch(() => []);
+      const fetchedReplies = await fetchThreadReplies(id, $relays, initialThreadReplyLimit).catch(() => []);
       const nestedReplies = fetchedReplies.length
         ? await fetchThreadReplies(
             fetchedReplies.map((event) => event.id),
             $relays,
-            160
+            nestedThreadReplyLimit
           ).catch(() => [])
         : [];
       const allReplies = mergeThreadEvents(nestedReplies, fetchedReplies).filter((event) => event.id !== id);
@@ -119,12 +122,14 @@
     eventStats.update((existing) => {
       const next = { ...existing };
       for (const id of statIds) {
-        const existingStats = next[id] ?? { replies: 0, reposts: 0, likes: 0, dislikes: 0, emoji: 0 };
+        const existingStats = next[id] ?? { replies: 0, reposts: 0, likes: 0, zaps: 0, zapSats: 0, dislikes: 0, emoji: 0 };
         const loadedStats = localStats[id] ?? existingStats;
         next[id] = {
           replies: Math.max(existingStats.replies, loadedStats.replies),
           reposts: Math.max(existingStats.reposts, loadedStats.reposts),
           likes: Math.max(existingStats.likes, loadedStats.likes),
+          zaps: Math.max(existingStats.zaps, loadedStats.zaps),
+          zapSats: Math.max(existingStats.zapSats, loadedStats.zapSats),
           dislikes: Math.max(existingStats.dislikes, loadedStats.dislikes),
           emoji: Math.max(existingStats.emoji, loadedStats.emoji)
         };
