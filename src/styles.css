@@ -1001,6 +1001,45 @@ label span, label strong { color: var(--text); }
 }
 .rail .panel { box-shadow: none; }
 .rail .panel > button { width: 100%; justify-content: flex-start; margin-top: 8px; }
+.desktop-install-dialog .dialog-head {
+  align-items: start;
+}
+.desktop-install-dialog .dialog-head p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  line-height: 1.35;
+}
+.desktop-install-list {
+  display: grid;
+  gap: 8px;
+}
+.desktop-install-option {
+  min-width: 0;
+  width: 100%;
+  min-height: 72px;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 22px;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid color-mix(in srgb, var(--line) 74%, transparent);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--bg) 24%, transparent);
+  text-align: left;
+}
+.desktop-install-option:hover {
+  border-color: color-mix(in srgb, var(--text) 42%, var(--line));
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+.desktop-install-option span {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.desktop-install-option small {
+  color: var(--muted);
+}
 .search-box {
   position: sticky;
   top: 0;
