@@ -1,7 +1,8 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { Heart, MessageCircle, RefreshCw, Repeat2, UserPlus, UserRound } from '@lucide/svelte';
-  import { events, loadingNotifications, loginDialogOpen, mergeEvents, notifications, profiles, refreshNotifications, session } from '$lib/stores/app';
+  import { events, loadingNotifications, loginDialogOpen, markNotificationsSeen, mergeEvents, notifications, profiles, refreshNotifications, session } from '$lib/stores/app';
   import { appPath } from '$lib/paths';
   import type { NotificationItem, Profile } from '$lib/nostr/types';
 
@@ -44,6 +45,12 @@
       void goto(appPath(`/thread/${targetId}${focus}`));
     }
   }
+
+  onMount(() => {
+    markNotificationsSeen();
+  });
+
+  $: if ($session && $notifications.length) markNotificationsSeen();
 </script>
 
 <section class="notifications-view">

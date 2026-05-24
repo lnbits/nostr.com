@@ -8,6 +8,7 @@
     follows,
     loadingMessages,
     loginDialogOpen,
+    markMessagesSeen,
     profiles,
     refreshMessages,
     resolveMessageRecipient,
@@ -34,8 +35,11 @@
   $: activeProfile = activePeer ? $profiles[activePeer] : undefined;
 
   onMount(() => {
+    markMessagesSeen();
     void refreshMessages();
   });
+
+  $: if ($session && $directMessages.length) markMessagesSeen();
 
   $: if (activeMessages.length) void scrollChatToBottom();
 

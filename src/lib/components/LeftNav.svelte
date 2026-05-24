@@ -9,7 +9,7 @@
     UserRound
   } from '@lucide/svelte';
   import { page } from '$app/stores';
-  import { goHome, selectMessagePeer, session, startCompose, unreadMessageCount, unreadNotificationCount } from '$lib/stores/app';
+  import { goHome, markMessagesSeen, markNotificationsSeen, selectMessagePeer, session, startCompose, unreadMessageCount, unreadNotificationCount } from '$lib/stores/app';
   import { appPath } from '$lib/paths';
   import ThemeToggle from './ThemeToggle.svelte';
 
@@ -47,7 +47,7 @@
       <a
         class:active={isActive(item.href)}
         href={appPath(item.href)}
-        on:click={item.href === '/' ? goHome : item.href === '/messages' ? () => selectMessagePeer('') : undefined}
+        on:click={item.href === '/' ? goHome : item.href === '/notifications' ? markNotificationsSeen : item.href === '/messages' ? () => { markMessagesSeen(); selectMessagePeer(''); } : undefined}
       >
         <svelte:component this={item.icon} size={26} />
         <span>{item.label}</span>

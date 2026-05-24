@@ -16,8 +16,8 @@
   $: embeddedPage = $page.route.id?.startsWith('/embed/') ?? false;
   $: notificationCount = badgeCount($unreadNotificationCount);
   $: messageCount = badgeCount($unreadMessageCount);
-  $: if ($session && $page.route.id === '/notifications' && $notifications.length) markNotificationsSeen();
-  $: if ($session && $page.route.id === '/messages' && $directMessages.length) markMessagesSeen();
+  $: if ($session && $page.route.id === '/notifications') markNotificationsSeen();
+  $: if ($session && $page.route.id === '/messages') markMessagesSeen();
 
   function badgeCount(count: number) {
     if (!count) return '';
@@ -94,13 +94,13 @@
   <nav class="tabbar" class:guest={!$session} aria-label="Primary">
     {#if $session}
       <a href={appPath('/')} aria-label="Home" on:click={goHome}><Home size={22} /></a>
-      <a class="tabbar-badge-link" href={appPath('/notifications')} aria-label={notificationCount ? `${notificationCount} notifications` : 'Notifications'}>
+      <a class="tabbar-badge-link" href={appPath('/notifications')} aria-label={notificationCount ? `${notificationCount} notifications` : 'Notifications'} on:click={markNotificationsSeen}>
         <Bell size={22} />
         {#if notificationCount}
           <span class="tabbar-badge">{notificationCount}</span>
         {/if}
       </a>
-      <a class="tabbar-badge-link" href={appPath('/messages')} aria-label={messageCount ? `${messageCount} messages` : 'Messages'} on:click={() => selectMessagePeer('')}>
+      <a class="tabbar-badge-link" href={appPath('/messages')} aria-label={messageCount ? `${messageCount} messages` : 'Messages'} on:click={() => { markMessagesSeen(); selectMessagePeer(''); }}>
         <Mail size={22} />
         {#if messageCount}
           <span class="tabbar-badge">{messageCount}</span>
