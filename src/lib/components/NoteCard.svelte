@@ -1,11 +1,12 @@
 <script lang="ts">
+  import { onDestroy, onMount } from 'svelte';
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
   import { Copy, ExternalLink, Flag, Heart, MessageCircle, MoreHorizontal, Repeat2 } from '@lucide/svelte';
   import type { NostrEvent, Profile } from '$lib/nostr/types';
   import { extractMediaAttachments, extractQuotedNoteReferences, parseNoteText } from '$lib/nostr/media';
   import { fetchLikeAuthors, fetchProfiles } from '$lib/nostr/client';
-  import { eventStats, filterByHashtag, likedEvents, profiles, reactToNote, relays, reportNote, repostNote, startReply } from '$lib/stores/app';
+  import { eventStats, filterByHashtag, likedEvents, profiles, reactToNote, relays, reportNote, repostNote, startReply, watchVisibleNoteStats } from '$lib/stores/app';
   import QuotedNotePreview from './QuotedNotePreview.svelte';
 
   export let event: NostrEvent;
@@ -22,6 +23,40 @@
   let likePopoverOpen = false;
   let likeAuthors: string[] = [];
   let loadingLikeAuthors = false;
+  let reportDialogOpen = false;
+  let reporting = false;
+  let reportError = '';
+  let noteElement: HTMLElement;
+  let noteObserver: IntersectionObserver | undefined;
+  let statsVisible = false;
+  let statsEventId = event.id;
+
+  onMount(() => {
+    if (!browser || embedded) return;
+    if (!('IntersectionObserver' in window)) {
+      statsVisible = true;
+      watchVisibleNoteStats(event.id, true);
+      return;
+    }
+    noteObserver = new IntersectionObserver(
+      ([entry]) => updateStatsVisibility(Boolean(entry?.isIntersecting)),
+      { rootMargin: '900px 0px' }
+    );
+    noteObserver.observe(noteElement);
+  });
+
+  onDestroy(() => {
+    noteObserver?.disconnect();
+    if (statsVisible) watchVisibleNoteStats(statsEventId, false);
+  });
+
+  $: if (browser && !embedded && event.id !== statsEventId) {
+    if (statsVisible) {
+      watchVisibleNoteStats(statsEventId, false);
+      watchVisibleNoteStats(event.id, true);
+    }
+    statsEventId = event.id;
+  }
 
   $: name = profile?.display_name || profile?.name || event.pubkey.slice(0, 10);
   $: avatar = profile?.picture;
@@ -119,9 +154,28 @@
     menuOpen = false;
     setTimeout(() => (copiedEmbed = false), 1400);
   }
+
+  function updateStatsVisibility(visible: boolean) {
+    if (visible === statsVisible) return;
+    statsVisible = visible;
+    watchVisibleNoteStats(event.id, visible);
+  }
+
+  async function confirmReport() {
+    reporting = true;
+    reportError = '';
+    try {
+      await reportNote(event);
+      reportDialogOpen = false;
+    } catch (err) {
+      reportError = err instanceof Error ? err.message : 'Could not report this post.';
+    } finally {
+      reporting = false;
+    }
+  }
 </script>
 
-<article class="note-card" class:featured class:embedded>
+<article class="note-card" class:featured class:embedded bind:this={noteElement}>
   <a class="avatar" href={`/profile/${event.pubkey}`} aria-label={`${name} profile`}>
     {#if avatar}
       <img src={avatar} alt="" loading="lazy" />
@@ -215,11 +269,27 @@
             </div>
           {/if}
         </span>
-        <button class="report-action" aria-label="Report" on:click={() => void reportNote(event)}><Flag size={17} /></button>
+        <button class="report-action" aria-label="Report" on:click={() => (reportDialogOpen = true)}><Flag size={17} /></button>
       </div>
     {/if}
   </div>
 </article>
+
+{#if reportDialogOpen}
+  <div class="dialog-backdrop" role="presentation" tabindex="-1" on:click={(event) => event.target === event.currentTarget && !reporting && (reportDialogOpen = false)}>
+    <div class="dialog-panel compact report-dialog" role="dialog" aria-modal="true" aria-labelledby={`report-title-${event.id}`}>
+      <div class="dialog-head">
+        <h2 id={`report-title-${event.id}`}>Report post</h2>
+      </div>
+      <p>Are you sure you want to report this post?</p>
+      {#if reportError}<p class="error">{reportError}</p>{/if}
+      <div class="dialog-actions">
+        <button disabled={reporting} on:click={() => (reportDialogOpen = false)}>Cancel</button>
+        <button class="danger-button" disabled={reporting} on:click={confirmReport}><Flag size={17} /> {reporting ? 'Reporting' : 'Report'}</button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 {#if openImage}
   <div class="dialog-backdrop image-viewer-backdrop" role="presentation" tabindex="-1" on:click={(event) => event.target === event.currentTarget && (openImage = null)}>

@@ -126,7 +126,7 @@ label span, label strong { color: var(--text); }
   top: 0;
   height: 100svh;
   display: grid;
-  grid-template-rows: auto 1fr auto auto;
+  grid-template-rows: auto 1fr auto;
   gap: 16px;
   padding: 14px 18px 18px;
 }
@@ -153,33 +153,47 @@ label span, label strong { color: var(--text); }
   align-content: start;
   gap: 6px;
 }
-.left-nav-list a {
+.left-nav-list a,
+.left-nav-list button {
   min-height: 50px;
   width: fit-content;
   display: inline-flex;
   align-items: center;
   gap: 18px;
+  border: 0;
   border-radius: 999px;
   padding: 0 18px;
+  color: var(--text);
+  background: transparent;
   font-size: 20px;
   font-weight: 650;
 }
 .left-nav-list a.active,
-.left-nav-list a:hover {
+.left-nav-list a:hover,
+.left-nav-list button:hover {
   background: color-mix(in srgb, var(--text) 9%, transparent);
 }
-.compose-wide {
+.left-nav-list .nav-compose {
+  margin-top: 14px;
   width: 100%;
   min-height: 54px;
-  border-radius: 999px;
-  border-color: var(--text);
+  justify-content: center;
+  border: 1px solid var(--text);
   background: var(--text);
   color: var(--bg);
   font-size: 18px;
   font-weight: 900;
 }
-:root[data-theme='dark'] .compose-wide {
+.left-nav-list .nav-compose:hover {
+  background: var(--text);
+  color: var(--bg);
+}
+:root[data-theme='dark'] .left-nav-list .nav-compose {
   border-color: var(--accent);
+  background: var(--accent);
+  color: #07111f;
+}
+:root[data-theme='dark'] .left-nav-list .nav-compose:hover {
   background: var(--accent);
   color: #07111f;
 }
@@ -317,10 +331,14 @@ label span, label strong { color: var(--text); }
 }
 .follow-list-manager {
   max-height: min(360px, 45svh);
-  overflow: visible;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   display: grid;
   gap: 8px;
   margin-top: 14px;
+  padding-right: 4px;
 }
 .profile-suggestions {
   position: absolute;
@@ -1044,13 +1062,19 @@ label span, label strong { color: var(--text); }
   border-color: var(--accent);
   color: #07111f;
 }
-.composer-dock {
+.composer-backdrop {
   position: fixed;
-  left: 50%;
-  bottom: calc(74px + env(safe-area-inset-bottom));
-  z-index: 30;
+  inset: 0;
+  z-index: 55;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(0, 0, 0, 0.28);
+}
+.composer-dock {
   width: min(620px, calc(100vw - 24px));
-  transform: translateX(-50%);
+  max-height: calc(100svh - 36px);
+  overflow: auto;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -1221,6 +1245,88 @@ label span, label strong { color: var(--text); }
   min-height: 0;
   overflow: hidden;
 }
+.notifications-view {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding: 12px 18px 34px;
+}
+.notification-list {
+  display: grid;
+}
+.notification-item {
+  display: grid;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 25%, transparent);
+  padding: 12px 0;
+}
+.notification-summary {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  border: 0;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  text-align: left;
+}
+.notification-summary:hover .notification-preview {
+  color: var(--text);
+}
+.notification-summary strong {
+  color: var(--text);
+}
+.notification-avatar {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  display: block;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--surface) 74%, var(--bg));
+}
+.notification-avatar img,
+.notification-avatar > span:first-child {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  object-fit: cover;
+  color: var(--text);
+  font-weight: 800;
+}
+.notification-badge {
+  position: absolute;
+  right: -4px;
+  bottom: -3px;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--bg);
+  border-radius: 50%;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+}
+.notification-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.notification-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: baseline;
+}
+.notification-preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 14px;
+}
 .messages-head {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1349,11 +1455,17 @@ label span, label strong { color: var(--text); }
 }
 .dm-inbox {
   min-width: 0;
+  min-height: 0;
   display: grid;
-  align-content: start;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
   padding: 0;
   background: transparent;
+}
+.dm-inbox-controls {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
 }
 .dm-recipient-form {
   display: grid;
@@ -1367,8 +1479,14 @@ label span, label strong { color: var(--text); }
   gap: 6px;
 }
 .conversation-list {
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   display: grid;
+  align-content: start;
   gap: 4px;
+  padding-right: 4px;
 }
 .conversation-row {
   width: 100%;
@@ -1567,11 +1685,30 @@ label span, label strong { color: var(--text); }
   display: grid;
   align-content: start;
   gap: 10px;
+  min-width: 0;
+  overflow-x: hidden;
+}
+.thread-page .feed-list {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+.thread-reply {
+  display: grid;
+  min-width: 0;
+  max-width: 100%;
+}
+.thread-reply.direct {
+  margin-left: 10px;
 }
 .thread-reply.nested {
-  margin-left: 16px;
-  padding-left: 10px;
-  border-left: 1px solid color-mix(in srgb, var(--line) 30%, transparent);
+  margin-left: 0;
+  padding-left: 0;
+  border-left: 0;
+}
+.thread-reply .note-card {
+  min-width: 0;
+  max-width: 100%;
 }
 .thread-back {
   width: fit-content;
@@ -1913,6 +2050,12 @@ label span, label strong { color: var(--text); }
   }
   .avatar { width: 40px; height: 40px; }
   .note-actions { gap: 12px; }
+  .thread-page {
+    overflow-x: hidden;
+  }
+  .thread-reply.direct {
+    margin-left: 6px;
+  }
   .messages-view {
     height: calc(100svh - 64px - env(safe-area-inset-bottom));
     padding: 10px;

@@ -1,12 +1,68 @@
 <script lang="ts">
-  import { ChevronsLeft, ChevronsRight, LogIn, RefreshCw } from '@lucide/svelte';
+  import { onDestroy, onMount } from 'svelte';
+  import { ChevronsLeft, ChevronsRight, Download, LogIn, RefreshCw } from '@lucide/svelte';
   import FeedTabs from './FeedTabs.svelte';
   import { loadingFeed, loginDialogOpen, refreshFeed, relays, session } from '$lib/stores/app';
   import { relayStatus } from '$lib/stores/relayStatus';
 
+  interface BeforeInstallPromptEvent extends Event {
+    prompt(): Promise<void>;
+    userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+  }
+
   export let collapsible = false;
   export let collapsed = false;
   export let onToggle = () => {};
+
+  let installPrompt: BeforeInstallPromptEvent | null = null;
+  let canInstall = false;
+  let installed = false;
+  let installBusy = false;
+
+  $: showInstallButton = canInstall && !installed;
+
+  onMount(() => {
+    installed = isStandalone();
+    const beforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      installPrompt = event as BeforeInstallPromptEvent;
+      canInstall = !installed;
+    };
+    const appInstalled = () => {
+      installed = true;
+      canInstall = false;
+      installPrompt = null;
+    };
+
+    window.addEventListener('beforeinstallprompt', beforeInstallPrompt);
+    window.addEventListener('appinstalled', appInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', beforeInstallPrompt);
+      window.removeEventListener('appinstalled', appInstalled);
+    };
+  });
+
+  onDestroy(() => {
+    installPrompt = null;
+  });
+
+  async function installPwa() {
+    if (!installPrompt) return;
+    installBusy = true;
+    try {
+      await installPrompt.prompt();
+      const choice = await installPrompt.userChoice;
+      if (choice.outcome === 'accepted') installed = true;
+    } finally {
+      installPrompt = null;
+      canInstall = false;
+      installBusy = false;
+    }
+  }
+
+  function isStandalone() {
+    return window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(display-mode: window-controls-overlay)').matches;
+  }
 </script>
 
 <aside class="rail" class:collapsed>
@@ -39,5 +95,13 @@
         </div>
       {/each}
     </section>
+
+    {#if showInstallButton}
+      <section class="panel install-panel">
+        <button class="primary" disabled={installBusy} on:click={installPwa}>
+          <Download size={18} /> {installBusy ? 'Opening install' : 'Install as PWA'}
+        </button>
+      </section>
+    {/if}
   {/if}
 </aside>

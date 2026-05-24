@@ -81,8 +81,8 @@
       <a href="/" aria-label="Home" on:click={goHome}><Home size={22} /></a>
       <a href="/#notifications" aria-label="Notifications"><Bell size={22} /></a>
       <a href="/#messages" aria-label="Messages" on:click={() => selectMessagePeer('')}><Mail size={22} /></a>
-      <a href={`/profile/${$session.pubkey}`} aria-label="Profile"><UserRound size={22} /></a>
       <a href="/settings" aria-label="Settings"><Settings size={22} /></a>
+      <a href={`/profile/${$session.pubkey}`} aria-label="Profile"><UserRound size={22} /></a>
     {:else}
       <button class="tabbar-signin" on:click={() => loginDialogOpen.set(true)}><LogIn size={19} /> Sign in</button>
       <a class="tabbar-info" href="/#info" aria-label="Info">i</a>

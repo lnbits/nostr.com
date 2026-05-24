@@ -7,6 +7,7 @@
   import InfoView from '$lib/components/InfoView.svelte';
   import MessagesView from '$lib/components/MessagesView.svelte';
   import NoteCard from '$lib/components/NoteCard.svelte';
+  import NotificationsView from '$lib/components/NotificationsView.svelte';
   import {
     events,
     feedMode,
@@ -179,6 +180,8 @@
 
 {#if activeHash === '#messages'}
   <MessagesView />
+{:else if activeHash === '#notifications'}
+  <NotificationsView />
 {:else if activeHash === '#info'}
   <InfoView />
 {:else}

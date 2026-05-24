@@ -11,9 +11,11 @@ import {
   fetchFeed,
   fetchEventStats,
   fetchProfiles,
+  fetchNotifications,
   fetchRelayInfoDocuments,
   fetchRelayListMetadata,
   filterSpam,
+  eventStatsFromEvents,
   limitCryptoTopicDensity,
   limitConsecutiveAuthors,
   loginWithBunker,
@@ -30,6 +32,7 @@ import {
   publishNip17DirectMessage,
   resolveNip05Profile,
   resolvePubkeyIdentifier,
+  subscribeEventStats,
   subscribeFeed,
   topLevelFeedEvents
 } from '$lib/nostr/client';
@@ -63,6 +66,7 @@ export const likedEvents = writable<Set<string>>(new Set());
 export const loadingFeed = writable(false);
 export const loadingNewerFeed = writable(false);
 export const loadingMessages = writable(false);
+export const loadingNotifications = writable(false);
 export const loadingMoreFeed = writable(false);
 export const hasMoreFeed = writable(true);
 export const composerOpen = writable(false);
@@ -79,10 +83,20 @@ let currentContactItems: ContactListItem[] = [];
 let oldestFeedTimestamp: number | undefined;
 let liveFeedSub: { close: (reason?: string) => void } | undefined;
 let liveFeedToken = 0;
+let liveStatsSub: { close: (reason?: string) => void } | undefined;
+let liveStatsTimer: ReturnType<typeof setTimeout> | undefined;
+let liveStatsKey = '';
 let cachedOlderEvents: NostrEvent[] = [];
-const requestedStats = new Set<string>();
+const visibleStatIds = new Set<string>();
+const seenLiveStatEvents = new Set<string>();
+const requestedStats = new Map<string, number>();
+const statsRetryMs = 60_000;
 
-relays.subscribe((value) => (currentRelays = value));
+relays.subscribe((value) => {
+  currentRelays = value;
+  liveStatsKey = '';
+  if (visibleStatIds.size) scheduleVisibleStatsSubscription();
+});
 follows.subscribe((value) => (currentFollows = value));
 customFeedSettings.subscribe((value) => {
   currentSettings = value;
@@ -108,6 +122,7 @@ export async function bootstrap() {
   await hydrateDefaultFeedContext();
   void refreshRelayInfo();
   void refreshFeed();
+  void refreshNotifications();
 }
 
 export async function refreshFeed(mode = currentMode) {
@@ -243,6 +258,59 @@ function stopLiveFeed() {
   liveFeedSub = undefined;
 }
 
+function stopLiveStats(reason = 'stopping visible stats subscription') {
+  liveStatsSub?.close(reason);
+  liveStatsSub = undefined;
+  liveStatsKey = '';
+}
+
+export function watchVisibleNoteStats(id: string, visible: boolean) {
+  if (!browser || !/^[0-9a-f]{64}$/i.test(id)) return;
+  if (visible) visibleStatIds.add(id);
+  else visibleStatIds.delete(id);
+  scheduleVisibleStatsSubscription();
+}
+
+function scheduleVisibleStatsSubscription() {
+  if (liveStatsTimer) clearTimeout(liveStatsTimer);
+  liveStatsTimer = setTimeout(() => void restartVisibleStatsSubscription(), 350);
+}
+
+async function restartVisibleStatsSubscription() {
+  const ids = [...visibleStatIds].sort().slice(0, 80);
+  const nextKey = ids.join(',');
+  if (nextKey === liveStatsKey) return;
+  stopLiveStats('visible note set changed');
+  if (!ids.length) return;
+
+  liveStatsKey = nextKey;
+  liveStatsSub = await subscribeEventStats(ids, currentRelays, (event) => {
+    if (seenLiveStatEvents.has(event.id)) return;
+    seenLiveStatEvents.add(event.id);
+    if (seenLiveStatEvents.size > 1500) seenLiveStatEvents.clear();
+    mergeLiveStatEvent(ids, event);
+  }).catch(() => undefined);
+}
+
+function mergeLiveStatEvent(ids: string[], event: NostrEvent) {
+  const stats = eventStatsFromEvents(ids, [event]);
+  eventStats.update((existing) => {
+    const next = { ...existing };
+    for (const [id, stat] of Object.entries(stats)) {
+      if (!stat.replies && !stat.reposts && !stat.likes && !stat.dislikes && !stat.emoji) continue;
+      const previous = next[id] ?? emptyStats();
+      next[id] = {
+        replies: previous.replies + stat.replies,
+        reposts: previous.reposts + stat.reposts,
+        likes: previous.likes + stat.likes,
+        dislikes: previous.dislikes + stat.dislikes,
+        emoji: previous.emoji + stat.emoji
+      };
+    }
+    return next;
+  });
+}
+
 async function restartLiveFeed(mode = currentMode, newestTimestamp?: number) {
   const token = liveFeedToken + 1;
   stopLiveFeed();
@@ -330,15 +398,28 @@ export async function loadMoreFeed(force = false) {
   }
 }
 
-export async function refreshEventStats(ids: string[]) {
-  const nextIds = ids.filter((id) => !requestedStats.has(id));
-  nextIds.forEach((id) => requestedStats.add(id));
+export async function refreshEventStats(ids: string[], force = false) {
+  const checkedAt = Date.now();
+  const nextIds = ids.filter((id) => force || checkedAt - (requestedStats.get(id) ?? 0) > statsRetryMs);
+  nextIds.forEach((id) => requestedStats.set(id, checkedAt));
   if (!nextIds.length) return;
   const stats = await fetchEventStats(nextIds, currentRelays).catch(() => ({}));
-  eventStats.update((existing) => ({
-    ...existing,
-    ...stats
-  }));
+  eventStats.update((existing) => mergeStats(existing, stats));
+}
+
+function mergeStats(existing: Record<string, EventStats>, incoming: Record<string, EventStats>) {
+  const next = { ...existing };
+  for (const [id, stat] of Object.entries(incoming)) {
+    const previous = next[id] ?? emptyStats();
+    next[id] = {
+      replies: Math.max(previous.replies, stat.replies),
+      reposts: Math.max(previous.reposts, stat.reposts),
+      likes: Math.max(previous.likes, stat.likes),
+      dislikes: Math.max(previous.dislikes, stat.dislikes),
+      emoji: Math.max(previous.emoji, stat.emoji)
+    };
+  }
+  return next;
 }
 
 export function filterByHashtag(tag: string) {
@@ -398,6 +479,24 @@ export async function refreshMessages() {
   }
 }
 
+export async function refreshNotifications() {
+  const currentSession = getStoreSnapshot(session);
+  if (!currentSession) {
+    notifications.set([]);
+    return;
+  }
+
+  loadingNotifications.set(true);
+  try {
+    const nextNotifications = await fetchNotifications(currentSession.pubkey, currentRelays).catch(() => []);
+    notifications.set(nextNotifications);
+    const pubkeys = [...new Set(nextNotifications.map((item) => item.event.pubkey))];
+    await hydrateMissingProfiles(pubkeys.map((pubkey) => ({ id: pubkey, pubkey, created_at: 0, kind: 0, tags: [], content: '' })), 80);
+  } finally {
+    loadingNotifications.set(false);
+  }
+}
+
 export async function resolveMessageRecipient(value: string) {
   const pubkey = normalizePubkey(await resolvePubkeyIdentifier(value, currentRelays).catch(() => ''));
   if (!pubkey) throw new Error('Could not resolve that npub or NIP-05 address.');
@@ -443,6 +542,7 @@ export async function signIn(mode: 'nip07' | 'private-key' | 'bunker' | 'guest',
   persistSession(next);
   await hydrateSignedInFeedContext(next);
   void refreshFeed();
+  void refreshNotifications();
 }
 
 export async function signOut() {
@@ -450,6 +550,7 @@ export async function signOut() {
   if (browser) localStorage.removeItem(sessionStorageKey);
   await hydrateGuestFeedContext();
   void refreshFeed();
+  notifications.set([]);
 }
 
 export async function postNote(content: string, parent?: NostrEvent) {

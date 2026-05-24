@@ -5,9 +5,10 @@
   import { ArrowLeft, Check, Copy, Globe2, MessageCircle, Pencil, Save, UserMinus, Upload, UserPlus, X } from '@lucide/svelte';
   import { nip19 } from 'nostr-tools';
   import NoteCard from '$lib/components/NoteCard.svelte';
-  import { events, follows, mergeEvents, profiles, relays, saveFollowList, saveProfile, selectMessagePeer, session } from '$lib/stores/app';
+  import { events, follows, mergeEvents, profiles, refreshEventStats, relays, saveFollowList, saveProfile, selectMessagePeer, session } from '$lib/stores/app';
   import { getCachedProfileEvents } from '$lib/nostr/cache';
-  import { dedupeEvents, fetchProfileEvents, fetchProfiles, getNip98AuthorizationHeader, topLevelFeedEvents } from '$lib/nostr/client';
+  import { dedupeEvents, fetchProfileEvents, fetchProfiles, topLevelFeedEvents } from '$lib/nostr/client';
+  import { uploadToNostrBuild } from '$lib/nostr/upload';
   import type { NostrEvent, Profile } from '$lib/nostr/types';
 
   const emptyProfile = (): Profile => ({
@@ -114,6 +115,7 @@
     profilePaginationCursor = undefined;
     const cachedProfileEvents = await getCachedProfileEvents(nextPubkey, initialProfileEventLimit);
     profileEvents = cleanProfileEvents([...cachedProfileEvents, ...$events.filter((event) => event.pubkey === nextPubkey)]);
+    void refreshProfileStats();
     const [found, fetchedProfileEvents] = await Promise.all([
       $profiles[nextPubkey] ? Promise.resolve([]) : fetchProfiles([nextPubkey], $relays).catch(() => []),
       fetchProfileEvents(nextPubkey, $relays, initialProfileEventLimit).catch(() => [])
@@ -164,6 +166,12 @@
 
   function addProfileEvents(nextEvents: NostrEvent[]) {
     profileEvents = cleanProfileEvents([...profileEvents, ...nextEvents]);
+    void refreshProfileStats();
+  }
+
+  function refreshProfileStats() {
+    const statIds = [...new Set(userItems.map((item) => item.event.id))];
+    if (statIds.length) void refreshEventStats(statIds, true);
   }
 
   function updateProfilePaginationCursor(nextEvents: NostrEvent[]) {
@@ -208,7 +216,7 @@
     error = '';
     uploadMessage = '';
     try {
-      const url = await uploadToNostrBuild(file, target === 'picture' ? 'avatar' : 'banner');
+      const url = await uploadToNostrBuild($session, file, target === 'picture' ? 'avatar' : 'banner');
       draft = { ...draft, [target]: url };
       uploadMessage = target === 'picture' ? 'Profile image uploaded.' : 'Banner image uploaded.';
     } catch (err) {
@@ -216,53 +224,6 @@
     } finally {
       uploading = '';
     }
-  }
-
-  async function uploadToNostrBuild(file: File, mediaType: 'avatar' | 'banner') {
-    if (!$session) throw new Error('Sign in before uploading profile media.');
-    const uploadUrl = 'https://nostr.build/api/v2/upload/files';
-    const form = new FormData();
-    form.set('file', file);
-    form.set('media_type', mediaType);
-    form.set('content_type', file.type);
-    form.set('size', String(file.size));
-
-    const authorization = await getNip98AuthorizationHeader($session, uploadUrl, 'POST');
-    const response = await fetch(uploadUrl, {
-      method: 'POST',
-      headers: { Authorization: authorization },
-      body: form
-    });
-    const data = await response.json().catch(() => null);
-    if (!response.ok) throw new Error(uploadErrorMessage(data) ?? `Upload failed with ${response.status}.`);
-
-    const url = uploadResponseUrl(data);
-    if (!url) throw new Error('Upload finished but no media URL was returned.');
-    return url;
-  }
-
-  function uploadResponseUrl(data: unknown): string {
-    const tags = uploadResponseTags(data);
-    const urlTag = tags.find((tag) => tag[0] === 'url' && tag[1]);
-    if (urlTag?.[1]) return urlTag[1];
-    if (data && typeof data === 'object' && 'url' in data && typeof data.url === 'string') return data.url;
-    return '';
-  }
-
-  function uploadResponseTags(data: unknown): string[][] {
-    if (Array.isArray(data) && Array.isArray(data[0])) return data as string[][];
-    if (!data || typeof data !== 'object') return [];
-    const record = data as Record<string, unknown>;
-    if (Array.isArray(record.tags)) return record.tags as string[][];
-    if (record.nip94_event && typeof record.nip94_event === 'object' && Array.isArray((record.nip94_event as Record<string, unknown>).tags)) {
-      return (record.nip94_event as { tags: string[][] }).tags;
-    }
-    if (record.data && typeof record.data === 'object') return uploadResponseTags(record.data);
-    return [];
-  }
-
-  function uploadErrorMessage(data: unknown) {
-    return data && typeof data === 'object' && 'message' in data && typeof data.message === 'string' ? data.message : '';
   }
 
   function normalizePubkey(value: string) {

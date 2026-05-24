@@ -160,27 +160,29 @@
     <section class="dm-shell" class:chat-open={activePeer} aria-label="Direct messages">
       {#if !activePeer}
         <section class="dm-inbox" aria-label="Message inbox">
-          <form class="dm-recipient-form" on:submit|preventDefault={startConversation}>
-            <label>
-              <input bind:value={recipientInput} placeholder="npub or name@example.com" autocomplete="off" />
-            </label>
-            <button type="submit" disabled={resolving || !recipientInput.trim()}>
-              {#if resolving}<Loader2 size={17} class="spin" />{:else}<UserPlus size={17} />{/if}
-              Open
-            </button>
-          </form>
+          <div class="dm-inbox-controls">
+            <form class="dm-recipient-form" on:submit|preventDefault={startConversation}>
+              <label>
+                <input bind:value={recipientInput} placeholder="npub or name@example.com" autocomplete="off" />
+              </label>
+              <button type="submit" disabled={resolving || !recipientInput.trim()}>
+                {#if resolving}<Loader2 size={17} class="spin" />{:else}<UserPlus size={17} />{/if}
+                Open
+              </button>
+            </form>
 
-          {#if followChoices.length}
-            <label class="dm-follow-picker">
-              <span>Follow list</span>
-              <select on:change={chooseFollow} value="">
-                <option value="">Select someone</option>
-                {#each followChoices as follow}
-                  <option value={follow.pubkey}>{follow.label}</option>
-                {/each}
-              </select>
-            </label>
-          {/if}
+            {#if followChoices.length}
+              <label class="dm-follow-picker">
+                <span>Follow list</span>
+                <select on:change={chooseFollow} value="">
+                  <option value="">Select someone</option>
+                  {#each followChoices as follow}
+                    <option value={follow.pubkey}>{follow.label}</option>
+                  {/each}
+                </select>
+              </label>
+            {/if}
+          </div>
 
           <div class="conversation-list" aria-label="Direct message conversations">
             {#each conversations as conversation}

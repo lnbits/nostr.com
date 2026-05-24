@@ -15,8 +15,7 @@
   const navItems = [
     { href: '/', label: 'Home', icon: Home },
     { href: '/#notifications', label: 'Notifications', icon: Bell },
-    { href: '/#messages', label: 'Messages', icon: Mail },
-    { href: '/settings', label: 'Settings', icon: Settings }
+    { href: '/#messages', label: 'Messages', icon: Mail }
   ];
 
   $: profileHref = $session ? `/profile/${$session.pubkey}` : '/';
@@ -52,11 +51,17 @@
       <UserRound size={26} />
       <span>Profile</span>
     </a>
+    <a class:active={isActive('/settings')} href="/settings">
+      <Settings size={26} />
+      <span>Settings</span>
+    </a>
     <a class:active={isActive('/#info')} href="/#info">
       <MoreHorizontal size={26} />
       <span>info</span>
     </a>
+    <button class="nav-compose" on:click={startCompose}>
+      <PencilLine size={26} />
+      <span>Note</span>
+    </button>
   </nav>
-
-  <button class="compose-wide" on:click={startCompose}><PencilLine size={21} /> Note</button>
 </aside>

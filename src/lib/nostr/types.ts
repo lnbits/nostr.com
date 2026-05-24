@@ -78,8 +78,10 @@ export interface Session {
 
 export interface NotificationItem {
   id: string;
-  type: 'reply' | 'repost' | 'like' | 'mention';
+  type: 'reply' | 'repost' | 'like' | 'mention' | 'follow';
   event: NostrEvent;
+  targetEvent?: NostrEvent;
+  targetId?: string;
   seen: boolean;
 }
 

@@ -4,7 +4,7 @@ import * as nip46 from 'nostr-tools/nip46';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { cacheEvents, cacheProfile, cacheProfileEvents } from './cache';
 import { adultDomains, adultHashtags, defaultGuestNip05, defaultRelays, mutedWords } from './config';
-import type { ContactListDetails, ContactListItem, CustomFeedSettings, DirectMessage, EventStats, FeedMode, FeedQueryOptions, Nip05Profile, NostrEvent, Profile, RelayState, Session } from './types';
+import type { ContactListDetails, ContactListItem, CustomFeedSettings, DirectMessage, EventStats, FeedMode, FeedQueryOptions, Nip05Profile, NostrEvent, NotificationItem, Profile, RelayState, Session } from './types';
 
 const pool = new SimplePool();
 const bunkerSigners = new Map<string, nip46.BunkerSigner>();
@@ -362,6 +362,23 @@ export async function subscribeFeed(
   });
 }
 
+export async function subscribeEventStats(ids: string[], relays = defaultRelays, onEvent: (event: NostrEvent) => void) {
+  const cleanIds = [...new Set(ids)].filter((id) => /^[0-9a-f]{64}$/i.test(id)).slice(0, 80);
+  if (!cleanIds.length) return undefined;
+
+  const relayUrls = activeRelayUrls(relays, 'read');
+  if (!relayUrls.length) return undefined;
+
+  const filter: Filter = { kinds: [1, 6, 7, 16], '#e': cleanIds, since: Math.floor(Date.now() / 1000) };
+  return pool.subscribeMany(relayUrls, filter, {
+    label: 'visible-note-stats',
+    onevent(event) {
+      const [clean] = verifiedRelayEvents([event as NostrEvent]);
+      if (clean) onEvent(clean);
+    }
+  });
+}
+
 export async function fetchMissingEvents(ids: string[], relays = defaultRelays) {
   if (!ids.length) return [];
   const relayUrls = activeRelayUrls(relays, 'read');
@@ -412,7 +429,7 @@ export async function fetchLikeAuthors(eventId: string, relays = defaultRelays, 
       reactions
         .filter((event) => {
           const reaction = event.content.trim();
-          return !reaction || reaction === '+';
+          return reactionTargetId(event) === eventId && (!reaction || reaction === '+');
         })
         .map((event) => event.pubkey)
     )
@@ -482,11 +499,29 @@ export async function fetchEventStats(ids: string[], relays = defaultRelays) {
     { kinds: [6, 16], '#e': uniqueIds, limit: Math.min(500, uniqueIds.length * 20) },
     { kinds: [7], '#e': uniqueIds, limit: Math.min(800, uniqueIds.length * 35) }
   ];
-  const countStats = await fetchCountStats(uniqueIds, relayUrls).catch(() => ({}));
-  Object.entries(countStats).forEach(([id, stat]) => (stats[id] = { ...stats[id], ...stat }));
-  const countedIds = new Set(Object.keys(countStats));
-
+  const countStats: Record<string, Partial<EventStats>> = await fetchCountStats(uniqueIds, relayUrls).catch(() => ({}));
   const events = dedupeEvents(verifiedRelayEvents((await Promise.all(filters.map((filter) => queryShortLived(relayUrls, filter, 4500)))).flat()));
+
+  const eventStats = eventStatsFromEvents(uniqueIds, events);
+  for (const id of uniqueIds) {
+    const fromEvents = eventStats[id] ?? emptyStats();
+    const fromCount = countStats[id];
+    stats[id] = {
+      replies: Math.max(fromEvents.replies, fromCount?.replies ?? 0),
+      reposts: Math.max(fromEvents.reposts, fromCount?.reposts ?? 0),
+      likes: Math.max(fromEvents.likes, fromCount?.likes ?? 0),
+      dislikes: fromEvents.dislikes,
+      emoji: fromEvents.emoji
+    };
+  }
+
+  return stats;
+}
+
+export function eventStatsFromEvents(ids: string[], events: NostrEvent[]) {
+  const uniqueIds = [...new Set(ids)].filter(Boolean);
+  const emptyStats = () => ({ replies: 0, reposts: 0, likes: 0, dislikes: 0, emoji: 0 });
+  const stats: Record<string, EventStats> = Object.fromEntries(uniqueIds.map((id) => [id, emptyStats()]));
   const seen = {
     replies: new Set<string>(),
     reposts: new Set<string>(),
@@ -494,9 +529,8 @@ export async function fetchEventStats(ids: string[], relays = defaultRelays) {
   };
 
   for (const event of events) {
-    for (const id of referencedEventIds(event, uniqueIds)) {
+    for (const id of statTargetIds(event, uniqueIds)) {
       if (!stats[id]) continue;
-      if (countedIds.has(id)) continue;
       if (event.kind === 1 && !seen.replies.has(`${id}:${event.id}`)) {
         seen.replies.add(`${id}:${event.id}`);
         stats[id].replies += 1;
@@ -514,6 +548,77 @@ export async function fetchEventStats(ids: string[], relays = defaultRelays) {
   }
 
   return stats;
+}
+
+export async function fetchNotifications(pubkey: string, relays = defaultRelays, limit = 80) {
+  if (!/^[0-9a-f]{64}$/i.test(pubkey)) return [];
+  const relayUrls = activeRelayUrls(relays, 'read');
+  const ownPosts = topLevelFeedEvents(
+    filterSpam(verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [1], authors: [pubkey], limit: Math.min(limit, 80) }, 4500)))
+  );
+  const ownPostIds = ownPosts.map((event) => event.id);
+  const ownPostById = new Map(ownPosts.map((event) => [event.id, event]));
+
+  const filters: Filter[] = [
+    { kinds: [1], '#p': [pubkey], limit },
+    { kinds: [3], '#p': [pubkey], limit }
+  ];
+  if (ownPostIds.length) {
+    filters.push({ kinds: [7], '#e': ownPostIds, limit: Math.min(240, ownPostIds.length * 12) });
+    filters.push({ kinds: [6, 16], '#e': ownPostIds, limit: Math.min(180, ownPostIds.length * 8) });
+  }
+
+  const events = dedupeEvents(verifiedRelayEvents((await Promise.all(filters.map((filter) => queryShortLived(relayUrls, filter, 5000)))).flat()));
+  const notifications = events.flatMap((event) => notificationForEvent(event, pubkey, ownPostById));
+  await cacheEvents([...ownPosts, ...events.filter((event) => event.kind !== 3)]);
+  return dedupeNotifications(notifications).slice(0, limit);
+}
+
+function notificationForEvent(event: NostrEvent, pubkey: string, ownPostById: Map<string, NostrEvent>): NotificationItem[] {
+  if (event.pubkey === pubkey) return [];
+  if (event.kind === 1) {
+    const mentionsMe = event.tags.some((tag) => tag[0] === 'p' && tag[1] === pubkey);
+    if (!mentionsMe || !filterSpam([event]).length) return [];
+    const type = isReplyEvent(event) ? 'reply' : 'mention';
+    const targetId = type === 'reply' ? threadRootOrParentId(event) || event.id : event.id;
+    return [{ id: `${type}:${event.id}`, type, event, targetId, targetEvent: ownPostById.get(targetId), seen: false }];
+  }
+  if (event.kind === 7) {
+    const targetId = reactionTargetId(event);
+    if (!targetId || !ownPostById.has(targetId)) return [];
+    const reaction = event.content.trim();
+    if (reaction && reaction !== '+') return [];
+    return [{ id: `like:${event.id}`, type: 'like', event, targetId, targetEvent: ownPostById.get(targetId), seen: false }];
+  }
+  if (event.kind === 6 || event.kind === 16) {
+    const targetId = firstReferencedEventId(event, ownPostById);
+    if (!targetId) return [];
+    return [{ id: `repost:${event.id}`, type: 'repost', event, targetId, targetEvent: ownPostById.get(targetId), seen: false }];
+  }
+  if (event.kind === 3 && extractContactListDetails(event).pubkeys.includes(pubkey)) {
+    return [{ id: `follow:${event.id}:${event.pubkey}`, type: 'follow', event, seen: false }];
+  }
+  return [];
+}
+
+function firstReferencedEventId(event: NostrEvent, eventsById: Map<string, NostrEvent>) {
+  return event.tags.find((tag) => tag[0] === 'e' && tag[1] && eventsById.has(tag[1]))?.[1] ?? '';
+}
+
+function threadRootOrParentId(event: NostrEvent) {
+  const rootTag = event.tags.find((tag) => tag[0] === 'e' && tag[1] && tag[3] === 'root');
+  if (rootTag?.[1]) return rootTag[1];
+
+  const replyTag = [...event.tags].reverse().find((tag) => tag[0] === 'e' && tag[1] && tag[3] === 'reply');
+  if (replyTag?.[1]) return replyTag[1];
+
+  return event.tags.find((tag) => tag[0] === 'e' && tag[1])?.[1] ?? '';
+}
+
+function dedupeNotifications(items: NotificationItem[]) {
+  const byId = new Map<string, NotificationItem>();
+  for (const item of items) byId.set(item.id, item);
+  return [...byId.values()].sort((a, b) => b.event.created_at - a.event.created_at);
 }
 
 export async function fetchContactList(pubkey: string, relays = defaultRelays) {
@@ -901,6 +1006,24 @@ function referencedEventIds(event: NostrEvent, ids: string[]) {
   return [...new Set(event.tags.flatMap((tag) => (tag[0] === 'e' && idSet.has(tag[1]) ? [tag[1]] : [])))];
 }
 
+function statTargetIds(event: NostrEvent, ids: string[]) {
+  const idSet = new Set(ids);
+  if (event.kind === 7) {
+    const targetId = reactionTargetId(event);
+    return targetId && idSet.has(targetId) ? [targetId] : [];
+  }
+  if (event.kind === 6 || event.kind === 16) {
+    const targetId = event.tags.find((tag) => tag[0] === 'e' && idSet.has(tag[1]))?.[1] ?? '';
+    return targetId ? [targetId] : [];
+  }
+  return referencedEventIds(event, ids);
+}
+
+function reactionTargetId(event: NostrEvent) {
+  const eTags = event.tags.filter((tag) => tag[0] === 'e' && tag[1]);
+  return eTags.at(-1)?.[1] ?? '';
+}
+
 function now() {
   return Math.floor(Date.now() / 1000);
 }
@@ -911,20 +1034,22 @@ function randomPastNow() {
 
 async function fetchCountStats(ids: string[], relayUrls: string[]) {
   const entries = await Promise.all(ids.map(async (id) => [id, await countStatsForId(id, relayUrls)] as const));
-  return Object.fromEntries(entries.filter(([, stats]) => stats));
+  return Object.fromEntries(entries.filter((entry): entry is readonly [string, EventStats] => Boolean(entry[1])));
 }
 
-async function countStatsForId(id: string, relayUrls: string[]) {
+async function countStatsForId(id: string, relayUrls: string[]): Promise<EventStats | undefined> {
   const [replies, reposts, likes] = await Promise.all([
     relayCount(relayUrls, { kinds: [1], '#e': [id] }),
-    relayCount(relayUrls, { kinds: [6], '#e': [id] }),
+    relayCount(relayUrls, { kinds: [6, 16], '#e': [id] }),
     relayCount(relayUrls, { kinds: [7], '#e': [id] })
   ]);
   if ([replies, reposts, likes].every((value) => value === undefined)) return undefined;
   return {
     replies: replies ?? 0,
     reposts: reposts ?? 0,
-    likes: likes ?? 0
+    likes: likes ?? 0,
+    dislikes: 0,
+    emoji: 0
   };
 }
 

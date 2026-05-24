@@ -5,11 +5,12 @@
   import { ArrowLeft } from '@lucide/svelte';
   import NoteCard from '$lib/components/NoteCard.svelte';
   import ThreadReplyTree from '$lib/components/ThreadReplyTree.svelte';
-  import { events, mergeEvents, profiles, relays, session } from '$lib/stores/app';
-  import { fetchMissingEvents, fetchProfiles, fetchThreadReplies } from '$lib/nostr/client';
+  import { eventStats, events, mergeEvents, profiles, refreshEventStats, relays, session } from '$lib/stores/app';
+  import { eventStatsFromEvents, fetchMissingEvents, fetchProfiles, fetchThreadReplies } from '$lib/nostr/client';
   import type { NostrEvent } from '$lib/nostr/types';
 
   $: id = $page.params.id;
+  $: focusedReplyId = $page.url.searchParams.get('focus') ?? '';
   $: threadEvents = mergeThreadEvents(localThreadEvents, $events);
   $: root = rootEvent?.id === id ? rootEvent : threadEvents.find((event) => event.id === id);
   $: replies = id ? threadReplyEvents(threadEvents, id) : [];
@@ -71,7 +72,7 @@
   async function hydrateThread() {
     if (!id || hydratedId === id) return;
     hydratedId = id;
-    localThreadEvents = [];
+    localThreadEvents = cachedThreadSeed(id, focusedReplyId);
     loading = true;
     try {
       const cached = $events.find((event) => event.id === id);
@@ -93,6 +94,7 @@
       if (fetchedReplies.length) {
         localThreadEvents = mergeThreadEvents(allReplies, localThreadEvents);
       }
+      refreshThreadStats(mergeThreadEvents([...(found ? [found] : []), ...allReplies], localThreadEvents));
 
       const pubkeys = [...(found ? [found.pubkey] : []), ...allReplies.map((event) => event.pubkey)];
       const missingPubkeys = [...new Set(pubkeys.filter((pubkey) => !$profiles[pubkey]))];
@@ -104,6 +106,33 @@
       loading = false;
     }
   }
+
+  function cachedThreadSeed(rootId: string, focusId: string) {
+    return $events.filter((event) => event.id === rootId || (focusId && event.id === focusId));
+  }
+
+  function refreshThreadStats(threadItems: NostrEvent[]) {
+    const statIds = [...new Set(threadItems.map((event) => event.id))];
+    if (!statIds.length) return;
+
+    const localStats = eventStatsFromEvents(statIds, threadItems);
+    eventStats.update((existing) => {
+      const next = { ...existing };
+      for (const id of statIds) {
+        const existingStats = next[id] ?? { replies: 0, reposts: 0, likes: 0, dislikes: 0, emoji: 0 };
+        const loadedStats = localStats[id] ?? existingStats;
+        next[id] = {
+          replies: Math.max(existingStats.replies, loadedStats.replies),
+          reposts: Math.max(existingStats.reposts, loadedStats.reposts),
+          likes: Math.max(existingStats.likes, loadedStats.likes),
+          dislikes: Math.max(existingStats.dislikes, loadedStats.dislikes),
+          emoji: Math.max(existingStats.emoji, loadedStats.emoji)
+        };
+      }
+      return next;
+    });
+    void refreshEventStats(statIds, true);
+  }
 </script>
 
 <section class="thread-page">
@@ -113,7 +142,7 @@
     <div class="feed-list">
       <NoteCard event={root} profile={$profiles[root.pubkey]} />
       {#if replies.length}
-        <ThreadReplyTree parentId={root.id} {repliesByParent} profiles={$profiles} />
+        <ThreadReplyTree parentId={root.id} {repliesByParent} profiles={$profiles} focusedId={focusedReplyId} />
       {:else}
         <div class="empty-state"><strong>No replies found yet</strong><span>Relays did not return replies for this thread.</span></div>
       {/if}

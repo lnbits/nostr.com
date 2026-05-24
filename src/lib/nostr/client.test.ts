@@ -3,6 +3,7 @@ import { bytesToHex } from '@noble/hashes/utils.js';
 import {
   activeRelayUrls,
   dedupeEvents,
+  eventStatsFromEvents,
   extractContactListDetails,
   feedFiltersForMode,
   fetchFeed,
@@ -151,6 +152,23 @@ describe('nostr client helpers', () => {
     expect(isReplyEvent(markedReply)).toBe(true);
     expect(isReplyEvent(legacyReply)).toBe(true);
     expect(topLevelFeedEvents([root, markedReply, legacyReply])).toEqual([root]);
+  });
+
+  it('counts note stats using NIP-10, NIP-18, and NIP-25 targets', () => {
+    const root = event({ id: '1'.repeat(64), content: 'root' });
+    const mentioned = event({ id: '2'.repeat(64), content: 'mentioned' });
+    const reply = event({ id: '3'.repeat(64), tags: [['e', root.id, 'wss://relay.example', 'root', root.pubkey]] });
+    const legacyReply = event({ id: '4'.repeat(64), tags: [['e', root.id]] });
+    const repost = event({ id: '5'.repeat(64), kind: 6, tags: [['e', root.id, 'wss://relay.example'], ['p', root.pubkey]] });
+    const like = event({ id: '6'.repeat(64), kind: 7, pubkey: 'c'.repeat(64), content: '+', tags: [['e', mentioned.id], ['e', root.id]] });
+    const duplicateLike = event({ id: '7'.repeat(64), kind: 7, pubkey: 'c'.repeat(64), content: '+', tags: [['e', root.id]] });
+    const dislike = event({ id: '8'.repeat(64), kind: 7, pubkey: 'd'.repeat(64), content: '-', tags: [['e', root.id]] });
+    const emoji = event({ id: '9'.repeat(64), kind: 7, pubkey: 'e'.repeat(64), content: '🔥', tags: [['e', root.id]] });
+
+    expect(eventStatsFromEvents([root.id, mentioned.id], [reply, legacyReply, repost, like, duplicateLike, dislike, emoji])).toEqual({
+      [root.id]: { replies: 2, reposts: 1, likes: 1, dislikes: 1, emoji: 1 },
+      [mentioned.id]: { replies: 0, reposts: 0, likes: 0, dislikes: 0, emoji: 0 }
+    });
   });
 
   it('filters obvious adult content by keyword, hashtag, domain, and warning tags', () => {
