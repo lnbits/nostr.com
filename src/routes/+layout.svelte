@@ -3,7 +3,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { Bell, Home, Info, LogIn, Mail, Settings, UserRound } from '@lucide/svelte';
-  import { bootstrap, goHome, loginDialogOpen, selectMessagePeer, session } from '$lib/stores/app';
+  import { bootstrap, directMessages, goHome, loginDialogOpen, notifications, selectMessagePeer, session } from '$lib/stores/app';
   import Composer from '$lib/components/Composer.svelte';
   import LeftNav from '$lib/components/LeftNav.svelte';
   import LoginDialog from '$lib/components/LoginDialog.svelte';
@@ -14,6 +14,13 @@
   const rightRailStorageKey = 'nostr-right-rail-collapsed';
   let rightRailCollapsed = false;
   $: embeddedPage = $page.route.id?.startsWith('/embed/') ?? false;
+  $: notificationCount = badgeCount($notifications.length);
+  $: messageCount = badgeCount($directMessages.length);
+
+  function badgeCount(count: number) {
+    if (!count) return '';
+    return count > 99 ? '99+' : String(count);
+  }
 
   onMount(() => {
     if (!embeddedPage) {
@@ -85,8 +92,18 @@
   <nav class="tabbar" class:guest={!$session} aria-label="Primary">
     {#if $session}
       <a href={appPath('/')} aria-label="Home" on:click={goHome}><Home size={22} /></a>
-      <a href={appPath('/notifications')} aria-label="Notifications"><Bell size={22} /></a>
-      <a href={appPath('/messages')} aria-label="Messages" on:click={() => selectMessagePeer('')}><Mail size={22} /></a>
+      <a class="tabbar-badge-link" href={appPath('/notifications')} aria-label={notificationCount ? `${notificationCount} notifications` : 'Notifications'}>
+        <Bell size={22} />
+        {#if notificationCount}
+          <span class="tabbar-badge">{notificationCount}</span>
+        {/if}
+      </a>
+      <a class="tabbar-badge-link" href={appPath('/messages')} aria-label={messageCount ? `${messageCount} messages` : 'Messages'} on:click={() => selectMessagePeer('')}>
+        <Mail size={22} />
+        {#if messageCount}
+          <span class="tabbar-badge">{messageCount}</span>
+        {/if}
+      </a>
       <a href={appPath('/settings')} aria-label="Settings"><Settings size={22} /></a>
       <a href={appPath(`/profile/${$session.pubkey}`)} aria-label="Profile"><UserRound size={22} /></a>
     {:else}

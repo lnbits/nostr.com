@@ -198,6 +198,28 @@ label span, label strong { color: var(--text); }
   background: var(--text);
   color: var(--bg);
 }
+.nav-badge-wrap {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+}
+.nav-badge {
+  position: absolute;
+  top: -8px;
+  right: -13px;
+  min-width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--bg);
+  border-radius: 999px;
+  padding: 0 5px;
+  background: var(--accent);
+  color: #07111f;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+}
 :root[data-theme='dark'] .left-nav-list .nav-compose {
   border-color: var(--accent);
   background: var(--accent);
@@ -1128,6 +1150,9 @@ label span, label strong { color: var(--text); }
   border-color: var(--accent);
   color: #07111f;
 }
+.mobile-compose-fab {
+  display: none;
+}
 .composer-backdrop {
   position: fixed;
   inset: 0;
@@ -1293,6 +1318,26 @@ label span, label strong { color: var(--text); }
 .tabbar button {
   display: grid;
   place-items: center;
+}
+.tabbar-badge-link {
+  position: relative;
+}
+.tabbar-badge {
+  position: absolute;
+  top: 8px;
+  right: calc(50% - 20px);
+  min-width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--bg);
+  border-radius: 999px;
+  padding: 0 5px;
+  background: var(--accent);
+  color: #07111f;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
 }
 .tabbar.guest .tabbar-signin {
   min-height: 46px;
@@ -2092,6 +2137,7 @@ label span, label strong { color: var(--text); }
   .left-nav { display: none; }
   .rail { display: none; }
   .tabbar { display: grid; }
+  .mobile-compose-fab { display: inline-flex; }
   .timeline { padding: 0 14px 34px; }
   .authed-main .timeline { padding: 0 14px 34px; }
   .feed-search { top: var(--app-top-safe); }

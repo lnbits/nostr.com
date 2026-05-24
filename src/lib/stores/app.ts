@@ -38,8 +38,10 @@ import {
   publishNip17DirectMessage,
   resolveNip05Profile,
   resolvePubkeyIdentifier,
+  subscribeDirectMessages,
   subscribeEventStats,
   subscribeFeed,
+  subscribeNotifications,
   topLevelFeedEvents
 } from '$lib/nostr/client';
 import type { ContactListItem, CustomFeedSettings, DirectMessage, EventStats, FeedMode, NostrEvent, NotificationItem, Profile, RelayState, Session } from '$lib/nostr/types';
@@ -99,6 +101,9 @@ let liveFeedToken = 0;
 let liveStatsSub: { close: (reason?: string) => void } | undefined;
 let liveStatsTimer: ReturnType<typeof setTimeout> | undefined;
 let liveStatsKey = '';
+let liveNotificationsSub: { close: (reason?: string) => void } | undefined;
+let liveMessagesSub: { close: (reason?: string) => void } | undefined;
+let liveInboxToken = 0;
 let cachedOlderEvents: NostrEvent[] = [];
 const visibleStatIds = new Set<string>();
 const seenLiveStatEvents = new Set<string>();
@@ -114,6 +119,7 @@ relays.subscribe((value) => {
   syncRelayStatus(value);
   liveStatsKey = '';
   if (visibleStatIds.size) scheduleVisibleStatsSubscription();
+  restartInboxSubscriptions();
 });
 follows.subscribe((value) => (currentFollows = value));
 mutedPubkeys.subscribe((value) => (currentMutedPubkeys = new Set(value)));
@@ -607,6 +613,7 @@ export async function signIn(mode: 'nip07' | 'private-key' | 'bunker' | 'guest',
   directMessages.set([]);
   notifications.set([]);
   loadingFeed.set(true);
+  restartInboxSubscriptions();
   void finishSignedInBootstrap(next);
 }
 
@@ -622,6 +629,7 @@ export async function signOut() {
   notifications.set([]);
   directMessages.set([]);
   activeMessagePeer.set('');
+  stopInboxSubscriptions();
   mutedPubkeys.set([]);
   replyTarget.set(null);
   editTarget.set(null);
@@ -1027,6 +1035,7 @@ async function finishSignedInBootstrap(next: Session) {
     await refreshFeed(currentMode);
     void refreshNotifications();
     void refreshMessages();
+    restartInboxSubscriptions();
   } finally {
     if (isCurrentSession(next)) loadingFeed.set(false);
   }
@@ -1054,6 +1063,44 @@ function selectPreferredSignedInFeed() {
 
 function isCurrentSession(next: Session) {
   return currentSessionValue?.pubkey === next.pubkey && currentSessionValue.mode === next.mode;
+}
+
+function restartInboxSubscriptions() {
+  const currentSession = currentSessionValue;
+  stopInboxSubscriptions();
+  if (!currentSession) return;
+
+  const token = ++liveInboxToken;
+  void subscribeNotifications(currentSession.pubkey, currentRelays, (items) => {
+    if (token !== liveInboxToken || currentSessionValue?.pubkey !== currentSession.pubkey) return;
+    notifications.update((existing) => mergeNotifications(items, existing));
+    void hydrateMissingProfiles(items.map((item) => item.event), 20);
+  }).then((sub) => {
+    if (token === liveInboxToken && currentSessionValue?.pubkey === currentSession.pubkey) liveNotificationsSub = sub;
+    else sub?.close();
+  });
+
+  void subscribeDirectMessages(currentSession, currentRelays, (message) => {
+    if (token !== liveInboxToken || currentSessionValue?.pubkey !== currentSession.pubkey) return;
+    directMessages.update((existing) => mergeDirectMessages([message], existing, currentSession.pubkey));
+  }).then((sub) => {
+    if (token === liveInboxToken && currentSessionValue?.pubkey === currentSession.pubkey) liveMessagesSub = sub;
+    else sub?.close();
+  });
+}
+
+function stopInboxSubscriptions() {
+  liveInboxToken += 1;
+  liveNotificationsSub?.close();
+  liveMessagesSub?.close();
+  liveNotificationsSub = undefined;
+  liveMessagesSub = undefined;
+}
+
+function mergeNotifications(next: NotificationItem[], existing: NotificationItem[]) {
+  const byId = new Map<string, NotificationItem>();
+  for (const item of [...next, ...existing]) byId.set(item.id, item);
+  return [...byId.values()].sort((a, b) => b.event.created_at - a.event.created_at).slice(0, 80);
 }
 
 async function hydrateGuestFeedContext() {

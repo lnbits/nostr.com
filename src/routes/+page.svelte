@@ -3,7 +3,7 @@
   import { tick } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import { ArrowUp } from '@lucide/svelte';
+  import { ArrowUp, Plus } from '@lucide/svelte';
   import FeedSearchBar from '$lib/components/FeedSearchBar.svelte';
   import NoteCard from '$lib/components/NoteCard.svelte';
   import {
@@ -20,6 +20,7 @@
     revealNewerFeed,
     relays,
     session,
+    startCompose,
     activeHashtag
   } from '$lib/stores/app';
   import { topLevelFeedEvents } from '$lib/nostr/client';
@@ -238,5 +239,10 @@
         <span>Scroll down for older notes</span>
       {/if}
     </div>
+    {#if $session}
+      <button class="fab mobile-compose-fab" on:click={startCompose} aria-label="Compose post">
+        <Plus size={30} />
+      </button>
+    {/if}
   </section>
 {/snippet}

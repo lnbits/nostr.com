@@ -502,6 +502,29 @@ export async function fetchDirectMessages(session: Session, relays = defaultRela
   return messages.filter((message): message is DirectMessage => Boolean(message));
 }
 
+export async function subscribeDirectMessages(session: Session, relays = defaultRelays, onMessage: (message: DirectMessage) => void) {
+  const relayUrls = activeRelayUrls(relays, 'read');
+  if (!relayUrls.length) return undefined;
+
+  const since = Math.floor(Date.now() / 1000) - 10;
+  const filters: Filter[] = [
+    { kinds: [4], '#p': [session.pubkey], since },
+    { kinds: [4], authors: [session.pubkey], since },
+    { kinds: [1059], '#p': [session.pubkey], since }
+  ];
+
+  const requests = filters.flatMap((filter) => relayUrls.map((url) => ({ url, filter })));
+  return pool.subscribeMap(requests, {
+    label: 'direct-messages-live',
+    async onevent(event) {
+      const [clean] = verifiedRelayEvents([event as NostrEvent]);
+      if (!clean) return;
+      const message = clean.kind === 1059 ? await toNip17DirectMessage(clean, session) : await toNip04DirectMessage(clean, session);
+      if (message) onMessage(message);
+    }
+  });
+}
+
 export async function fetchEventStats(ids: string[], relays = defaultRelays) {
   const uniqueIds = [...new Set(ids)].filter(Boolean).slice(0, 80);
   const emptyStats = () => ({ replies: 0, reposts: 0, likes: 0, zaps: 0, zapSats: 0, dislikes: 0, emoji: 0 });
@@ -598,6 +621,38 @@ export async function fetchNotifications(pubkey: string, relays = defaultRelays,
   const notifications = events.flatMap((event) => notificationForEvent(event, pubkey, ownPostById));
   await cacheEvents([...ownPosts, ...events.filter((event) => event.kind !== 3)]);
   return dedupeNotifications(notifications).slice(0, limit);
+}
+
+export async function subscribeNotifications(pubkey: string, relays = defaultRelays, onNotifications: (items: NotificationItem[]) => void, limit = 80) {
+  if (!/^[0-9a-f]{64}$/i.test(pubkey)) return undefined;
+  const relayUrls = activeRelayUrls(relays, 'read');
+  if (!relayUrls.length) return undefined;
+
+  const since = Math.floor(Date.now() / 1000) - 10;
+  const ownPosts = topLevelFeedEvents(
+    filterSpam(verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [1], authors: [pubkey], limit: Math.min(limit, 80) }, 4500)))
+  );
+  const ownPostById = new Map(ownPosts.map((event) => [event.id, event]));
+  const filters: Filter[] = [
+    { kinds: [1], '#p': [pubkey], since },
+    { kinds: [3], '#p': [pubkey], since }
+  ];
+  const ownPostIds = ownPosts.map((event) => event.id);
+  if (ownPostIds.length) {
+    filters.push({ kinds: [7], '#e': ownPostIds, since });
+    filters.push({ kinds: [6, 16], '#e': ownPostIds, since });
+  }
+
+  const requests = filters.flatMap((filter) => relayUrls.map((url) => ({ url, filter })));
+  return pool.subscribeMap(requests, {
+    label: 'notifications-live',
+    onevent(event) {
+      const [clean] = verifiedRelayEvents([event as NostrEvent]);
+      if (!clean) return;
+      const next = notificationForEvent(clean, pubkey, ownPostById);
+      if (next.length) onNotifications(next);
+    }
+  });
 }
 
 function notificationForEvent(event: NostrEvent, pubkey: string, ownPostById: Map<string, NostrEvent>): NotificationItem[] {
