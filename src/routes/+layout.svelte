@@ -2,8 +2,8 @@
   import '../styles.css';
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
-  import { Bell, Home, Info, LogIn, Settings, UserRound } from '@lucide/svelte';
-  import { bootstrap, goHome, loginDialogOpen, session } from '$lib/stores/app';
+  import { Bell, Home, Info, LogIn, Mail, Settings, UserRound } from '@lucide/svelte';
+  import { bootstrap, goHome, loginDialogOpen, selectMessagePeer, session } from '$lib/stores/app';
   import Composer from '$lib/components/Composer.svelte';
   import LeftNav from '$lib/components/LeftNav.svelte';
   import LoginDialog from '$lib/components/LoginDialog.svelte';
@@ -73,6 +73,7 @@
     {#if $session}
       <a href="/" aria-label="Home" on:click={goHome}><Home size={22} /></a>
       <a href="/#notifications" aria-label="Notifications"><Bell size={22} /></a>
+      <a href="/#messages" aria-label="Messages" on:click={() => selectMessagePeer('')}><Mail size={22} /></a>
       <a href={`/profile/${$session.pubkey}`} aria-label="Profile"><UserRound size={22} /></a>
       <a href="/settings" aria-label="Settings"><Settings size={22} /></a>
     {:else}

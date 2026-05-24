@@ -2,12 +2,12 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import { Check, Copy, Globe2, MessageCircle, Pencil, Save, Upload, UserPlus, X } from '@lucide/svelte';
+  import { ArrowLeft, Check, Copy, Globe2, MessageCircle, Pencil, Save, Upload, UserPlus, X } from '@lucide/svelte';
   import { nip19 } from 'nostr-tools';
   import NoteCard from '$lib/components/NoteCard.svelte';
   import { events, mergeEvents, profiles, relays, saveProfile, selectMessagePeer, session } from '$lib/stores/app';
   import { getCachedProfileEvents } from '$lib/nostr/cache';
-  import { dedupeEvents, fetchProfileEvents, fetchProfiles, getNip98AuthorizationHeader } from '$lib/nostr/client';
+  import { dedupeEvents, fetchProfileEvents, fetchProfiles, getNip98AuthorizationHeader, topLevelFeedEvents } from '$lib/nostr/client';
   import type { NostrEvent, Profile } from '$lib/nostr/types';
 
   const emptyProfile = (): Profile => ({
@@ -24,11 +24,15 @@
   });
   const initialProfileEventLimit = 120;
   const profileEventPageLimit = 120;
+  const targetProfileEventCount = 24;
+  const maxAutomaticProfilePages = 4;
+  type ProfileTimelineItem = { id: string; event: NostrEvent };
 
   $: pubkey = normalizePubkey($page.params.pubkey ?? '');
   $: profile = $profiles[pubkey];
   $: isOwnProfile = Boolean($session?.pubkey === pubkey);
-  $: userEvents = profileEvents.filter((event) => event.pubkey === pubkey);
+  $: userItems = profileEvents.flatMap(profileTimelineItem);
+  $: userEvents = userItems.map((item) => item.event);
   $: npub = /^[0-9a-f]{64}$/i.test(pubkey) ? nip19.npubEncode(pubkey) : '';
   $: shortNpub = npub ? `${npub.slice(0, 12)}...${npub.slice(-8)}` : '';
   $: displayName = profile?.display_name || profile?.name || (isOwnProfile ? '' : 'Nostr profile');
@@ -47,6 +51,7 @@
   let profileObserver: IntersectionObserver | undefined;
   let loadingMoreProfile = false;
   let hasMoreProfile = true;
+  let profilePaginationCursor: number | undefined;
   let pictureInput: HTMLInputElement;
   let bannerInput: HTMLInputElement;
 
@@ -90,8 +95,9 @@
   async function hydrateProfile(nextPubkey: string) {
     hasMoreProfile = true;
     loadingMoreProfile = false;
+    profilePaginationCursor = undefined;
     const cachedProfileEvents = await getCachedProfileEvents(nextPubkey, initialProfileEventLimit);
-    profileEvents = dedupeEvents([...cachedProfileEvents, ...$events.filter((event) => event.pubkey === nextPubkey)]);
+    profileEvents = cleanProfileEvents([...cachedProfileEvents, ...$events.filter((event) => event.pubkey === nextPubkey)]);
     const [found, fetchedProfileEvents] = await Promise.all([
       $profiles[nextPubkey] ? Promise.resolve([]) : fetchProfiles([nextPubkey], $relays).catch(() => []),
       fetchProfileEvents(nextPubkey, $relays, initialProfileEventLimit).catch(() => [])
@@ -102,23 +108,36 @@
       events.update((existing) => mergeEvents(fetchedProfileEvents, existing));
       addProfileEvents(fetchedProfileEvents);
     }
+    updateProfilePaginationCursor([...cachedProfileEvents, ...fetchedProfileEvents]);
+    void autoFillProfileEvents(nextPubkey);
   }
 
-  async function loadMoreProfileEvents() {
-    if (!pubkey || loadingMoreProfile || !hasMoreProfile) return;
-    const oldest = oldestProfileTimestamp();
-    if (!oldest) return;
+  async function loadMoreProfileEvents(targetPubkey = pubkey) {
+    if (!targetPubkey || loadingMoreProfile || !hasMoreProfile) return false;
+    const oldest = profilePaginationCursor ?? oldestProfileTimestamp();
+    if (!oldest) return false;
 
     loadingMoreProfile = true;
     try {
-      const nextEvents = await fetchProfileEvents(pubkey, $relays, profileEventPageLimit, { until: oldest - 1 }).catch(() => []);
-      hasMoreProfile = true;
+      const nextEvents = await fetchProfileEvents(targetPubkey, $relays, profileEventPageLimit, { until: oldest - 1 }).catch(() => []);
+      if (targetPubkey !== pubkey) return false;
+      hasMoreProfile = nextEvents.length > 0;
       if (nextEvents.length) {
         events.update((existing) => mergeEvents(nextEvents, existing));
         addProfileEvents(nextEvents);
+        updateProfilePaginationCursor(nextEvents);
       }
+      return nextEvents.length > 0;
     } finally {
       loadingMoreProfile = false;
+    }
+  }
+
+  async function autoFillProfileEvents(targetPubkey: string) {
+    for (let page = 0; page < maxAutomaticProfilePages; page += 1) {
+      if (targetPubkey !== pubkey || userItems.length >= targetProfileEventCount || !hasMoreProfile) return;
+      const loaded = await loadMoreProfileEvents(targetPubkey);
+      if (!loaded) return;
     }
   }
 
@@ -128,7 +147,34 @@
   }
 
   function addProfileEvents(nextEvents: NostrEvent[]) {
-    profileEvents = dedupeEvents([...profileEvents, ...nextEvents]);
+    profileEvents = cleanProfileEvents([...profileEvents, ...nextEvents]);
+  }
+
+  function updateProfilePaginationCursor(nextEvents: NostrEvent[]) {
+    if (!nextEvents.length) return;
+    const oldest = Math.min(...nextEvents.map((event) => event.created_at));
+    profilePaginationCursor = Math.min(profilePaginationCursor ?? oldest, oldest);
+  }
+
+  function cleanProfileEvents(nextEvents: NostrEvent[]) {
+    return dedupeEvents(nextEvents).filter((event) => event.kind === 6 || (event.kind === 1 && topLevelFeedEvents([event]).length));
+  }
+
+  function profileTimelineItem(event: NostrEvent): ProfileTimelineItem[] {
+    if (event.kind === 1 && topLevelFeedEvents([event]).length) return [{ id: event.id, event }];
+    const reposted = parseRepostContent(event);
+    if (!reposted || !topLevelFeedEvents([reposted]).length) return [];
+    return [{ id: event.id, event: reposted }];
+  }
+
+  function parseRepostContent(event: NostrEvent) {
+    if (event.kind !== 6 || !event.content.trim()) return null;
+    try {
+      const reposted = JSON.parse(event.content) as NostrEvent;
+      return reposted?.kind === 1 && /^[0-9a-f]{64}$/i.test(reposted.id) ? reposted : null;
+    } catch {
+      return null;
+    }
   }
 
   async function uploadProfileMedia(file: File | undefined, target: 'picture' | 'banner') {
@@ -216,6 +262,8 @@
 </script>
 
 <section class="profile-hero">
+  <a class="mobile-floating-back" href="/" aria-label="Back to feed"><ArrowLeft size={20} /></a>
+
   {#if !$session}
     <a class="info-back" href="/">← Feed</a>
   {/if}
@@ -341,8 +389,8 @@
 </section>
 
 <section class="feed-list narrow">
-  {#each userEvents as event (event.id)}
-    <NoteCard {event} {profile} />
+  {#each userItems as item (item.id)}
+    <NoteCard event={item.event} profile={$profiles[item.event.pubkey] ?? (item.event.pubkey === pubkey ? profile : undefined)} />
   {:else}
     <div class="empty-state"><strong>No notes for this profile yet</strong><span>Trying relays for this profile’s posts.</span></div>
   {/each}

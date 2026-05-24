@@ -1,8 +1,11 @@
 <script lang="ts">
-  import { LogOut, Moon, Plus, Save, SlidersHorizontal, Sun, Trash2 } from '@lucide/svelte';
-  import { customFeedSettings, feedMode, refreshFeed, relays, session, signOut } from '$lib/stores/app';
+  import { onDestroy, onMount } from 'svelte';
+  import { Check, Copy, LogOut, Moon, Plus, RefreshCw, Save, SlidersHorizontal, Sun, Trash2 } from '@lucide/svelte';
+  import { nip19 } from 'nostr-tools';
+  import { customFeedSettings, feedMode, loadingFeed, refreshFeed, relays, session, signOut } from '$lib/stores/app';
   import { normalizeRelayUrl } from '$lib/nostr/client';
   import { setThemeMode, themeMode, type ThemeMode } from '$lib/stores/theme';
+  import FeedTabs from '$lib/components/FeedTabs.svelte';
 
   const themes: { mode: ThemeMode; label: string; icon: typeof Sun }[] = [
     { mode: 'light', label: 'Light', icon: Sun },
@@ -10,6 +13,22 @@
   ];
 
   let newRelay = 'wss://';
+  let copiedPublicKey = false;
+  let mounted = false;
+  let relayStatus: Record<string, 'checking' | 'online' | 'offline'> = {};
+  let cleanupChecks: Array<() => void> = [];
+  $: sessionNpub = $session ? encodeNpub($session.pubkey) : '';
+  $: enabledRelayUrls = $relays.filter((relay) => relay.enabled).map((relay) => relay.url);
+  $: if (mounted) checkRelays(enabledRelayUrls);
+
+  onMount(() => {
+    mounted = true;
+    checkRelays(enabledRelayUrls);
+  });
+
+  onDestroy(() => {
+    cleanupChecks.forEach((cleanup) => cleanup());
+  });
 
   function addRelay() {
     const url = normalizeRelayUrl(newRelay);
@@ -54,12 +73,69 @@
     if (mode === 'bunker') return 'Remote signer';
     return 'Signed in';
   }
+
+  function encodeNpub(pubkey: string) {
+    try {
+      return nip19.npubEncode(pubkey);
+    } catch {
+      return pubkey;
+    }
+  }
+
+  async function copyPublicKey() {
+    if (!sessionNpub) return;
+    await navigator.clipboard.writeText(sessionNpub);
+    copiedPublicKey = true;
+    setTimeout(() => (copiedPublicKey = false), 1400);
+  }
+
+  function checkRelays(urls: string[]) {
+    cleanupChecks.forEach((cleanup) => cleanup());
+    cleanupChecks = [];
+    relayStatus = Object.fromEntries(urls.map((url) => [url, 'checking']));
+
+    for (const url of urls) {
+      try {
+        const socket = new WebSocket(url);
+        let opened = false;
+        const timeout = setTimeout(() => {
+          if (!opened) relayStatus = { ...relayStatus, [url]: 'offline' };
+          socket.close();
+        }, 3500);
+
+        socket.onopen = () => {
+          opened = true;
+          relayStatus = { ...relayStatus, [url]: 'online' };
+          socket.close();
+        };
+        socket.onerror = () => {
+          if (!opened) relayStatus = { ...relayStatus, [url]: 'offline' };
+        };
+        socket.onclose = () => {
+          clearTimeout(timeout);
+          if (!opened) relayStatus = { ...relayStatus, [url]: 'offline' };
+        };
+        cleanupChecks.push(() => {
+          clearTimeout(timeout);
+          socket.close();
+        });
+      } catch {
+        relayStatus = { ...relayStatus, [url]: 'offline' };
+      }
+    }
+  }
 </script>
 
 <div class="settings-page">
   <section class="page-head">
     <h1>Settings</h1>
     <p>Relay, cache, feed distance, mute, and report controls live here so the native apps inherit the same behavior.</p>
+  </section>
+
+  <section class="panel settings-feed-card">
+    <h2>Your algorithm</h2>
+    <FeedTabs layout="vertical" disabled={!$session} />
+    <button disabled={!$session || $loadingFeed} on:click={() => refreshFeed()} aria-label="Refresh feed"><RefreshCw size={18} class={$loadingFeed ? 'spin' : ''} /> Refresh</button>
   </section>
 
   <section class="panel">
@@ -79,7 +155,10 @@
       <h2>Account</h2>
       <div class="setting-grid">
         <span>Signed in with</span><strong>{sessionLabel($session.mode)}</strong>
-        <span>Public key</span><strong>{$session.pubkey.slice(0, 16)}...</strong>
+        <span>Public key</span>
+        <button class="public-key-copy" on:click={copyPublicKey} aria-label="Copy public key">
+          {#if copiedPublicKey}<Check size={16} /> Copied{:else}<Copy size={16} /> {sessionNpub.slice(0, 18)}...{sessionNpub.slice(-8)}{/if}
+        </button>
       </div>
       <button class="danger-button" on:click={() => void signOut()}><LogOut size={18} /> Log out</button>
     </section>
@@ -104,6 +183,12 @@
     <h2>Relays</h2>
     {#each $relays as relay, index}
       <div class="relay-editor">
+        <span
+          class:online={relay.enabled && relayStatus[relay.url] === 'online'}
+          class:offline={relay.enabled && relayStatus[relay.url] === 'offline'}
+          class="relay-status settings-relay-status"
+          aria-label={`${relay.url} ${relay.enabled ? relayStatus[relay.url] ?? 'checking' : 'disabled'}`}
+        ></span>
         <input bind:value={relay.url} />
         <label><input type="checkbox" bind:checked={relay.enabled} /> Enabled</label>
         <label><input type="checkbox" bind:checked={relay.read} /> Read</label>

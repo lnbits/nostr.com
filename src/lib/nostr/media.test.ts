@@ -1,5 +1,5 @@
 import { nip19 } from 'nostr-tools';
-import { extractMediaUrls, isVideoUrl, parseHashtags, parseNoteText } from './media';
+import { extractMediaUrls, extractQuotedNoteReferences, isVideoUrl, parseHashtags, parseNoteText } from './media';
 
 describe('media helpers', () => {
   it('extracts unique image and video urls from note content', () => {
@@ -66,6 +66,20 @@ describe('media helpers', () => {
       { type: 'nostr', value: '#[0]', href: `/profile/${pubkey}`, label: '@nostr' },
       { type: 'text', value: ' see ' },
       { type: 'nostr', value: '#[1]', href: `/thread/${noteId}`, label: 'note' }
+    ]);
+  });
+
+  it('extracts quoted note references from NIP-19 and indexed references', () => {
+    const first = 'd'.repeat(64);
+    const second = 'e'.repeat(64);
+    const third = 'f'.repeat(64);
+    const note = nip19.noteEncode(first);
+    const nevent = nip19.neventEncode({ id: second });
+
+    expect(extractQuotedNoteReferences(`quote nostr:${note} and ${nevent} plus #[2]`, [['p', 'a'.repeat(64)], ['e', first], ['e', third]])).toEqual([
+      { id: first, raw: `nostr:${note}` },
+      { id: second, raw: nevent },
+      { id: third, raw: '#[2]' }
     ]);
   });
 });

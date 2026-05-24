@@ -3,9 +3,10 @@
   import { goto } from '$app/navigation';
   import { Copy, ExternalLink, Flag, Heart, MessageCircle, MoreHorizontal, Repeat2 } from '@lucide/svelte';
   import type { NostrEvent, Profile } from '$lib/nostr/types';
-  import { extractMediaAttachments, parseNoteText } from '$lib/nostr/media';
+  import { extractMediaAttachments, extractQuotedNoteReferences, parseNoteText } from '$lib/nostr/media';
   import { fetchLikeAuthors, fetchProfiles } from '$lib/nostr/client';
   import { eventStats, filterByHashtag, likedEvents, profiles, reactToNote, relays, reportNote, repostNote, startReply } from '$lib/stores/app';
+  import QuotedNotePreview from './QuotedNotePreview.svelte';
 
   export let event: NostrEvent;
   export let profile: Profile | undefined;
@@ -25,9 +26,11 @@
   $: name = profile?.display_name || profile?.name || event.pubkey.slice(0, 10);
   $: avatar = profile?.picture;
   $: mediaAttachments = extractMediaAttachments(event);
+  $: quotedNoteReferences = extractQuotedNoteReferences(event.content, event.tags);
+  $: quotedNoteRawValues = quotedNoteReferences.map((reference) => reference.raw);
   $: isLong = event.content.length > previewLength;
   $: visibleContent = !isLong || expanded ? event.content : event.content.slice(0, previewLength).trimEnd();
-  $: contentParts = parseNoteText(visibleContent, mediaAttachments.map((media) => media.url), event.tags);
+  $: contentParts = parseNoteText(visibleContent, [...mediaAttachments.map((media) => media.url), ...quotedNoteRawValues], event.tags);
   $: counts = $eventStats[event.id] ?? { replies: 0, reposts: 0, likes: 0, dislikes: 0, emoji: 0 };
   $: liked = $likedEvents.has(event.id);
   $: timestamp = new Date(event.created_at * 1000);
@@ -70,7 +73,7 @@
   }
 
   function isInteractiveTarget(target: EventTarget | null) {
-    return target instanceof Element && Boolean(target.closest('a, button, input, textarea, video, .note-actions, .media-grid, .note-menu, .reaction-popover'));
+    return target instanceof Element && Boolean(target.closest('a, button, input, textarea, video, .note-actions, .media-grid, .note-menu, .reaction-popover, .quoted-note'));
   }
 
   async function toggleLikePopover() {
@@ -173,8 +176,9 @@
     {:else if isLong}
       <button class="show-more" on:click={() => (expanded = false)}>show less</button>
     {/if}
+    <QuotedNotePreview ids={quotedNoteReferences.map((reference) => reference.id)} />
     {#if mediaAttachments.length}
-      <div class="media-grid">
+      <div class="media-grid" class:single={mediaAttachments.length === 1} class:double={mediaAttachments.length === 2} class:triple={mediaAttachments.length === 3} class:quad={mediaAttachments.length >= 4}>
         {#each mediaAttachments as media}
           {#if media.type === 'video'}
             <!-- svelte-ignore a11y_media_has_caption -->

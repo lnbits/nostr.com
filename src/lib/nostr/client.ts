@@ -108,6 +108,7 @@ export async function loginWithBunker(uri: string): Promise<Session> {
 export function filterSpam(events: NostrEvent[], mutedPubkeys = new Set<string>()) {
   return events.filter((event) => {
     if (mutedPubkeys.has(event.pubkey)) return false;
+    if (event.kind === 6) return Boolean(parseRepostContent(event));
     if (isMachineGeneratedContent(event.content)) return false;
     if (!isFamilySafeEvent(event)) return false;
     const lower = event.content.toLowerCase();
@@ -116,7 +117,7 @@ export function filterSpam(events: NostrEvent[], mutedPubkeys = new Set<string>(
 }
 
 export function topLevelFeedEvents(events: NostrEvent[]) {
-  return events.filter((event) => !isReplyEvent(event));
+  return events.filter((event) => event.kind === 1 && !isReplyEvent(event));
 }
 
 export function isReplyEvent(event: NostrEvent) {
@@ -382,13 +383,23 @@ export async function fetchThreadReplies(rootId: string, relays = defaultRelays,
 export async function fetchProfileEvents(pubkey: string, relays = defaultRelays, limit = 36, options: Pick<FeedQueryOptions, 'until' | 'since'> = {}) {
   if (!/^[0-9a-f]{64}$/i.test(pubkey)) return [];
   const relayUrls = activeRelayUrls(relays, 'read');
-  const filter: Filter = { kinds: [1], authors: [pubkey], limit };
+  const filter: Filter = { kinds: [1, 6], authors: [pubkey], limit };
   if (options.until) filter.until = options.until;
   if (options.since) filter.since = options.since;
   const events = verifiedRelayEvents(await queryShortLived(relayUrls, filter, 5000));
-  const clean = dedupeEvents(filterSpam(events));
+  const clean = dedupeEvents([...filterSpam(events.filter((event) => event.kind !== 6)), ...events.filter((event) => event.kind === 6 && parseRepostContent(event))]);
   await cacheProfileEvents(clean);
   return clean;
+}
+
+export function parseRepostContent(event: NostrEvent) {
+  if (event.kind !== 6 || !event.content.trim()) return null;
+  try {
+    const reposted = JSON.parse(event.content) as NostrEvent;
+    return reposted?.kind === 1 && /^[0-9a-f]{64}$/i.test(reposted.id) ? reposted : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function fetchLikeAuthors(eventId: string, relays = defaultRelays, limit = 32) {

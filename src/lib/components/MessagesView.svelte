@@ -15,8 +15,9 @@
     sendDirectMessage,
     session
   } from '$lib/stores/app';
-  import { extractMediaAttachments, parseNoteText } from '$lib/nostr/media';
+  import { extractMediaAttachments, extractQuotedNoteReferences, parseNoteText } from '$lib/nostr/media';
   import type { DirectMessage, MediaAttachment, NostrEvent, Profile } from '$lib/nostr/types';
+  import QuotedNotePreview from './QuotedNotePreview.svelte';
 
   let recipientInput = '';
   let messageText = '';
@@ -117,7 +118,12 @@
   }
 
   function messageParts(message: DirectMessage, media: MediaAttachment[]) {
-    return parseNoteText(message.content ?? '', media.map((item) => item.url));
+    const quotes = messageQuotes(message);
+    return parseNoteText(message.content ?? '', [...media.map((item) => item.url), ...quotes.map((quote) => quote.raw)]);
+  }
+
+  function messageQuotes(message: DirectMessage) {
+    return extractQuotedNoteReferences(message.content ?? '');
   }
 
   function messageAsEvent(message: DirectMessage): NostrEvent {
@@ -156,7 +162,6 @@
         <section class="dm-inbox" aria-label="Message inbox">
           <form class="dm-recipient-form" on:submit|preventDefault={startConversation}>
             <label>
-              <span>Start chat</span>
               <input bind:value={recipientInput} placeholder="npub or name@example.com" autocomplete="off" />
             </label>
             <button type="submit" disabled={resolving || !recipientInput.trim()}>
@@ -221,6 +226,7 @@
             {#each activeMessages as message (message.id)}
               {@const mine = message.from === $session?.pubkey}
               {@const media = messageMedia(message)}
+              {@const quotes = messageQuotes(message)}
               <article class="dm-message" class:mine class:theirs={!mine}>
                 <div class="dm-bubble">
                   {#if message.content}
@@ -240,6 +246,8 @@
                   {:else}
                     <p class="muted-copy">{message.protocol} encrypted message</p>
                   {/if}
+
+                  <QuotedNotePreview ids={quotes.map((quote) => quote.id)} compact />
 
                   {#if media.length}
                     <div class="dm-media-grid">
@@ -270,7 +278,7 @@
             <textarea bind:value={messageText} placeholder="Write a message" rows="2"></textarea>
             <button type="submit" disabled={sending || !messageText.trim()}>
               {#if sending}<Loader2 size={18} class="spin" />{:else}<Send size={18} />{/if}
-              Send
+              <span>Send</span>
             </button>
           </form>
         </section>

@@ -39,6 +39,29 @@ export type NoteTextPart =
   | { type: 'mention'; value: string; href: string }
   | { type: 'link'; value: string; href: string };
 
+export interface QuotedNoteReference {
+  id: string;
+  raw: string;
+}
+
+export function extractQuotedNoteReferences(content: string, tags: string[][] = []): QuotedNoteReference[] {
+  const refs = new Map<string, QuotedNoteReference>();
+  let match: RegExpExecArray | null;
+  nostrRefPattern.lastIndex = 0;
+  while ((match = nostrRefPattern.exec(content))) {
+    const id = noteIdForNostrReference(match[1]);
+    if (id) refs.set(id, { id, raw: match[0] });
+  }
+
+  indexedRefPattern.lastIndex = 0;
+  while ((match = indexedRefPattern.exec(content))) {
+    const tag = tags[Number(match[1])];
+    if (tag?.[0] === 'e' && /^[0-9a-f]{64}$/i.test(tag[1])) refs.set(tag[1], { id: tag[1], raw: match[0] });
+  }
+
+  return [...refs.values()];
+}
+
 export function parseHashtags(content: string): NoteTextPart[] {
   return parseNoteText(content);
 }
@@ -232,4 +255,15 @@ function labelForNostrReference(value: string) {
     // fall through
   }
   return `nostr:${value.slice(0, 12)}...`;
+}
+
+function noteIdForNostrReference(value: string) {
+  try {
+    const decoded = nip19.decode(value);
+    if (decoded.type === 'note') return decoded.data;
+    if (decoded.type === 'nevent') return decoded.data.id;
+  } catch {
+    // not a note reference
+  }
+  return '';
 }

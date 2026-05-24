@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { browser } from '$app/environment';
   import { page } from '$app/stores';
+  import { ArrowLeft } from '@lucide/svelte';
   import NoteCard from '$lib/components/NoteCard.svelte';
   import { events, mergeEvents, profiles, relays, session } from '$lib/stores/app';
   import { fetchMissingEvents, fetchProfiles, fetchThreadReplies } from '$lib/nostr/client';
@@ -72,6 +73,8 @@
 </script>
 
 <section class="thread-page">
+  <a class="mobile-floating-back" href="/" aria-label="Back to feed"><ArrowLeft size={20} /></a>
+
   {#if !$session}
     <a class="info-back" href="/">← Feed</a>
   {/if}
