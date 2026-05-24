@@ -3,7 +3,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { Bell, Home, Info, LogIn, Mail, Settings, UserRound } from '@lucide/svelte';
-  import { bootstrap, directMessages, goHome, loginDialogOpen, notifications, selectMessagePeer, session } from '$lib/stores/app';
+  import { bootstrap, directMessages, goHome, loginDialogOpen, markMessagesSeen, markNotificationsSeen, notifications, selectMessagePeer, session, unreadMessageCount, unreadNotificationCount } from '$lib/stores/app';
   import Composer from '$lib/components/Composer.svelte';
   import LeftNav from '$lib/components/LeftNav.svelte';
   import LoginDialog from '$lib/components/LoginDialog.svelte';
@@ -14,8 +14,10 @@
   const rightRailStorageKey = 'nostr-right-rail-collapsed';
   let rightRailCollapsed = false;
   $: embeddedPage = $page.route.id?.startsWith('/embed/') ?? false;
-  $: notificationCount = badgeCount($notifications.length);
-  $: messageCount = badgeCount($directMessages.length);
+  $: notificationCount = badgeCount($unreadNotificationCount);
+  $: messageCount = badgeCount($unreadMessageCount);
+  $: if ($session && $page.route.id === '/notifications' && $notifications.length) markNotificationsSeen();
+  $: if ($session && $page.route.id === '/messages' && $directMessages.length) markMessagesSeen();
 
   function badgeCount(count: number) {
     if (!count) return '';

@@ -48,6 +48,8 @@ import type { ContactListItem, CustomFeedSettings, DirectMessage, EventStats, Fe
 
 const sessionStorageKey = 'nostr-session';
 const customFeedStorageKey = 'nostr-custom-feed-settings';
+const notificationSeenStorageKey = 'nostr-notifications-seen-at';
+const messageSeenStorageKey = 'nostr-messages-seen-at';
 const initialFeedLimit = 18;
 const pageFeedLimit = 24;
 const cachedFeedBufferLimit = initialFeedLimit + pageFeedLimit * 3;
@@ -69,6 +71,8 @@ export const activeHashtag = writable<string>('');
 export const online = writable(true);
 export const notifications = writable<NotificationItem[]>([]);
 export const directMessages = writable<DirectMessage[]>([]);
+export const unreadNotificationCount = writable(0);
+export const unreadMessageCount = writable(0);
 export const activeMessagePeer = writable<string>('');
 export const eventStats = writable<Record<string, EventStats>>({});
 export const likedEvents = writable<Set<string>>(new Set());
@@ -86,6 +90,17 @@ export const loginDialogOpen = writable(false);
 export const replyTarget = writable<NostrEvent | null>(null);
 export const editTarget = writable<NostrEvent | null>(null);
 
+export function mergeProfileRecords(existing: Record<string, Profile>, nextProfiles: Profile[]) {
+  const merged = { ...existing };
+  for (const profile of nextProfiles) {
+    const current = merged[profile.pubkey];
+    if (!current || (profile.updated_at ?? 0) >= (current.updated_at ?? 0)) {
+      merged[profile.pubkey] = profile;
+    }
+  }
+  return merged;
+}
+
 let currentRelays = defaultRelays;
 let currentFollows: string[] = [];
 let currentMutedPubkeys = new Set<string>();
@@ -93,6 +108,10 @@ let currentSettings = defaultCustomFeedSettings;
 let currentMode: FeedMode = 'global';
 let currentHashtag = '';
 let currentSessionValue: Session | null = initialSession;
+let currentNotifications: NotificationItem[] = [];
+let currentDirectMessages: DirectMessage[] = [];
+let currentNotificationSeenAt = initialSession && browser ? readLastSeen(notificationSeenStorageKey, initialSession.pubkey) : 0;
+let currentMessageSeenAt = initialSession && browser ? readLastSeen(messageSeenStorageKey, initialSession.pubkey) : 0;
 let currentContactItems: ContactListItem[] = [];
 let currentDeletedEventIds = new Set<string>();
 let oldestFeedTimestamp: number | undefined;
@@ -129,7 +148,20 @@ customFeedSettings.subscribe((value) => {
 });
 feedMode.subscribe((value) => (currentMode = value));
 activeHashtag.subscribe((value) => (currentHashtag = value));
-session.subscribe((value) => (currentSessionValue = value));
+session.subscribe((value) => {
+  currentSessionValue = value;
+  currentNotificationSeenAt = value && browser ? readLastSeen(notificationSeenStorageKey, value.pubkey) : 0;
+  currentMessageSeenAt = value && browser ? readLastSeen(messageSeenStorageKey, value.pubkey) : 0;
+  recalculateUnreadCounts();
+});
+notifications.subscribe((value) => {
+  currentNotifications = value;
+  recalculateUnreadCounts();
+});
+directMessages.subscribe((value) => {
+  currentDirectMessages = value;
+  recalculateUnreadCounts();
+});
 deletedEventIds.subscribe((value) => (currentDeletedEventIds = value));
 
 export async function bootstrap() {
@@ -144,7 +176,7 @@ export async function bootstrap() {
   cachedOlderEvents = cachedTopLevelEvents.slice(initialFeedLimit);
   events.set(visibleEvents);
   oldestFeedTimestamp = getOldestTimestamp(visibleEvents);
-  profiles.set(Object.fromEntries(cachedProfiles.map((profile) => [profile.pubkey, profile])));
+  profiles.set(mergeProfileRecords({}, cachedProfiles));
 
   const relayCountBeforeContext = currentRelays.length;
   const contextReady = hydrateDefaultFeedContext();
@@ -566,6 +598,22 @@ export async function refreshNotifications() {
   }
 }
 
+export function markNotificationsSeen() {
+  const currentSession = currentSessionValue;
+  if (!currentSession) return;
+  currentNotificationSeenAt = Math.max(nowSeconds(), newestNotificationTimestamp());
+  persistLastSeen(notificationSeenStorageKey, currentSession.pubkey, currentNotificationSeenAt);
+  recalculateUnreadCounts();
+}
+
+export function markMessagesSeen() {
+  const currentSession = currentSessionValue;
+  if (!currentSession) return;
+  currentMessageSeenAt = Math.max(nowSeconds(), newestIncomingMessageTimestamp(currentSession.pubkey));
+  persistLastSeen(messageSeenStorageKey, currentSession.pubkey, currentMessageSeenAt);
+  recalculateUnreadCounts();
+}
+
 export async function resolveMessageRecipient(value: string) {
   const pubkey = normalizePubkey(await resolvePubkeyIdentifier(value, currentRelays).catch(() => ''));
   if (!pubkey) throw new Error('Could not resolve that npub or NIP-05 address.');
@@ -610,6 +658,8 @@ export async function signIn(mode: 'nip07' | 'private-key' | 'bunker' | 'guest',
   session.set(next);
   persistSession(next);
   activeHashtag.set('');
+  currentNotificationSeenAt = browser ? readLastSeen(notificationSeenStorageKey, next.pubkey) : 0;
+  currentMessageSeenAt = browser ? readLastSeen(messageSeenStorageKey, next.pubkey) : 0;
   directMessages.set([]);
   notifications.set([]);
   loadingFeed.set(true);
@@ -628,6 +678,8 @@ export async function signOut() {
   void refreshFeed('global');
   notifications.set([]);
   directMessages.set([]);
+  unreadNotificationCount.set(0);
+  unreadMessageCount.set(0);
   activeMessagePeer.set('');
   stopInboxSubscriptions();
   mutedPubkeys.set([]);
@@ -858,10 +910,7 @@ export async function saveProfile(nextProfile: Profile) {
   session.subscribe((value) => (currentSession = value))();
   if (!currentSession) throw new Error('Sign in before updating your profile.');
   const { profile } = await publishProfile(currentSession, nextProfile, currentRelays);
-  profiles.update((existing) => ({
-    ...existing,
-    [profile.pubkey]: profile
-  }));
+  profiles.update((existing) => mergeProfileRecords(existing, [profile]));
 }
 
 export async function saveFollowList(pubkeys: string[]) {
@@ -927,10 +976,7 @@ async function hydrateMissingProfiles(nextEvents: NostrEvent[], limit = 40) {
 
   const foundProfiles = await fetchProfiles(pubkeys, currentRelays).catch(() => []);
   if (!foundProfiles.length) return;
-  profiles.update((existing) => ({
-    ...existing,
-    ...Object.fromEntries(foundProfiles.map((profile) => [profile.pubkey, profile]))
-  }));
+  profiles.update((existing) => mergeProfileRecords(existing, foundProfiles));
 }
 
 export function startReply(event: NostrEvent) {
@@ -991,6 +1037,55 @@ function readStoredSession() {
     localStorage.removeItem(sessionStorageKey);
     return null;
   }
+}
+
+function readLastSeen(storageKey: string, pubkey: string) {
+  if (!browser || !pubkey) return 0;
+  try {
+    const stored = JSON.parse(localStorage.getItem(storageKey) ?? '{}') as Record<string, number>;
+    const value = stored[pubkey] ?? 0;
+    return Number.isFinite(value) ? value : 0;
+  } catch {
+    localStorage.removeItem(storageKey);
+    return 0;
+  }
+}
+
+function persistLastSeen(storageKey: string, pubkey: string, value: number) {
+  if (!browser || !pubkey) return;
+  let stored: Record<string, number> = {};
+  try {
+    stored = JSON.parse(localStorage.getItem(storageKey) ?? '{}') as Record<string, number>;
+  } catch {
+    stored = {};
+  }
+  stored[pubkey] = value;
+  localStorage.setItem(storageKey, JSON.stringify(stored));
+}
+
+function recalculateUnreadCounts() {
+  const currentSession = currentSessionValue;
+  if (!currentSession) {
+    unreadNotificationCount.set(0);
+    unreadMessageCount.set(0);
+    return;
+  }
+  unreadNotificationCount.set(currentNotifications.filter((item) => item.event.created_at > currentNotificationSeenAt).length);
+  unreadMessageCount.set(
+    currentDirectMessages.filter((message) => message.from !== currentSession.pubkey && message.created_at > currentMessageSeenAt).length
+  );
+}
+
+function newestNotificationTimestamp() {
+  return currentNotifications.reduce((newest, item) => Math.max(newest, item.event.created_at), 0);
+}
+
+function newestIncomingMessageTimestamp(pubkey: string) {
+  return currentDirectMessages.reduce((newest, message) => (message.from !== pubkey ? Math.max(newest, message.created_at) : newest), 0);
+}
+
+function nowSeconds() {
+  return Math.floor(Date.now() / 1000);
 }
 
 function readStoredCustomFeedSettings() {

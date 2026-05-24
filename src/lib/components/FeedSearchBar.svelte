@@ -2,7 +2,7 @@
   import { goto } from '$app/navigation';
   import { onDestroy } from 'svelte';
   import { Hash, Loader2, Search, UserRound } from '@lucide/svelte';
-  import { filterByHashtag, profiles, relays } from '$lib/stores/app';
+  import { filterByHashtag, mergeProfileRecords, profiles, relays } from '$lib/stores/app';
   import { resolvePubkeyIdentifier, searchProfiles } from '$lib/nostr/client';
   import { appPath } from '$lib/paths';
   import type { Profile } from '$lib/nostr/types';
@@ -33,7 +33,7 @@
       const found = await searchProfiles(value, $relays).catch(() => []);
       if (value === cleanQuery) {
         remoteProfiles = found;
-        if (found.length) profiles.update((existing) => ({ ...existing, ...Object.fromEntries(found.map((profile) => [profile.pubkey, profile])) }));
+        if (found.length) profiles.update((existing) => mergeProfileRecords(existing, found));
       }
     } finally {
       searchingProfiles = false;

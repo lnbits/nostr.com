@@ -13,6 +13,7 @@ export interface NostrEvent {
 
 export interface Profile {
   pubkey: string;
+  updated_at?: number;
   name?: string;
   display_name?: string;
   picture?: string;

@@ -198,20 +198,11 @@ label span, label strong { color: var(--text); }
   background: var(--text);
   color: var(--bg);
 }
-.nav-badge-wrap {
-  position: relative;
-  display: inline-grid;
-  place-items: center;
-}
-.nav-badge {
-  position: absolute;
-  top: -8px;
-  right: -13px;
+.nav-row-badge {
   min-width: 20px;
   height: 20px;
   display: grid;
   place-items: center;
-  border: 2px solid var(--bg);
   border-radius: 999px;
   padding: 0 5px;
   background: var(--accent);
@@ -2138,6 +2129,14 @@ label span, label strong { color: var(--text); }
   .rail { display: none; }
   .tabbar { display: grid; }
   .mobile-compose-fab { display: inline-flex; }
+  .composer-backdrop {
+    place-items: start center;
+    padding: calc(16px + var(--app-top-safe)) 12px calc(84px + env(safe-area-inset-bottom));
+  }
+  .composer-dock {
+    width: min(620px, 100%);
+    max-height: calc(100svh - 100px - var(--app-top-safe) - env(safe-area-inset-bottom));
+  }
   .timeline { padding: 0 14px 34px; }
   .authed-main .timeline { padding: 0 14px 34px; }
   .feed-search { top: var(--app-top-safe); }

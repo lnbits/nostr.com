@@ -767,14 +767,19 @@ export async function resolveNip05Profile(identifier = defaultGuestNip05): Promi
 }
 
 export function parseProfileEvents(events: NostrEvent[]) {
-  return events.flatMap((event) => {
+  const byPubkey = new Map<string, Profile>();
+  for (const event of events) {
     try {
       const profile = JSON.parse(event.content) as Profile;
-      return [{ ...profile, pubkey: event.pubkey }];
+      const existing = byPubkey.get(event.pubkey);
+      if (!existing || (existing.updated_at ?? 0) < event.created_at) {
+        byPubkey.set(event.pubkey, { ...profile, pubkey: event.pubkey, updated_at: event.created_at });
+      }
     } catch {
-      return [];
+      // Ignore malformed profile metadata.
     }
-  });
+  }
+  return [...byPubkey.values()];
 }
 
 export async function publishReaction(session: Session, target: NostrEvent, relays = defaultRelays, content = '+') {
@@ -881,7 +886,7 @@ export async function publishNote(session: Session, content: string, relays = de
 export async function publishProfile(session: Session, profile: Profile, relays = defaultRelays) {
   const metadata = compactProfile(profile);
   const event = await publishEventTemplate(session, { kind: 0, content: JSON.stringify(metadata), tags: [], created_at: now() }, relays);
-  const savedProfile = { ...metadata, pubkey: session.pubkey };
+  const savedProfile = { ...metadata, pubkey: session.pubkey, updated_at: event.created_at };
   await cacheProfile(savedProfile);
   return { event, profile: savedProfile };
 }

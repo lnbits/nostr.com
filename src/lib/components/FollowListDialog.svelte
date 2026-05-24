@@ -1,7 +1,7 @@
 <script lang="ts">
   import { nip19 } from 'nostr-tools';
   import { Save, Trash2, UserPlus, X } from '@lucide/svelte';
-  import { follows, profiles, relays, saveFollowList } from '$lib/stores/app';
+  import { follows, mergeProfileRecords, profiles, relays, saveFollowList } from '$lib/stores/app';
   import { fetchProfiles, resolveNip05Profile, searchProfiles } from '$lib/nostr/client';
   import { appPath } from '$lib/paths';
   import type { Profile } from '$lib/nostr/types';
@@ -99,10 +99,7 @@
     if (!missing.length) return;
     const found = await fetchProfiles(missing, $relays).catch(() => []);
     if (!found.length) return;
-    profiles.update((existing) => ({
-      ...existing,
-      ...Object.fromEntries(found.map((profile) => [profile.pubkey, profile]))
-    }));
+    profiles.update((existing) => mergeProfileRecords(existing, found));
   }
 
   async function updateSuggestions(value: string) {

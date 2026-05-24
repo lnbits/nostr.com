@@ -5,7 +5,7 @@
   import { ArrowLeft } from '@lucide/svelte';
   import NoteCard from '$lib/components/NoteCard.svelte';
   import ThreadReplyTree from '$lib/components/ThreadReplyTree.svelte';
-  import { deletedEventIds, eventStats, events, mergeEvents, profiles, refreshEventStats, relays, session } from '$lib/stores/app';
+  import { deletedEventIds, eventStats, events, mergeEvents, mergeProfileRecords, profiles, refreshEventStats, relays, session } from '$lib/stores/app';
   import { eventStatsFromEvents, fetchMissingEvents, fetchProfiles, fetchThreadReplies } from '$lib/nostr/client';
   import { appPath } from '$lib/paths';
   import type { NostrEvent } from '$lib/nostr/types';
@@ -104,7 +104,7 @@
       const missingPubkeys = [...new Set(pubkeys.filter((pubkey) => !$profiles[pubkey]))];
       if (missingPubkeys.length) {
         const fetchedProfiles = await fetchProfiles(missingPubkeys, $relays).catch(() => []);
-        if (fetchedProfiles.length) profiles.update((existing) => ({ ...existing, ...Object.fromEntries(fetchedProfiles.map((profile) => [profile.pubkey, profile])) }));
+        if (fetchedProfiles.length) profiles.update((existing) => mergeProfileRecords(existing, fetchedProfiles));
       }
     } finally {
       loading = false;

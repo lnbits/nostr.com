@@ -290,7 +290,7 @@ describe('nostr client helpers', () => {
     const valid = event({ kind: 0, pubkey, content: JSON.stringify({ name: 'Ada', about: 'builds clients' }) });
     const invalid = event({ kind: 0, pubkey: 'd'.repeat(64), content: '{nope' });
 
-    expect(parseProfileEvents([valid, invalid])).toEqual([{ pubkey, name: 'Ada', about: 'builds clients' }]);
+    expect(parseProfileEvents([valid, invalid])).toEqual([{ pubkey, name: 'Ada', about: 'builds clients', updated_at: valid.created_at }]);
   });
 
   it('extracts contact pubkeys and relay hints from contact lists', () => {

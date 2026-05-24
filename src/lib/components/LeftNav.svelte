@@ -9,7 +9,7 @@
     UserRound
   } from '@lucide/svelte';
   import { page } from '$app/stores';
-  import { directMessages, goHome, notifications, selectMessagePeer, session, startCompose } from '$lib/stores/app';
+  import { goHome, selectMessagePeer, session, startCompose, unreadMessageCount, unreadNotificationCount } from '$lib/stores/app';
   import { appPath } from '$lib/paths';
   import ThemeToggle from './ThemeToggle.svelte';
 
@@ -27,7 +27,7 @@
   }
 
   function badgeFor(href: string) {
-    const count = href === '/notifications' ? $notifications.length : href === '/messages' ? $directMessages.length : 0;
+    const count = href === '/notifications' ? $unreadNotificationCount : href === '/messages' ? $unreadMessageCount : 0;
     if (!count) return '';
     return count > 99 ? '99+' : String(count);
   }
@@ -49,13 +49,11 @@
         href={appPath(item.href)}
         on:click={item.href === '/' ? goHome : item.href === '/messages' ? () => selectMessagePeer('') : undefined}
       >
-        <span class="nav-badge-wrap">
-          <svelte:component this={item.icon} size={26} />
-          {#if badge}
-            <span class="nav-badge">{badge}</span>
-          {/if}
-        </span>
+        <svelte:component this={item.icon} size={26} />
         <span>{item.label}</span>
+        {#if badge}
+          <span class="nav-row-badge">{badge}</span>
+        {/if}
       </a>
     {/each}
     <a class:active={$page.route.id?.startsWith('/profile/')} href={appPath(profileHref)}>

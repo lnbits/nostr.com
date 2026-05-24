@@ -5,7 +5,7 @@
   import { ArrowLeft, Check, Copy, Globe2, MessageCircle, Pencil, Save, UserMinus, UserX, Upload, UserPlus, X } from '@lucide/svelte';
   import { nip19 } from 'nostr-tools';
   import NoteCard from '$lib/components/NoteCard.svelte';
-  import { deletedEventIds, events, follows, mergeEvents, mutedPubkeys, muteAccount, profiles, refreshEventStats, relays, saveFollowList, saveProfile, selectMessagePeer, session, unmuteAccount } from '$lib/stores/app';
+  import { deletedEventIds, events, follows, mergeEvents, mergeProfileRecords, mutedPubkeys, muteAccount, profiles, refreshEventStats, relays, saveFollowList, saveProfile, selectMessagePeer, session, unmuteAccount } from '$lib/stores/app';
   import { getCachedProfileEvents } from '$lib/nostr/cache';
   import { dedupeEvents, fetchProfileEvents, fetchProfiles, topLevelFeedEvents } from '$lib/nostr/client';
   import { uploadToNostrBuild } from '$lib/nostr/upload';
@@ -64,8 +64,9 @@
   let profilePaginationCursor: number | undefined;
   let pictureInput: HTMLInputElement;
   let bannerInput: HTMLInputElement;
+  let editingProfilePubkey = '';
 
-  $: if (pubkey) draft = { ...emptyProfile(), ...profile, pubkey };
+  $: if (pubkey && !editorOpen) draft = { ...emptyProfile(), ...profile, pubkey };
 
   $: if (pubkey && pubkey !== hydratedPubkey) {
     hydratedPubkey = pubkey;
@@ -96,6 +97,7 @@
     saving = true;
     error = '';
     try {
+      profiles.update((existing) => mergeProfileRecords(existing, [{ ...draft, pubkey, updated_at: Math.floor(Date.now() / 1000) }]));
       await saveProfile(draft);
       editorOpen = false;
     } catch (err) {
@@ -151,7 +153,7 @@
     if (nextPubkey !== pubkey) return;
     triedProfileRelays = true;
     const [profile] = found;
-    if (profile) profiles.update((existing) => ({ ...existing, [profile.pubkey]: profile }));
+    if (profile) profiles.update((existing) => mergeProfileRecords(existing, [profile]));
     if (fetchedProfileEvents.length) {
       events.update((existing) => mergeEvents(fetchedProfileEvents, existing));
       addProfileEvents(fetchedProfileEvents);
@@ -213,6 +215,12 @@
 
   function cleanProfileEvents(nextEvents: NostrEvent[]) {
     return dedupeEvents(nextEvents).filter((event) => event.kind === 6 || (event.kind === 1 && topLevelFeedEvents([event]).length));
+  }
+
+  function openEditor() {
+    editingProfilePubkey = pubkey;
+    draft = { ...emptyProfile(), ...profile, pubkey };
+    editorOpen = true;
   }
 
   function profileTimelineItem(event: NostrEvent): ProfileTimelineItem[] {
@@ -292,7 +300,7 @@
 
       <div class="profile-banner-actions">
         {#if isOwnProfile}
-          <button class="profile-edit-inline" on:click={() => (editorOpen = true)} aria-label="Edit profile">
+          <button class="profile-edit-inline" on:click={openEditor} aria-label="Edit profile">
             <Pencil size={14} /> Edit profile
           </button>
         {:else}
@@ -335,7 +343,7 @@
       </div>
     </div>
 
-    {#if isOwnProfile && editorOpen}
+    {#if isOwnProfile && editorOpen && editingProfilePubkey === pubkey}
       <div
         class="dialog-backdrop"
         role="presentation"

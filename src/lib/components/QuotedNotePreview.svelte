@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { MessageSquareText } from '@lucide/svelte';
-  import { events, profiles, relays } from '$lib/stores/app';
+  import { events, mergeProfileRecords, profiles, relays } from '$lib/stores/app';
   import { fetchMissingEvents, fetchProfiles } from '$lib/nostr/client';
   import { appPath } from '$lib/paths';
   import type { NostrEvent, Profile } from '$lib/nostr/types';
@@ -30,7 +30,7 @@
         fetchedEvents = { ...fetchedEvents, ...Object.fromEntries(found.map((event) => [event.id, event])) };
         const missingProfiles = [...new Set(found.map((event) => event.pubkey).filter((pubkey) => !$profiles[pubkey]))];
         const foundProfiles = missingProfiles.length ? await fetchProfiles(missingProfiles, $relays).catch(() => []) : [];
-        if (foundProfiles.length) profiles.update((existing) => ({ ...existing, ...Object.fromEntries(foundProfiles.map((profile) => [profile.pubkey, profile])) }));
+        if (foundProfiles.length) profiles.update((existing) => mergeProfileRecords(existing, foundProfiles));
       }
     } finally {
       loadingIds = new Set([...loadingIds].filter((id) => !missing.includes(id)));
