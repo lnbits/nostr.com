@@ -1,36 +1,25 @@
 <script lang="ts">
   import '../styles.css';
-  import { onDestroy, onMount } from 'svelte';
+  import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { Bell, Home, Info, LogIn, Mail, Settings, UserRound } from '@lucide/svelte';
-  import { bootstrap, goHome, loginDialogOpen, relays, selectMessagePeer, session } from '$lib/stores/app';
+  import { bootstrap, goHome, loginDialogOpen, selectMessagePeer, session } from '$lib/stores/app';
   import Composer from '$lib/components/Composer.svelte';
   import LeftNav from '$lib/components/LeftNav.svelte';
   import LoginDialog from '$lib/components/LoginDialog.svelte';
   import RightRail from '$lib/components/RightRail.svelte';
   import ThemeToggle from '$lib/components/ThemeToggle.svelte';
-  import { startRelayStatusChecks } from '$lib/stores/relayStatus';
   import { appPath } from '$lib/paths';
 
   const rightRailStorageKey = 'nostr-right-rail-collapsed';
   let rightRailCollapsed = false;
-  let stopRelayStatusChecks = () => {};
-  let relayStatusTimer: ReturnType<typeof setTimeout> | undefined;
   $: embeddedPage = $page.route.id?.startsWith('/embed/') ?? false;
 
   onMount(() => {
     if (!embeddedPage) {
       void bootstrap();
-      relayStatusTimer = setTimeout(() => {
-        stopRelayStatusChecks = startRelayStatusChecks(relays);
-      }, 1500);
       rightRailCollapsed = localStorage.getItem(rightRailStorageKey) === 'true';
     }
-  });
-
-  onDestroy(() => {
-    clearTimeout(relayStatusTimer);
-    stopRelayStatusChecks();
   });
 
   function toggleRightRail() {

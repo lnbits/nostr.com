@@ -45,12 +45,13 @@ function decodePng(buffer) {
   const bitDepth = header[8];
   const colorType = header[9];
   const interlace = header[12];
-  if (bitDepth !== 8 || colorType !== 6 || interlace !== 0) throw new Error(`${sourcePath} must be an 8-bit non-interlaced RGBA PNG.`);
+  if (bitDepth !== 8 || ![2, 3, 6].includes(colorType) || interlace !== 0) throw new Error(`${sourcePath} must be an 8-bit non-interlaced RGB, indexed, or RGBA PNG.`);
 
   const compressed = Buffer.concat(chunks.filter((chunk) => chunk.type === 'IDAT').map((chunk) => chunk.data));
   const raw = zlib.inflateSync(compressed);
-  const stride = width * 4;
-  const pixels = Buffer.alloc(width * height * 4);
+  const channels = colorType === 6 ? 4 : colorType === 2 ? 3 : 1;
+  const stride = width * channels;
+  const unfiltered = Buffer.alloc(width * height * channels);
   let inputOffset = 0;
   let outputOffset = 0;
   let previous = Buffer.alloc(stride);
@@ -62,9 +63,9 @@ function decodePng(buffer) {
     inputOffset += stride;
 
     for (let x = 0; x < stride; x += 1) {
-      const left = x >= 4 ? scanline[x - 4] : 0;
+      const left = x >= channels ? scanline[x - channels] : 0;
       const up = previous[x];
-      const upLeft = x >= 4 ? previous[x - 4] : 0;
+      const upLeft = x >= channels ? previous[x - channels] : 0;
       if (filter === 1) scanline[x] = (scanline[x] + left) & 255;
       else if (filter === 2) scanline[x] = (scanline[x] + up) & 255;
       else if (filter === 3) scanline[x] = (scanline[x] + Math.floor((left + up) / 2)) & 255;
@@ -79,12 +80,39 @@ function decodePng(buffer) {
       }
     }
 
-    scanline.copy(pixels, outputOffset);
+    scanline.copy(unfiltered, outputOffset);
     previous = scanline;
     outputOffset += stride;
   }
 
+  const pixels = colorType === 6 ? unfiltered : expandToRgba(unfiltered, width, height, colorType, chunks);
   return { width, height, pixels };
+}
+
+function expandToRgba(source, width, height, colorType, chunks) {
+  const pixels = Buffer.alloc(width * height * 4);
+  if (colorType === 2) {
+    for (let i = 0, o = 0; i < source.length; i += 3, o += 4) {
+      pixels[o] = source[i];
+      pixels[o + 1] = source[i + 1];
+      pixels[o + 2] = source[i + 2];
+      pixels[o + 3] = 255;
+    }
+    return pixels;
+  }
+
+  const palette = chunks.find((chunk) => chunk.type === 'PLTE')?.data;
+  if (!palette) throw new Error(`${sourcePath} is indexed but has no palette.`);
+  const alpha = chunks.find((chunk) => chunk.type === 'tRNS')?.data ?? Buffer.alloc(0);
+  for (let i = 0, o = 0; i < source.length; i += 1, o += 4) {
+    const index = source[i];
+    const paletteOffset = index * 3;
+    pixels[o] = palette[paletteOffset] ?? 0;
+    pixels[o + 1] = palette[paletteOffset + 1] ?? 0;
+    pixels[o + 2] = palette[paletteOffset + 2] ?? 0;
+    pixels[o + 3] = alpha[index] ?? 255;
+  }
+  return pixels;
 }
 
 function resizeCover(image, size) {

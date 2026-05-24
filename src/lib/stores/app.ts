@@ -4,8 +4,10 @@ import { writable } from 'svelte/store';
 import { getCachedEvents, getCachedHashtagEvents, getCachedProfiles } from '$lib/nostr/cache';
 import { defaultCustomFeedSettings, defaultGuestNip05, defaultRelays, keywordsForInterests } from '$lib/nostr/config';
 import { appPath } from '$lib/paths';
+import { markRelaysOnline, syncRelayStatus } from '$lib/stores/relayStatus';
 import { mergeDirectMessages } from './directMessages';
 import {
+  activeRelayUrls,
   createGuestSession,
   fetchDirectMessages,
   fetchContactListDetails,
@@ -109,6 +111,7 @@ const pendingRepostToggles = new Set<string>();
 
 relays.subscribe((value) => {
   currentRelays = value;
+  syncRelayStatus(value);
   liveStatsKey = '';
   if (visibleStatIds.size) scheduleVisibleStatsSubscription();
 });
@@ -171,6 +174,7 @@ export async function refreshFeed(mode = currentMode) {
   try {
     const nextEvents = filterMutedEvents(await fetchFeed(fetchMode, currentRelays, currentFollows, effectiveFeedSettings(fetchMode), { limit: initialFeedLimit, hashtag: currentHashtag }));
     if (nextEvents.length) {
+      markRelaysOnline(activeRelayUrls(currentRelays, 'read'));
       events.set(nextEvents);
       oldestFeedTimestamp = getOldestTimestamp(nextEvents);
       void refreshEventStats(nextEvents.map((event) => event.id));
@@ -262,6 +266,7 @@ export async function loadNewerFeed() {
     const existingIds = new Set(getStoreSnapshot(events).map((event) => event.id));
     const freshEvents = nextEvents.filter((event) => !existingIds.has(event.id));
     if (!freshEvents.length) return [];
+    markRelaysOnline(activeRelayUrls(currentRelays, 'read'));
     events.update((existing) => {
       const merged = mergeEvents(freshEvents, existing);
       oldestFeedTimestamp = getOldestTimestamp(feedEventsForActiveHashtag(merged));
@@ -437,6 +442,7 @@ export async function loadMoreFeed(force = false) {
       hasMoreFeed.set(true);
       return;
     }
+    markRelaysOnline(activeRelayUrls(currentRelays, 'read'));
     hasMoreFeed.set(true);
     const nextOldest = getOldestTimestamp(freshEvents);
     if (nextOldest !== undefined) oldestFeedTimestamp = currentOldest === undefined ? nextOldest : Math.min(currentOldest, nextOldest);
