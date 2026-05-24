@@ -33,6 +33,10 @@
       description: 'Relay information documents, used to understand relay capabilities, limits, and supported NIPs.'
     },
     {
+      id: 'NIP-15',
+      description: 'End-of-stored-events notices, used by relay queries to know when the initial batch of stored events has finished.'
+    },
+    {
       id: 'NIP-17',
       description: 'Modern private messages, read and published as gift-wrapped events when the active signer can handle NIP-44 payloads.'
     },

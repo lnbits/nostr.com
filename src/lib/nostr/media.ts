@@ -223,14 +223,26 @@ function parseImeta(tag: string[]) {
     const [key, ...rest] = field.split(' ');
     const value = rest.join(' ').trim();
     if (!value) continue;
-    if (key === 'url') metadata.url = value;
+    if (key === 'url') metadata.url = safeHttpUrl(value);
     if (key === 'alt') metadata.alt = value;
     if (key === 'blurhash') metadata.blurhash = value;
     if (key === 'dim') metadata.dim = value;
-    if (key === 'fallback') metadata.fallbackUrls = [...(metadata.fallbackUrls ?? []), value];
+    if (key === 'fallback') {
+      const fallbackUrl = safeHttpUrl(value);
+      if (fallbackUrl) metadata.fallbackUrls = [...(metadata.fallbackUrls ?? []), fallbackUrl];
+    }
   }
   if (metadata.url) metadata.type = isVideoUrl(metadata.url) ? 'video' : 'image';
   return metadata;
+}
+
+function safeHttpUrl(value: string) {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.toString() : '';
+  } catch {
+    return '';
+  }
 }
 
 function hrefForNostrReference(value: string) {

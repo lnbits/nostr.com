@@ -40,6 +40,8 @@
   $: shortNpub = npub ? `${npub.slice(0, 12)}...${npub.slice(-8)}` : '';
   $: displayName = profile?.display_name || profile?.name || (isOwnProfile ? '' : 'Nostr profile');
   $: avatarInitial = (profile?.display_name || profile?.name || npub || pubkey || '?').slice(0, 1).toUpperCase();
+  $: websiteHref = safeHttpUrl(profile?.website);
+  $: websiteLabel = websiteHref.replace(/^https?:\/\//, '').replace(/\/$/, '');
 
   let saving = false;
   let copied = false;
@@ -264,6 +266,16 @@
       return value;
     }
   }
+
+  function safeHttpUrl(value: string | undefined) {
+    if (!value) return '';
+    try {
+      const parsed = new URL(value.startsWith('http://') || value.startsWith('https://') ? value : `https://${value}`);
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.toString() : '';
+    } catch {
+      return '';
+    }
+  }
 </script>
 
 <div class="profile-page">
@@ -316,7 +328,7 @@
 
         <div class="profile-meta">
           {#if profile?.nip05}<span>{profile.nip05}</span>{/if}
-          {#if profile?.website}<a href={profile.website} target="_blank" rel="noreferrer"><Globe2 size={16} /> {profile.website.replace(/^https?:\/\//, '')}</a>{/if}
+          {#if websiteHref}<a href={websiteHref} target="_blank" rel="noreferrer"><Globe2 size={16} /> {websiteLabel}</a>{/if}
           {#if profile?.lud16}<span>{profile.lud16}</span>{/if}
         </div>
       </div>
