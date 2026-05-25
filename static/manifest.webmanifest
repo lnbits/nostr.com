@@ -1,7 +1,7 @@
 {
   "name": "Nostr Social",
   "short_name": "Nostr",
-  "description": "A mobile-ready Nostr social client.",
+  "description": "Controlled by users, not platforms.",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
