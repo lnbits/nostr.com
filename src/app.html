@@ -9,10 +9,12 @@
         const base = '%sveltekit.assets%';
         const embedded = location.pathname.startsWith(`${base}/embed/`);
         const native = window.Capacitor?.isNativePlatform?.();
-        const theme = native || embedded ? 'dark' : localStorage.getItem('nostr-theme');
-        document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : 'light';
+        const theme = embedded ? 'dark' : localStorage.getItem('nostr-theme');
+        const resolvedTheme = theme === 'dark' ? 'dark' : 'light';
+        document.documentElement.dataset.theme = resolvedTheme;
+        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', resolvedTheme === 'dark' ? '#0f172a' : '#fffdf8');
         if (native) document.documentElement.classList.add('native-shell');
-        if (!native && !embedded && theme !== 'dark' && theme !== 'light') localStorage.setItem('nostr-theme', 'light');
+        if (!embedded && theme !== 'dark' && theme !== 'light') localStorage.setItem('nostr-theme', 'light');
       } catch {
         document.documentElement.dataset.theme = 'light';
       }

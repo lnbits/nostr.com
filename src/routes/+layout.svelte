@@ -10,6 +10,7 @@
   import RightRail from '$lib/components/RightRail.svelte';
   import ThemeToggle from '$lib/components/ThemeToggle.svelte';
   import { appPath } from '$lib/paths';
+  import { themeMode, type ThemeMode } from '$lib/stores/theme';
 
   const rightRailStorageKey = 'nostr-right-rail-collapsed';
   let rightRailCollapsed = false;
@@ -25,11 +26,13 @@
   }
 
   onMount(() => {
+    let stopNativeChrome: (() => void) | undefined;
     if (!embeddedPage) {
       void bootstrap();
       rightRailCollapsed = localStorage.getItem(rightRailStorageKey) === 'true';
-      void configureNativeChrome();
+      void configureNativeChrome().then((cleanup) => (stopNativeChrome = cleanup));
     }
+    return () => stopNativeChrome?.();
   });
 
   function toggleRightRail() {
@@ -38,12 +41,24 @@
   }
 
   async function configureNativeChrome() {
-    const [{ Capacitor }, { StatusBar, Style }] = await Promise.all([import('@capacitor/core'), import('@capacitor/status-bar')]);
+    const [{ Capacitor, registerPlugin }, { StatusBar, Style }] = await Promise.all([import('@capacitor/core'), import('@capacitor/status-bar')]);
     if (!Capacitor.isNativePlatform()) return;
 
     document.documentElement.classList.add('native-shell');
     await StatusBar.setOverlaysWebView({ overlay: false }).catch(() => undefined);
-    await StatusBar.setStyle({ style: Style.Default }).catch(() => undefined);
+    const NavigationBar = registerPlugin('NavigationBar') as {
+      setColor?: (options: { color: string; darkButtons?: boolean }) => Promise<void>;
+      setNavigationBarColor?: (options: { color: string; darkButtons?: boolean }) => Promise<void>;
+    };
+
+    return themeMode.subscribe((mode) => {
+      const color = mode === 'dark' ? '#0f172a' : '#fffdf8';
+      void StatusBar.setStyle({ style: mode === 'dark' ? Style.Dark : Style.Light }).catch(() => undefined);
+      void StatusBar.setBackgroundColor({ color }).catch(() => undefined);
+      void (NavigationBar.setColor?.({ color, darkButtons: mode === 'light' }) ?? NavigationBar.setNavigationBarColor?.({ color, darkButtons: mode === 'light' }))?.catch(
+        () => undefined
+      );
+    });
   }
 </script>
 

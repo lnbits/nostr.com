@@ -9,10 +9,6 @@ const initialTheme = browser ? readThemeMode() : 'light';
 export const themeMode = writable<ThemeMode>(initialTheme);
 
 export function setThemeMode(mode: ThemeMode) {
-  if (isNativeShell()) {
-    themeMode.set('dark');
-    return;
-  }
   themeMode.set(mode);
 }
 
@@ -23,17 +19,13 @@ export function cycleThemeMode(mode: ThemeMode) {
 themeMode.subscribe((mode) => {
   if (!browser) return;
   document.documentElement.dataset.theme = mode;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', mode === 'dark' ? '#0f172a' : '#fffdf8');
   localStorage.setItem(storageKey, mode);
 });
 
 function readThemeMode(): ThemeMode {
-  if (isNativeShell()) return 'dark';
   const saved = localStorage.getItem(storageKey);
   if (saved === 'dark') return 'dark';
   if (saved !== 'light') localStorage.setItem(storageKey, 'light');
   return 'light';
-}
-
-function isNativeShell() {
-  return Boolean(browser && window.Capacitor?.isNativePlatform?.());
 }
