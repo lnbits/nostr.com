@@ -10,6 +10,7 @@
   import { createZapInvoice, loadZapInfo, type ZapInfo } from '$lib/nostr/zap';
   import { deleteNote, editedEvents, eventStats, filterByHashtag, likedEvents, mergeProfileRecords, muteAccount, profiles, reactToNote, refreshEventStats, relays, reportNote, repostedEvents, repostNote, session, startEdit, startReply, watchVisibleNoteStats } from '$lib/stores/app';
   import { appPath } from '$lib/paths';
+  import { pauseWhenHidden } from '$lib/actions/pauseWhenHidden';
   import QuotedNotePreview from './QuotedNotePreview.svelte';
 
   export let event: NostrEvent;
@@ -443,7 +444,7 @@
         {#each mediaAttachments as media}
           {#if media.type === 'video'}
             <!-- svelte-ignore a11y_media_has_caption -->
-            <video src={media.url} controls preload="metadata" playsinline title={media.alt}></video>
+            <video use:pauseWhenHidden src={media.url} controls preload="metadata" playsinline title={media.alt}></video>
           {:else}
             <button class="media-image-button" on:click={() => (openImage = { url: media.url, alt: media.alt })} aria-label="Open image">
               <img src={media.url} alt={media.alt ?? ''} loading="lazy" referrerpolicy="no-referrer" />

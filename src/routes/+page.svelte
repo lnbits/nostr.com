@@ -147,7 +147,8 @@
         await revealBufferedNewer(false);
         return;
       }
-      await loadNewerFeed();
+      const loaded = await loadNewerFeed();
+      if (loaded?.length) await revealBufferedNewer(false);
     } finally {
       pullingNewer = false;
     }

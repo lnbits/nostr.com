@@ -42,11 +42,11 @@ describe('app store helpers', () => {
 
   it('caps the in-memory feed after merging', () => {
     const authors = ['a'.repeat(64), 'b'.repeat(64), 'c'.repeat(64)];
-    const items = Array.from({ length: 245 }, (_, index) => authorEvent(`event-${index}`, index, authors[index % authors.length]));
+    const items = Array.from({ length: 605 }, (_, index) => authorEvent(`event-${index}`, index, authors[index % authors.length]));
 
     const merged = mergeEvents(items, []);
-    expect(merged).toHaveLength(240);
-    expect(merged[0].id).toBe('event-244');
+    expect(merged).toHaveLength(600);
+    expect(merged[0].id).toBe('event-604');
     expect(merged.at(-1)?.id).toBe('event-5');
   });
 });

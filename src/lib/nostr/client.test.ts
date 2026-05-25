@@ -111,6 +111,19 @@ describe('nostr client helpers', () => {
     ]);
   });
 
+  it('omits since from older paged feed filters', async () => {
+    const follows = ['c'.repeat(64)];
+    const base = { kinds: [1], limit: 10, until: 456 };
+
+    expect(await feedFiltersForMode('follow', base, follows, { friendsOfFriends: false, keywords: [], interests: [] }, undefined, [], { until: 456 })).toEqual([
+      { kinds: [1], limit: 10, until: 456, authors: follows }
+    ]);
+    expect(await feedFiltersForMode('custom', base, follows, { friendsOfFriends: false, keywords: ['art'], interests: [] }, undefined, [], { until: 456 })).toEqual([
+      { kinds: [1], limit: 8, until: 456, authors: follows },
+      { kinds: [1], limit: 2, until: 456, '#t': ['art'] }
+    ]);
+  });
+
   it('reserves part of global and custom feeds for hashtag keywords', async () => {
     const follows = ['c'.repeat(64)];
     const base = { kinds: [1], limit: 10 };

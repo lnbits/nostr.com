@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
+  import { onDestroy, onMount, tick } from 'svelte';
   import { ArrowLeft, Image as ImageIcon, Loader2, MessageSquareText, RefreshCw, Send, UserPlus } from '@lucide/svelte';
   import { nip19 } from 'nostr-tools';
   import {
@@ -9,14 +9,19 @@
     loadingMessages,
     loginDialogOpen,
     markMessagesSeen,
+    mergeProfileRecords,
     profiles,
+    relays,
     refreshMessages,
     resolveMessageRecipient,
     selectMessagePeer,
     sendDirectMessage,
     session
   } from '$lib/stores/app';
+  import { searchProfiles } from '$lib/nostr/client';
   import { extractMediaAttachments, extractQuotedNoteReferences, parseNoteText } from '$lib/nostr/media';
+  import { appPath } from '$lib/paths';
+  import { pauseWhenHidden } from '$lib/actions/pauseWhenHidden';
   import type { DirectMessage, MediaAttachment, NostrEvent, Profile } from '$lib/nostr/types';
   import QuotedNotePreview from './QuotedNotePreview.svelte';
 
@@ -27,16 +32,26 @@
   let error = '';
   let chatScroll: HTMLDivElement;
   let openImage: { url: string; alt?: string } | null = null;
+  let remoteProfiles: Profile[] = [];
+  let searchingProfiles = false;
+  let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
   $: conversations = groupMessages($directMessages);
   $: activePeer = $activeMessagePeer;
   $: activeMessages = activePeer ? [...($directMessages.filter((message) => message.peer === activePeer))].sort((a, b) => a.created_at - b.created_at) : [];
   $: followChoices = $follows.map((pubkey) => ({ pubkey, label: profileName(pubkey, $profiles[pubkey]) })).sort((a, b) => a.label.localeCompare(b.label));
   $: activeProfile = activePeer ? $profiles[activePeer] : undefined;
+  $: cleanRecipientInput = recipientInput.trim();
+  $: localProfiles = profileSuggestions(cleanRecipientInput, Object.values($profiles));
+  $: recipientSuggestions = mergeProfiles(localProfiles, remoteProfiles).slice(0, 6);
 
   onMount(() => {
     markMessagesSeen();
     void refreshMessages();
+  });
+
+  onDestroy(() => {
+    clearTimeout(searchTimer);
   });
 
   $: if ($session && $directMessages.length) markMessagesSeen();
@@ -58,19 +73,51 @@
   }
 
   async function startConversation() {
-    if (!recipientInput.trim()) return;
+    if (!cleanRecipientInput) return;
     resolving = true;
     error = '';
     try {
-      const pubkey = await resolveMessageRecipient(recipientInput);
+      const pubkey = await resolveMessageRecipient(cleanRecipientInput).catch((exception) => {
+        if (recipientSuggestions[0]) return recipientSuggestions[0].pubkey;
+        throw exception;
+      });
+      selectMessagePeer(pubkey);
       recipientInput = profileName(pubkey, $profiles[pubkey]);
+      remoteProfiles = [];
       await tick();
       chatScroll?.scrollTo({ top: chatScroll.scrollHeight });
     } catch (exception) {
-      error = exception instanceof Error ? exception.message : 'Could not resolve that recipient.';
+      error = exception instanceof Error ? exception.message : 'Could not find that profile.';
     } finally {
       resolving = false;
     }
+  }
+
+  function scheduleProfileSearch() {
+    clearTimeout(searchTimer);
+    remoteProfiles = [];
+    if (cleanRecipientInput.replace(/^@/, '').length < 2) return;
+    searchTimer = setTimeout(() => void runProfileSearch(cleanRecipientInput), 260);
+  }
+
+  async function runProfileSearch(value: string) {
+    searchingProfiles = true;
+    try {
+      const found = await searchProfiles(value, $relays).catch(() => []);
+      if (value === cleanRecipientInput) {
+        remoteProfiles = found;
+        if (found.length) profiles.update((existing) => mergeProfileRecords(existing, found));
+      }
+    } finally {
+      searchingProfiles = false;
+    }
+  }
+
+  function chooseProfile(profile: Profile) {
+    selectMessagePeer(profile.pubkey);
+    recipientInput = profileName(profile.pubkey, profile);
+    remoteProfiles = [];
+    clearTimeout(searchTimer);
   }
 
   async function sendMessage() {
@@ -102,6 +149,32 @@
 
   function profileName(pubkey: string, profile?: Profile) {
     return profile?.display_name || profile?.name || shortNpub(pubkey);
+  }
+
+  function profileSubline(profile: Profile) {
+    return profile.nip05 || shortNpub(profile.pubkey);
+  }
+
+  function profileSuggestions(value: string, items: Profile[]) {
+    const needle = value.trim().replace(/^@/, '').toLowerCase();
+    if (needle.length < 2) return [];
+    return items
+      .filter((profile) => profileMatches(profile, needle))
+      .sort((a, b) => profileName(a.pubkey, a).localeCompare(profileName(b.pubkey, b)));
+  }
+
+  function profileMatches(profile: Profile, needle: string) {
+    return [profile.name, profile.display_name, profile.nip05, profile.pubkey].filter(isString).some((value) => value.toLowerCase().includes(needle));
+  }
+
+  function mergeProfiles(first: Profile[], second: Profile[]) {
+    const byPubkey = new Map<string, Profile>();
+    [...first, ...second].forEach((profile) => byPubkey.set(profile.pubkey, profile));
+    return [...byPubkey.values()];
+  }
+
+  function isString(value: unknown): value is string {
+    return typeof value === 'string' && value.trim().length > 0;
   }
 
   function shortNpub(pubkey: string) {
@@ -166,9 +239,33 @@
         <section class="dm-inbox" aria-label="Message inbox">
           <div class="dm-inbox-controls">
             <form class="dm-recipient-form" on:submit|preventDefault={startConversation}>
-              <label>
-                <input bind:value={recipientInput} placeholder="npub or name@example.com" autocomplete="off" />
-              </label>
+              <div class="dm-recipient-search">
+                <label>
+                  <input bind:value={recipientInput} on:input={scheduleProfileSearch} placeholder="Search name, npub, or NIP-05" autocomplete="off" />
+                </label>
+                {#if cleanRecipientInput.length >= 2 && (recipientSuggestions.length || searchingProfiles)}
+                  <div class="dm-search-results" aria-label="Profile suggestions">
+                    {#each recipientSuggestions as profile (profile.pubkey)}
+                      <button type="button" on:click={() => chooseProfile(profile)}>
+                        <span class="avatar mini">
+                          {#if profile.picture}
+                            <img src={profile.picture} alt="" loading="lazy" referrerpolicy="no-referrer" />
+                          {:else}
+                            <span>{profileName(profile.pubkey, profile).slice(0, 1).toUpperCase()}</span>
+                          {/if}
+                        </span>
+                        <span>
+                          <strong>{profileName(profile.pubkey, profile)}</strong>
+                          <small>{profileSubline(profile)}</small>
+                        </span>
+                      </button>
+                    {/each}
+                    {#if searchingProfiles}
+                      <div class="dm-search-empty"><Loader2 size={16} class="spin" /> Searching profiles</div>
+                    {/if}
+                  </div>
+                {/if}
+              </div>
               <button type="submit" disabled={resolving || !recipientInput.trim()}>
                 {#if resolving}<Loader2 size={17} class="spin" />{:else}<UserPlus size={17} />{/if}
                 Open
@@ -215,17 +312,19 @@
             <button class="dm-back" aria-label="Back to messages" on:click={() => selectMessagePeer('')}>
               <ArrowLeft size={18} />
             </button>
-            <span class="avatar">
-              {#if activeProfile?.picture}
-                <img src={activeProfile.picture} alt="" loading="lazy" referrerpolicy="no-referrer" />
-              {:else}
-                <span>{avatarLetter(activePeer, activeProfile)}</span>
-              {/if}
-            </span>
-            <div>
-              <strong>{profileName(activePeer, activeProfile)}</strong>
-              <span>{shortNpub(activePeer)}</span>
-            </div>
+            <a class="dm-chat-profile" href={appPath(`/profile/${activePeer}`)} aria-label={`${profileName(activePeer, activeProfile)} profile`}>
+              <span class="avatar">
+                {#if activeProfile?.picture}
+                  <img src={activeProfile.picture} alt="" loading="lazy" referrerpolicy="no-referrer" />
+                {:else}
+                  <span>{avatarLetter(activePeer, activeProfile)}</span>
+                {/if}
+              </span>
+              <span>
+                <strong>{profileName(activePeer, activeProfile)}</strong>
+                <span>{shortNpub(activePeer)}</span>
+              </span>
+            </a>
           </header>
 
           <div class="dm-messages" bind:this={chatScroll}>
@@ -260,7 +359,7 @@
                       {#each media as item}
                         {#if item.type === 'video'}
                           <!-- svelte-ignore a11y_media_has_caption -->
-                          <video src={item.url} controls preload="metadata" playsinline title={item.alt}></video>
+                          <video use:pauseWhenHidden src={item.url} controls preload="metadata" playsinline title={item.alt}></video>
                         {:else}
                           <button type="button" on:click={() => (openImage = { url: item.url, alt: item.alt })} aria-label="Open image">
                             <img src={item.url} alt={item.alt ?? ''} loading="lazy" referrerpolicy="no-referrer" />

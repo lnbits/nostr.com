@@ -41,11 +41,11 @@ describe('IndexedDB cache', () => {
   });
 
   it('prunes old events after the cache reaches its storage cap', async () => {
-    await cacheEvents(Array.from({ length: 605 }, (_, index) => event(`event-${index}`, index)));
+    await cacheEvents(Array.from({ length: 2405 }, (_, index) => event(`event-${index}`, index)));
 
-    const cached = await getCachedEvents(700);
-    expect(cached).toHaveLength(600);
-    expect(cached[0].id).toBe('event-604');
+    const cached = await getCachedEvents(2500);
+    expect(cached).toHaveLength(2400);
+    expect(cached[0].id).toBe('event-2404');
     expect(cached.at(-1)?.id).toBe('event-5');
   });
 
@@ -67,13 +67,13 @@ describe('IndexedDB cache', () => {
 
   it('caps profile event indexes independently of the global event cache', async () => {
     const alice = 'a'.repeat(64);
-    await cacheProfileEvents(Array.from({ length: 605 }, (_, index) => event(`alice-${index}`, index, alice)));
+    await cacheProfileEvents(Array.from({ length: 1205 }, (_, index) => event(`alice-${index}`, index, alice)));
 
-    const cached = await getCachedProfileEvents(alice, 700);
-    expect(cached).toHaveLength(600);
-    expect(cached[0].id).toBe('alice-604');
+    const cached = await getCachedProfileEvents(alice, 1300);
+    expect(cached).toHaveLength(1200);
+    expect(cached[0].id).toBe('alice-1204');
     expect(cached.at(-1)?.id).toBe('alice-5');
-  });
+  }, 10_000);
 
   it('keeps a separate ordered hashtag event cache from tags and content', async () => {
     await cacheEvents([
@@ -87,10 +87,10 @@ describe('IndexedDB cache', () => {
   });
 
   it('recycles the hashtag cache across all tags instead of capping each tag independently', async () => {
-    await cacheEvents(Array.from({ length: 605 }, (_, index) => event(`tagged-${index}`, index, 'a'.repeat(64), `hello #topic${index}`)));
+    await cacheEvents(Array.from({ length: 1205 }, (_, index) => event(`tagged-${index}`, index, 'a'.repeat(64), `hello #topic${index}`)));
 
     expect(await getCachedHashtagEvents('topic0')).toEqual([]);
-    expect((await getCachedHashtagEvents('topic604')).map((item) => item.id)).toEqual(['tagged-604']);
+    expect((await getCachedHashtagEvents('topic1204')).map((item) => item.id)).toEqual(['tagged-1204']);
     expect((await getCachedHashtagEvents('topic5')).map((item) => item.id)).toEqual(['tagged-5']);
   });
 });

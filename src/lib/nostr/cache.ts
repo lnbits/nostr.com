@@ -2,9 +2,9 @@ import type { NostrEvent, Profile } from './types';
 
 const DB_NAME = 'nostr-social-cache';
 const DB_VERSION = 4;
-const MAX_CACHED_EVENTS = 600;
-const MAX_CACHED_PROFILE_EVENTS = 600;
-const MAX_CACHED_HASHTAG_EVENTS = 600;
+const MAX_CACHED_EVENTS = 2400;
+const MAX_CACHED_PROFILE_EVENTS = 1200;
+const MAX_CACHED_HASHTAG_EVENTS = 1200;
 
 interface CachedProfileEvent {
   cacheKey: string;

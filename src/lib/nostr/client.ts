@@ -438,16 +438,16 @@ export function feedFiltersForMode(
   base: Filter,
   follows: string[] = [],
   settings: CustomFeedSettings = { friendsOfFriends: true, keywords: [], interests: [] },
-  since: number,
+  since?: number,
   relayUrls: string[] = [],
   options: FeedQueryOptions = {}
 ) {
   const tag = normalizedHashtag(options.hashtag);
   const taggedBase = tag ? { ...base, '#t': [tag] } : base;
-  if (mode === 'follow' && follows.length) return [{ ...taggedBase, authors: follows, since }];
+  if (mode === 'follow' && follows.length) return [withOptionalSince({ ...taggedBase, authors: follows }, since)];
   if (mode === 'custom' && follows.length) return customFeedFilters(taggedBase, follows, settings, since, relayUrls);
   if (mode === 'global' && hashtagKeywords(settings).length) return globalFeedFilters(taggedBase, settings, since);
-  return [{ ...taggedBase, since }];
+  return [withOptionalSince(taggedBase, since)];
 }
 
 export async function fetchFeed(
@@ -461,7 +461,7 @@ export async function fetchFeed(
 
   const relayUrls = activeRelayUrls(relays, 'read');
   const base: Filter = { kinds: [1], limit: options.limit ?? 24 };
-  const since = options.since ?? Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 7;
+  const since = options.since ?? (options.until ? undefined : Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 7);
   if (options.until) base.until = options.until;
   const filters = await feedFiltersForMode(mode, base, follows, settings, since, relayUrls, options);
 
@@ -1196,32 +1196,36 @@ function normalizedHashtag(tag?: string) {
   return clean && /^[a-z0-9_]{2,64}$/.test(clean) ? clean : '';
 }
 
-async function customFeedFilters(base: Filter, follows: string[], settings: CustomFeedSettings, since: number, relayUrls: string[]) {
+async function customFeedFilters(base: Filter, follows: string[], settings: CustomFeedSettings, since: number | undefined, relayUrls: string[]) {
   const total = base.limit ?? 24;
   const feedHashtags = hashtagKeywords(settings);
   const hashtagLimit = feedHashtags.length ? Math.max(1, Math.round(total * 0.2)) : 0;
   const friendsOfFriends = settings.friendsOfFriends ? await fetchFriendsOfFriends(follows, relayUrls) : [];
   const friendsOfFriendsLimit = friendsOfFriends.length ? Math.max(1, Math.round(total * 0.2)) : 0;
   const followLimit = Math.max(1, total - hashtagLimit - friendsOfFriendsLimit);
-  const filters: Filter[] = [{ ...base, authors: sampleAuthors(follows, followLimit), limit: followLimit, since }];
+  const filters: Filter[] = [withOptionalSince({ ...base, authors: sampleAuthors(follows, followLimit), limit: followLimit }, since)];
 
   if (friendsOfFriendsLimit) {
-    filters.push({ ...base, authors: sampleAuthors(friendsOfFriends, friendsOfFriendsLimit), limit: friendsOfFriendsLimit, since });
+    filters.push(withOptionalSince({ ...base, authors: sampleAuthors(friendsOfFriends, friendsOfFriendsLimit), limit: friendsOfFriendsLimit }, since));
   }
 
-  if (feedHashtags.length) filters.push({ ...base, '#t': feedHashtags, limit: hashtagLimit, since });
+  if (feedHashtags.length) filters.push(withOptionalSince({ ...base, '#t': feedHashtags, limit: hashtagLimit }, since));
   return filters;
 }
 
-function globalFeedFilters(base: Filter, settings: CustomFeedSettings, since: number) {
+function globalFeedFilters(base: Filter, settings: CustomFeedSettings, since?: number) {
   const total = base.limit ?? 24;
   const hashtagLimit = Math.max(1, Math.round(total * 0.3));
   const generalLimit = Math.max(1, total - hashtagLimit);
   const feedHashtags = hashtagKeywords(settings);
   return [
-    { ...base, limit: generalLimit, since },
-    { ...base, '#t': feedHashtags, limit: hashtagLimit, since }
+    withOptionalSince({ ...base, limit: generalLimit }, since),
+    withOptionalSince({ ...base, '#t': feedHashtags, limit: hashtagLimit }, since)
   ];
+}
+
+function withOptionalSince(filter: Filter, since?: number) {
+  return since === undefined ? filter : { ...filter, since };
 }
 
 function hashtagKeywords(settings: CustomFeedSettings) {
