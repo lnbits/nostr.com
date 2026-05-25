@@ -120,7 +120,7 @@ describe('nostr client helpers', () => {
     ]);
     expect(await feedFiltersForMode('custom', base, follows, { friendsOfFriends: false, keywords: ['art'], interests: [] }, undefined, [], { until: 456 })).toEqual([
       { kinds: [1], limit: 8, until: 456, authors: follows },
-      { kinds: [1], limit: 2, until: 456, '#t': ['art'] }
+      { kinds: [1], limit: 2, until: 456, search: 'art' }
     ]);
   });
 
@@ -142,11 +142,12 @@ describe('nostr client helpers', () => {
   it('keeps custom feed mostly follows with optional hashtag and friends-of-friends slices', async () => {
     const follows = ['c'.repeat(64)];
     const base = { kinds: [1], limit: 10 };
-    const settings = { friendsOfFriends: true, keywords: ['#sports', 'plain text ignored for custom'], interests: [] };
+    const settings = { friendsOfFriends: true, keywords: ['#sports', 'cycling'], interests: [] };
 
     expect(await feedFiltersForMode('custom', base, follows, settings, 123, [])).toEqual([
       { kinds: [1], limit: 8, authors: follows, since: 123 },
-      { kinds: [1], limit: 2, '#t': ['sports'], since: 123 }
+      { kinds: [1], limit: 1, '#t': ['sports'], since: 123 },
+      { kinds: [1], limit: 1, search: 'cycling', since: 123 }
     ]);
   });
 

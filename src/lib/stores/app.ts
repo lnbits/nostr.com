@@ -12,6 +12,7 @@ import {
   fetchDirectMessages,
   fetchContactListDetails,
   fetchFeed,
+  fetchFriendsOfFriends,
   fetchEventStats,
   fetchMuteList,
   fetchProfiles,
@@ -119,6 +120,9 @@ let currentDirectMessages: DirectMessage[] = [];
 let currentNotificationSeenAt = initialSession && browser ? readLastSeen(notificationSeenStorageKey, initialSession.pubkey) : 0;
 let currentMessageSeenAt = initialSession && browser ? readLastSeen(messageSeenStorageKey, initialSession.pubkey) : 0;
 let currentContactItems: ContactListItem[] = [];
+let currentFriendsOfFriends: string[] = [];
+let friendsOfFriendsKey = '';
+let friendsOfFriendsToken = 0;
 let currentDeletedEventIds = new Set<string>();
 let hasExplicitFeedModeSelection = false;
 let oldestFeedTimestamp: number | undefined;
@@ -219,6 +223,7 @@ export async function refreshFeed(mode = currentMode, options: { replaceVisible?
   }
 
   try {
+    if (fetchMode === 'custom') await refreshFriendsOfFriendsAuthors();
     const newestTimestamp = getNewestTimestamp([...visibleEvents, ...getStoreSnapshot(pendingNewerEvents)]);
     const nextEvents = filterMutedEvents(
       await fetchFeed(fetchMode, currentRelays, currentFollows, effectiveFeedSettings(fetchMode), {
@@ -247,6 +252,7 @@ export async function refreshFeed(mode = currentMode, options: { replaceVisible?
 }
 
 async function hydrateCachedFeed(mode = currentMode) {
+  if (mode === 'custom') await refreshFriendsOfFriendsAuthors();
   const cachedEvents = await getCachedFeedCandidates(mode, cachedFeedBufferLimit);
   const clean = cachedEventsForMode(mode, cachedEvents, cachedFeedBufferLimit);
   if (!clean.length) return;
@@ -263,15 +269,23 @@ function cachedEventsForMode(mode: FeedMode, items: NostrEvent[], limit = initia
   return eventsForFeedMode(mode, items).slice(0, limit);
 }
 
-export function displayEventsForFeedMode(mode: FeedMode, items: NostrEvent[], follows = currentFollows, settings = currentSettings) {
-  return eventsForFeedMode(mode, items, follows, settings);
+export function displayEventsForFeedMode(mode: FeedMode, items: NostrEvent[], follows = currentFollows, settings = currentSettings, friendsOfFriends = currentFriendsOfFriends) {
+  return eventsForFeedMode(mode, items, follows, settings, friendsOfFriends);
 }
 
-function eventsForFeedMode(mode: FeedMode, items: NostrEvent[], follows = currentFollows, settings = currentSettings) {
+function eventsForFeedMode(mode: FeedMode, items: NostrEvent[], follows = currentFollows, settings = currentSettings, friendsOfFriends = currentFriendsOfFriends) {
   if (mode === 'follow') return items.filter((event) => follows.includes(event.pubkey));
   if (mode === 'custom' && follows.length) {
     const feedHashtags = feedKeywordHashtags(settings);
-    return items.filter((event) => follows.includes(event.pubkey) || feedHashtags.some((tag) => eventHasHashtag(event, tag)));
+    const friendAuthors = settings.friendsOfFriends ? new Set(friendsOfFriends) : new Set<string>();
+    const feedKeywords = feedKeywordTerms(settings);
+    return items.filter(
+      (event) =>
+        follows.includes(event.pubkey) ||
+        friendAuthors.has(event.pubkey) ||
+        feedHashtags.some((tag) => eventHasHashtag(event, tag)) ||
+        feedKeywords.some((keyword) => eventMatchesKeyword(event, keyword))
+    );
   }
   return items;
 }
@@ -322,6 +336,7 @@ export async function loadNewerFeed() {
 
   loadingNewerFeed.set(true);
   try {
+    if (fetchMode === 'custom') await refreshFriendsOfFriendsAuthors();
     const nextEvents = filterMutedEvents(await fetchFeed(fetchMode, currentRelays, currentFollows, effectiveFeedSettings(fetchMode), {
       limit: initialFeedLimit,
       since: newestTimestamp + 1,
@@ -430,6 +445,7 @@ async function restartLiveFeed(mode = currentMode, newestTimestamp?: number) {
   liveFeedToken = token;
 
   if ((mode === 'follow' || mode === 'custom') && !currentFollows.length) return;
+  if (mode === 'custom') await refreshFriendsOfFriendsAuthors();
 
   const sub = await subscribeFeed(
     mode,
@@ -481,6 +497,7 @@ export async function loadMoreFeed(force = false) {
 
   loadingMoreFeed.set(true);
   try {
+    if (fetchMode === 'custom') await refreshFriendsOfFriendsAuthors();
     const revealedEvents = revealCachedOlderFeed();
     const freshEvents = await fetchOlderFeedPage(fetchMode, olderFetchTarget);
     if (!freshEvents.length) {
@@ -1057,7 +1074,48 @@ function eventHasHashtag(event: NostrEvent, tag: string) {
 }
 
 function feedKeywordHashtags(settings: CustomFeedSettings) {
-  return [...new Set(settings.keywords.map((keyword) => keyword.trim().replace(/^#/, '').toLowerCase()).filter((keyword) => /^[a-z0-9_]{2,64}$/.test(keyword)))];
+  return [
+    ...new Set(
+      settings.keywords
+        .filter((keyword) => keyword.trim().startsWith('#'))
+        .map((keyword) => keyword.trim().replace(/^#/, '').toLowerCase())
+        .filter((keyword) => /^[a-z0-9_]{2,64}$/.test(keyword))
+    )
+  ];
+}
+
+function feedKeywordTerms(settings: CustomFeedSettings) {
+  return [
+    ...new Set(
+      settings.keywords
+        .filter((keyword) => !keyword.trim().startsWith('#'))
+        .map((keyword) => keyword.trim().toLowerCase())
+        .filter((keyword) => /^[a-z0-9][a-z0-9 _-]{1,63}$/.test(keyword))
+    )
+  ];
+}
+
+function eventMatchesKeyword(event: NostrEvent, keyword: string) {
+  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i').test(event.content);
+}
+
+async function refreshFriendsOfFriendsAuthors() {
+  if (!currentSettings.friendsOfFriends || !currentFollows.length) {
+    currentFriendsOfFriends = [];
+    friendsOfFriendsKey = '';
+    return;
+  }
+
+  const relayUrls = activeRelayUrls(currentRelays, 'read');
+  const nextKey = `${currentFollows.join(',')}|${relayUrls.join(',')}`;
+  if (nextKey === friendsOfFriendsKey) return;
+
+  const token = ++friendsOfFriendsToken;
+  friendsOfFriendsKey = nextKey;
+  const next = await fetchFriendsOfFriends(currentFollows, relayUrls).catch(() => []);
+  if (token !== friendsOfFriendsToken) return;
+  currentFriendsOfFriends = next;
 }
 
 async function hydrateMissingProfiles(nextEvents: NostrEvent[], limit = 40) {

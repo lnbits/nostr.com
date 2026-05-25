@@ -7,6 +7,7 @@ import { adultDomains, adultHashtags, defaultGuestNip05, defaultRelays, mutedWor
 import type { ContactListDetails, ContactListItem, CustomFeedSettings, DirectMessage, EventStats, FeedMode, FeedQueryOptions, Nip05Profile, NostrEvent, NotificationItem, Profile, RelayState, Session } from './types';
 
 const pool = new SimplePool();
+type SearchFilter = Filter & { search?: string };
 const bunkerSigners = new Map<string, nip46.BunkerSigner>();
 type SubCloser = { close: (reason?: string) => void };
 type PomegranateProfile = { name: string; handler_pubkey: string; email?: string };
@@ -1228,30 +1229,25 @@ function normalizedHashtag(tag?: string) {
 
 async function customFeedFilters(base: Filter, follows: string[], settings: CustomFeedSettings, since: number | undefined, relayUrls: string[]) {
   const total = base.limit ?? 24;
-  const feedHashtags = hashtagKeywords(settings);
-  const hashtagLimit = feedHashtags.length ? Math.max(1, Math.round(total * 0.2)) : 0;
+  const keywordLimit = keywordFilters(settings).length ? Math.max(1, Math.round(total * 0.2)) : 0;
   const friendsOfFriends = settings.friendsOfFriends ? await fetchFriendsOfFriends(follows, relayUrls) : [];
   const friendsOfFriendsLimit = friendsOfFriends.length ? Math.max(1, Math.round(total * 0.2)) : 0;
-  const followLimit = Math.max(1, total - hashtagLimit - friendsOfFriendsLimit);
+  const followLimit = Math.max(1, total - keywordLimit - friendsOfFriendsLimit);
   const filters: Filter[] = [withOptionalSince({ ...base, authors: sampleAuthors(follows, followLimit), limit: followLimit }, since)];
 
   if (friendsOfFriendsLimit) {
     filters.push(withOptionalSince({ ...base, authors: sampleAuthors(friendsOfFriends, friendsOfFriendsLimit), limit: friendsOfFriendsLimit }, since));
   }
 
-  if (feedHashtags.length) filters.push(withOptionalSince({ ...base, '#t': feedHashtags, limit: hashtagLimit }, since));
+  filters.push(...keywordFeedFilters(base, settings, keywordLimit, since));
   return filters;
 }
 
 function globalFeedFilters(base: Filter, settings: CustomFeedSettings, since?: number) {
   const total = base.limit ?? 24;
-  const hashtagLimit = Math.max(1, Math.round(total * 0.3));
-  const generalLimit = Math.max(1, total - hashtagLimit);
-  const feedHashtags = hashtagKeywords(settings);
-  return [
-    withOptionalSince({ ...base, limit: generalLimit }, since),
-    withOptionalSince({ ...base, '#t': feedHashtags, limit: hashtagLimit }, since)
-  ];
+  const keywordLimit = Math.max(1, Math.round(total * 0.3));
+  const generalLimit = Math.max(1, total - keywordLimit);
+  return [withOptionalSince({ ...base, limit: generalLimit }, since), ...keywordFeedFilters(base, settings, keywordLimit, since)];
 }
 
 function withOptionalSince(filter: Filter, since?: number) {
@@ -1259,10 +1255,44 @@ function withOptionalSince(filter: Filter, since?: number) {
 }
 
 function hashtagKeywords(settings: CustomFeedSettings) {
-  return [...new Set(settings.keywords.map((keyword) => normalizedHashtag(keyword)).filter(Boolean))];
+  return [...new Set(settings.keywords.filter((keyword) => keyword.trim().startsWith('#')).map((keyword) => normalizedHashtag(keyword)).filter(Boolean))];
 }
 
-async function fetchFriendsOfFriends(follows: string[], relayUrls: string[]) {
+function keywordSearchTerms(settings: CustomFeedSettings) {
+  return [
+    ...new Set(
+      settings.keywords
+        .filter((keyword) => !keyword.trim().startsWith('#'))
+        .map((keyword) => keyword.trim().toLowerCase())
+        .filter((keyword) => /^[a-z0-9][a-z0-9 _-]{1,63}$/.test(keyword))
+    )
+  ];
+}
+
+function keywordFilters(settings: CustomFeedSettings) {
+  const filters: SearchFilter[] = [];
+  const hashtags = hashtagKeywords(settings);
+  const searches = keywordSearchTerms(settings);
+  if (hashtags.length) filters.push({ '#t': hashtags });
+  filters.push(...searches.map((search) => ({ search })));
+  return filters;
+}
+
+function keywordFeedFilters(base: Filter, settings: CustomFeedSettings, totalLimit: number, since?: number) {
+  const filters = keywordFilters(settings);
+  if (!filters.length || totalLimit <= 0) return [];
+  const perFilterLimit = splitLimit(totalLimit, filters.length);
+  return filters.map((filter, index) => withOptionalSince({ ...base, ...filter, limit: perFilterLimit[index] }, since));
+}
+
+function splitLimit(total: number, parts: number) {
+  const base = Math.max(1, Math.floor(total / parts));
+  const remainder = Math.max(0, total - base * parts);
+  return Array.from({ length: parts }, (_, index) => base + (index < remainder ? 1 : 0));
+}
+
+export async function fetchFriendsOfFriends(follows: string[], relayUrls: string[]) {
+  if (!follows.length || !relayUrls.length) return [];
   const contactEvents = verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [3], authors: follows, limit: Math.min(120, follows.length) }, 4500));
   const directFollows = new Set(follows);
   const pubkeys = new Set<string>();
