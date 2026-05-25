@@ -5,7 +5,7 @@
   import { Copy, ExternalLink, Flag, Heart, Link, MessageCircle, MoreHorizontal, Pencil, Repeat2, Trash2, UserX, Zap } from '@lucide/svelte';
   import { nip19 } from 'nostr-tools';
   import type { NostrEvent, Profile } from '$lib/nostr/types';
-  import { extractMediaAttachments, extractQuotedNoteReferences, parseNoteText } from '$lib/nostr/media';
+  import { extractMediaAttachments, extractQuotedNoteReferences, extractSocialEmbeds, parseNoteText } from '$lib/nostr/media';
   import { activeRelayUrls, fetchLikeAuthors, fetchProfiles, subscribeZapReceipts } from '$lib/nostr/client';
   import { createZapInvoice, loadZapInfo, type ZapInfo } from '$lib/nostr/zap';
   import { deleteNote, editedEvents, eventStats, filterByHashtag, likedEvents, mergeProfileRecords, muteAccount, profiles, reactToNote, refreshEventStats, relays, reportNote, repostedEvents, repostNote, session, startEdit, startReply, watchVisibleNoteStats } from '$lib/stores/app';
@@ -85,11 +85,12 @@
   $: name = profile?.display_name || profile?.name || displayEvent.pubkey.slice(0, 10);
   $: avatar = profile?.picture;
   $: mediaAttachments = extractMediaAttachments(displayEvent);
+  $: socialEmbeds = extractSocialEmbeds(displayEvent.content);
   $: quotedNoteReferences = extractQuotedNoteReferences(displayEvent.content, displayEvent.tags);
   $: quotedNoteRawValues = quotedNoteReferences.map((reference) => reference.raw);
   $: isLong = displayEvent.content.length > previewLength;
   $: visibleContent = !isLong || expanded ? displayEvent.content : displayEvent.content.slice(0, previewLength).trimEnd();
-  $: contentParts = parseNoteText(visibleContent, [...mediaAttachments.map((media) => media.url), ...quotedNoteRawValues], displayEvent.tags);
+  $: contentParts = parseNoteText(visibleContent, [...mediaAttachments.map((media) => media.url), ...socialEmbeds.map((embed) => embed.url), ...quotedNoteRawValues], displayEvent.tags);
   $: counts = $eventStats[event.id] ?? { replies: 0, reposts: 0, likes: 0, zaps: 0, zapSats: 0, dislikes: 0, emoji: 0 };
   $: liked = $likedEvents.has(event.id);
   $: reposted = $repostedEvents.has(event.id);
@@ -139,7 +140,7 @@
   }
 
   function isInteractiveTarget(target: EventTarget | null) {
-    return target instanceof Element && Boolean(target.closest('a, button, input, textarea, video, .note-actions, .media-grid, .note-menu, .reaction-popover, .quoted-note'));
+    return target instanceof Element && Boolean(target.closest('a, button, input, textarea, video, iframe, .note-actions, .media-grid, .social-embed-list, .note-menu, .reaction-popover, .quoted-note'));
   }
 
   function closeMenuFromOutside(pointerEvent: PointerEvent) {
@@ -439,6 +440,23 @@
       <button class="show-more" on:click={() => (expanded = false)}>show less</button>
     {/if}
     <QuotedNotePreview ids={quotedNoteReferences.map((reference) => reference.id)} />
+    {#if socialEmbeds.length}
+      <div class="social-embed-list">
+        {#each socialEmbeds as embed (embed.url)}
+          <div class="social-embed" class:portrait={embed.aspect === 'portrait'} class:square={embed.aspect === 'square'}>
+            <iframe
+              src={embed.embedUrl}
+              title={embed.title}
+              loading="lazy"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowfullscreen
+              referrerpolicy="strict-origin-when-cross-origin"
+            ></iframe>
+            <a href={embed.url} target="_blank" rel="noreferrer">{embed.title}</a>
+          </div>
+        {/each}
+      </div>
+    {/if}
     {#if mediaAttachments.length}
       <div class="media-grid" class:single={mediaAttachments.length === 1} class:double={mediaAttachments.length === 2} class:triple={mediaAttachments.length === 3} class:quad={mediaAttachments.length >= 4}>
         {#each mediaAttachments as media}

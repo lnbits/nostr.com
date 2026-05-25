@@ -15,7 +15,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "desktop:win": "npm run icons && npm run build && electron-builder --win nsis --x64 --publish never",
-    "desktop:mac": "npm run icons && npm run build && electron-builder --mac dmg --arm64 --publish never",
+    "desktop:mac": "npm run icons && npm run build && electron-builder --mac dmg --x64 --arm64 --publish never",
+    "desktop:mac:x64": "npm run icons && npm run build && electron-builder --mac dmg --x64 --publish never",
+    "desktop:mac:arm64": "npm run icons && npm run build && electron-builder --mac dmg --arm64 --publish never",
     "desktop:linux": "npm run icons && npm run build && electron-builder --linux AppImage --x64 --publish never",
     "cap:add:ios": "cap add ios",
     "cap:add:android": "cap add android",
@@ -49,17 +51,10 @@
       "buildResources": "build-resources",
       "output": "release"
     },
-    "icon": "build-resources/icon",
+    "icon": "icon",
     "mac": {
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "arm64"
-          ]
-        }
-      ],
-      "artifactName": "Nostr-Social-macOS-arm64.${ext}"
+      "target": "dmg",
+      "artifactName": "Nostr-Social-macOS-${arch}.${ext}"
     },
     "win": {
       "target": [

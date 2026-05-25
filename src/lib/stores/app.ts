@@ -120,6 +120,7 @@ let currentNotificationSeenAt = initialSession && browser ? readLastSeen(notific
 let currentMessageSeenAt = initialSession && browser ? readLastSeen(messageSeenStorageKey, initialSession.pubkey) : 0;
 let currentContactItems: ContactListItem[] = [];
 let currentDeletedEventIds = new Set<string>();
+let hasExplicitFeedModeSelection = false;
 let oldestFeedTimestamp: number | undefined;
 let liveFeedSub: { close: (reason?: string) => void } | undefined;
 let liveFeedToken = 0;
@@ -199,33 +200,47 @@ export async function bootstrap() {
     });
 }
 
-export async function refreshFeed(mode = currentMode) {
+export async function refreshFeed(mode = currentMode, options: { replaceVisible?: boolean } = {}) {
   const fetchMode = currentHashtag ? 'global' : mode;
+  const visibleEvents = feedEventsForActiveHashtag(getStoreSnapshot(events));
+  const shouldReplaceVisible = options.replaceVisible || !visibleEvents.length;
   loadingFeed.set(true);
   hasMoreFeed.set(true);
-  oldestFeedTimestamp = undefined;
   requestedStats.clear();
-  pendingNewerEvents.set([]);
 
   if ((fetchMode === 'follow' || fetchMode === 'custom') && !currentFollows.length) {
-    events.set([]);
+    if (!visibleEvents.length) events.set([]);
     cachedOlderEvents = [];
+    pendingNewerEvents.set([]);
+    oldestFeedTimestamp = undefined;
     stopLiveFeed();
     loadingFeed.set(false);
     return;
   }
 
   try {
-    const nextEvents = filterMutedEvents(await fetchFeed(fetchMode, currentRelays, currentFollows, effectiveFeedSettings(fetchMode), { limit: initialFeedLimit, hashtag: currentHashtag }));
+    const newestTimestamp = getNewestTimestamp([...visibleEvents, ...getStoreSnapshot(pendingNewerEvents)]);
+    const nextEvents = filterMutedEvents(
+      await fetchFeed(fetchMode, currentRelays, currentFollows, effectiveFeedSettings(fetchMode), {
+        limit: initialFeedLimit,
+        since: newestTimestamp ? newestTimestamp + 1 : undefined,
+        hashtag: currentHashtag
+      })
+    );
     if (nextEvents.length) {
       markRelaysOnline(activeRelayUrls(currentRelays, 'read'));
-      events.set(nextEvents);
-      oldestFeedTimestamp = getOldestTimestamp(nextEvents);
+      if (shouldReplaceVisible) {
+        events.set(nextEvents);
+        oldestFeedTimestamp = getOldestTimestamp(nextEvents);
+        pendingNewerEvents.set([]);
+      } else {
+        queuePendingNewer(nextEvents);
+      }
       void refreshEventStats(nextEvents.map((event) => event.id));
       void hydrateMissingProfiles(nextEvents, 60);
-      void primeCachedFeedBuffers(fetchMode, nextEvents);
+      void primeCachedFeedBuffers(fetchMode, getStoreSnapshot(events));
     }
-    void restartLiveFeed(fetchMode, getNewestTimestamp(nextEvents));
+    void restartLiveFeed(fetchMode, getNewestTimestamp([...visibleEvents, ...nextEvents]));
   } finally {
     loadingFeed.set(false);
   }
@@ -245,14 +260,20 @@ async function hydrateCachedFeed(mode = currentMode) {
 }
 
 function cachedEventsForMode(mode: FeedMode, items: NostrEvent[], limit = initialFeedLimit) {
-  if (mode === 'follow') return items.filter((event) => currentFollows.includes(event.pubkey)).slice(0, limit);
-  if (mode === 'custom' && currentFollows.length) {
-    const feedHashtags = feedKeywordHashtags(currentSettings);
-    return items
-      .filter((event) => currentFollows.includes(event.pubkey) || feedHashtags.some((tag) => eventHasHashtag(event, tag)))
-      .slice(0, limit);
+  return eventsForFeedMode(mode, items).slice(0, limit);
+}
+
+export function displayEventsForFeedMode(mode: FeedMode, items: NostrEvent[], follows = currentFollows, settings = currentSettings) {
+  return eventsForFeedMode(mode, items, follows, settings);
+}
+
+function eventsForFeedMode(mode: FeedMode, items: NostrEvent[], follows = currentFollows, settings = currentSettings) {
+  if (mode === 'follow') return items.filter((event) => follows.includes(event.pubkey));
+  if (mode === 'custom' && follows.length) {
+    const feedHashtags = feedKeywordHashtags(settings);
+    return items.filter((event) => follows.includes(event.pubkey) || feedHashtags.some((tag) => eventHasHashtag(event, tag)));
   }
-  return items.slice(0, limit);
+  return items;
 }
 
 async function getCachedFeedCandidates(mode: FeedMode, limit = cachedFeedBufferLimit) {
@@ -516,13 +537,15 @@ async function fetchOlderFeedPage(fetchMode: FeedMode, target = olderFetchTarget
 function queuePendingNewer(incoming: NostrEvent[]) {
   if (!incoming.length) return;
   const visibleIds = new Set(getStoreSnapshot(events).map((event) => event.id));
-  pendingNewerEvents.update((existing) => limitFeedBuffer(mergeFeedEvents(incoming.filter((event) => !visibleIds.has(event.id)), existing), maxPendingNewerEvents));
+  pendingNewerEvents.update((existing) =>
+    limitFeedBuffer(mergeFeedEvents(eventsForFeedMode(currentMode, incoming).filter((event) => !visibleIds.has(event.id)), existing), maxPendingNewerEvents)
+  );
 }
 
 function prependVisibleEvents(incoming: NostrEvent[]) {
   if (!incoming.length) return;
   events.update((existing) => {
-    const merged = mergeFeedEvents(incoming, existing);
+    const merged = mergeFeedEvents(eventsForFeedMode(currentMode, incoming), eventsForFeedMode(currentMode, existing));
     const visible = merged.slice(0, maxFeedEvents);
     const overflowOlder = merged.slice(maxFeedEvents);
     cacheTrimmedOlderFeedEvents(overflowOlder);
@@ -534,7 +557,7 @@ function prependVisibleEvents(incoming: NostrEvent[]) {
 function appendVisibleEvents(incoming: NostrEvent[]) {
   if (!incoming.length) return;
   events.update((existing) => {
-    const merged = mergeFeedEvents(incoming, existing);
+    const merged = mergeFeedEvents(eventsForFeedMode(currentMode, incoming), eventsForFeedMode(currentMode, existing));
     const visible = merged.slice(-maxFeedEvents);
     const overflowNewer = merged.slice(0, Math.max(0, merged.length - maxFeedEvents));
     if (overflowNewer.length) pendingNewerEvents.update((pending) => limitFeedBuffer(mergeFeedEvents(overflowNewer, pending), maxPendingNewerEvents));
@@ -603,11 +626,13 @@ async function hydrateCachedHashtagFeed(tag: string) {
 }
 
 export function selectFeedMode(mode: FeedMode) {
+  hasExplicitFeedModeSelection = true;
   activeHashtag.set('');
   cachedOlderEvents = [];
+  pendingNewerEvents.set([]);
   feedMode.set(mode);
   void hydrateCachedFeed(mode);
-  void refreshFeed(mode);
+  void refreshFeed(mode, { replaceVisible: true });
 }
 
 export function goHome() {
@@ -716,7 +741,9 @@ export async function signIn(mode: LoginMode | 'guest', value = '') {
           : mode === 'pomegranate'
             ? await loginWithPomegranate(value)
             : createGuestSession();
+  if (isCurrentSession(next)) return;
   session.set(next);
+  const previousFeedMode = currentMode;
   persistSession(next);
   activeHashtag.set('');
   currentNotificationSeenAt = browser ? readLastSeen(notificationSeenStorageKey, next.pubkey) : 0;
@@ -724,7 +751,7 @@ export async function signIn(mode: LoginMode | 'guest', value = '') {
   directMessages.set([]);
   notifications.set([]);
   loadingFeed.set(true);
-  restartInboxSubscriptions();
+  if (!hasExplicitFeedModeSelection && previousFeedMode === 'global') feedMode.set('global');
   void finishSignedInBootstrap(next);
 }
 
@@ -732,6 +759,7 @@ export async function signOut() {
   session.set(null);
   if (browser) localStorage.removeItem(sessionStorageKey);
   activeHashtag.set('');
+  hasExplicitFeedModeSelection = false;
   feedMode.set('global');
   cachedOlderEvents = [];
   if (browser) await goto(appPath('/'));
@@ -1195,7 +1223,7 @@ async function hydrateDefaultFeedContext() {
   session.subscribe((value) => (currentSession = value))();
   if (currentSession) {
     await hydrateSignedInFeedContext(currentSession);
-    selectPreferredSignedInFeed();
+    selectPreferredSignedInFeed(false);
   } else {
     await hydrateGuestFeedContext();
   }
@@ -1205,10 +1233,10 @@ async function finishSignedInBootstrap(next: Session) {
   try {
     await hydrateSignedInFeedContext(next);
     if (!isCurrentSession(next)) return;
-    selectPreferredSignedInFeed();
+    selectPreferredSignedInFeed(true);
     await refreshFeed(currentMode);
     void refreshNotifications();
-    void refreshMessages();
+    if (next.mode !== 'nip07') void refreshMessages();
     restartInboxSubscriptions();
   } finally {
     if (isCurrentSession(next)) loadingFeed.set(false);
@@ -1229,10 +1257,11 @@ async function hydrateSignedInFeedContext(currentSession: Session) {
   dropMutedEvents();
 }
 
-function selectPreferredSignedInFeed() {
+function selectPreferredSignedInFeed(allowInitialDefault = false) {
   activeHashtag.set('');
   cachedOlderEvents = [];
-  feedMode.set(currentFollows.length ? 'follow' : 'global');
+  if (hasExplicitFeedModeSelection) return;
+  if (allowInitialDefault && !getStoreSnapshot(events).length) feedMode.set(currentFollows.length ? 'follow' : 'global');
 }
 
 function isCurrentSession(next: Session) {
@@ -1369,6 +1398,8 @@ function mergeRelayHints(urls: string[], startingScore = 76) {
         score: Math.max(55, startingScore - index)
       }));
 
-    return additions.length ? [...byUrl.values(), ...additions] : [...byUrl.values()];
+    if (additions.length) return [...byUrl.values(), ...additions];
+    const normalized = [...byUrl.values()];
+    return normalized.some((relay, index) => relay.url !== existing[index]?.url) ? normalized : existing;
   });
 }

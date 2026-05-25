@@ -19,6 +19,7 @@
     session
   } from '$lib/stores/app';
   import { searchProfiles } from '$lib/nostr/client';
+  import { shouldSubmitTextareaOnEnter } from '$lib/keyboard';
   import { extractMediaAttachments, extractQuotedNoteReferences, parseNoteText } from '$lib/nostr/media';
   import { appPath } from '$lib/paths';
   import { pauseWhenHidden } from '$lib/actions/pauseWhenHidden';
@@ -133,6 +134,12 @@
     } finally {
       sending = false;
     }
+  }
+
+  function sendMessageOnEnter(event: KeyboardEvent) {
+    if (!shouldSubmitTextareaOnEnter(event)) return;
+    event.preventDefault();
+    void sendMessage();
   }
 
   async function scrollChatToBottom() {
@@ -380,7 +387,7 @@
           </div>
 
           <form class="dm-compose" on:submit|preventDefault={sendMessage}>
-            <textarea bind:value={messageText} placeholder="Write a message" rows="2"></textarea>
+            <textarea bind:value={messageText} on:keydown={sendMessageOnEnter} placeholder="Write a message" rows="2"></textarea>
             <button type="submit" disabled={sending || !messageText.trim()}>
               {#if sending}<Loader2 size={18} class="spin" />{:else}<Send size={18} />{/if}
               <span>Send</span>

@@ -213,7 +213,7 @@ for (const [size, data] of outputs) writeFile(path.join('static', `icon-${size}.
 writeFile(path.join('static', 'apple-touch-icon.png'), outputs.get(180));
 writeFile(path.join('static', 'favicon.ico'), encodeIco([16, 32, 48].map((size) => ({ size, data: outputs.get(size) }))));
 writeFile(path.join('build-resources', 'icon.png'), outputs.get(512));
-writeFile(path.join('build-resources', 'icon.ico'), encodeIco([16, 32, 48].map((size) => ({ size, data: outputs.get(size) }))));
+writeFile(path.join('build-resources', 'icon.ico'), encodeIco([16, 32, 48, 256].map((size) => ({ size, data: outputs.get(size === 256 ? 512 : size) }))));
 writeFile(path.join('resources', 'icon.png'), outputs.get(512));
 writeAndroidIcons(outputs);
 

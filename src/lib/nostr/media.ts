@@ -45,6 +45,14 @@ export interface QuotedNoteReference {
   raw: string;
 }
 
+export interface SocialEmbed {
+  provider: 'youtube' | 'vimeo' | 'instagram' | 'tiktok';
+  url: string;
+  embedUrl: string;
+  title: string;
+  aspect: 'video' | 'portrait' | 'square';
+}
+
 export function extractQuotedNoteReferences(content: string, tags: string[][] = []): QuotedNoteReference[] {
   const refs = new Map<string, QuotedNoteReference>();
   let match: RegExpExecArray | null;
@@ -61,6 +69,15 @@ export function extractQuotedNoteReferences(content: string, tags: string[][] = 
   }
 
   return [...refs.values()];
+}
+
+export function extractSocialEmbeds(content: string): SocialEmbed[] {
+  const embeds = new Map<string, SocialEmbed>();
+  for (const raw of extractWebUrls(content)) {
+    const embed = socialEmbedForUrl(raw);
+    if (embed) embeds.set(embed.url, embed);
+  }
+  return [...embeds.values()];
 }
 
 export function parseHashtags(content: string): NoteTextPart[] {
@@ -114,6 +131,14 @@ function parseWebLinks(content: string): NoteTextPart[] {
 
   if (lastIndex < content.length) parts.push({ type: 'text', value: content.slice(lastIndex) });
   return parts.length ? parts : [{ type: 'text', value: content }];
+}
+
+function extractWebUrls(content: string) {
+  const urls: string[] = [];
+  let match: RegExpExecArray | null;
+  webUrlPattern.lastIndex = 0;
+  while ((match = webUrlPattern.exec(content))) urls.push(trimTrailingUrlPunctuation(match[0]));
+  return [...new Set(urls)];
 }
 
 function parseBareDomainLinks(content: string): NoteTextPart[] {
@@ -246,13 +271,103 @@ function safeHttpUrl(value: string) {
   }
 }
 
+function socialEmbedForUrl(raw: string): SocialEmbed | null {
+  const url = safeHttpUrl(raw);
+  if (!url) return null;
+
+  const parsed = new URL(url);
+  const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+  const pathParts = parsed.pathname.split('/').filter(Boolean);
+
+  const youtubeId = youtubeVideoId(host, parsed, pathParts);
+  if (youtubeId) {
+    return {
+      provider: 'youtube',
+      url,
+      embedUrl: `https://www.youtube-nocookie.com/embed/${youtubeId}`,
+      title: 'YouTube video',
+      aspect: 'video'
+    };
+  }
+
+  const vimeoId = vimeoVideoId(host, pathParts);
+  if (vimeoId) {
+    return {
+      provider: 'vimeo',
+      url,
+      embedUrl: `https://player.vimeo.com/video/${vimeoId}`,
+      title: 'Vimeo video',
+      aspect: 'video'
+    };
+  }
+
+  const instagramCode = instagramShortcode(host, pathParts);
+  if (instagramCode) {
+    const kind = pathParts[0] === 'reel' ? 'reel' : 'post';
+    return {
+      provider: 'instagram',
+      url,
+      embedUrl: `https://www.instagram.com/${kind === 'reel' ? 'reel' : 'p'}/${instagramCode}/embed`,
+      title: `Instagram ${kind}`,
+      aspect: kind === 'reel' ? 'portrait' : 'square'
+    };
+  }
+
+  const tiktokId = tiktokVideoId(host, pathParts);
+  if (tiktokId) {
+    return {
+      provider: 'tiktok',
+      url,
+      embedUrl: `https://www.tiktok.com/embed/v2/${tiktokId}`,
+      title: 'TikTok video',
+      aspect: 'portrait'
+    };
+  }
+
+  return null;
+}
+
+function youtubeVideoId(host: string, parsed: URL, pathParts: string[]) {
+  if (host === 'youtu.be') return validEmbedId(pathParts[0]);
+  if (!['youtube.com', 'm.youtube.com', 'music.youtube.com', 'youtube-nocookie.com'].includes(host)) return '';
+  if (pathParts[0] === 'watch') return validEmbedId(parsed.searchParams.get('v') ?? '');
+  if (['shorts', 'embed', 'live'].includes(pathParts[0])) return validEmbedId(pathParts[1]);
+  return '';
+}
+
+function vimeoVideoId(host: string, pathParts: string[]) {
+  if (host === 'player.vimeo.com' && pathParts[0] === 'video') return validNumericId(pathParts[1]);
+  if (!host.endsWith('vimeo.com')) return '';
+  return validNumericId(pathParts.find((part) => /^\d+$/.test(part)));
+}
+
+function instagramShortcode(host: string, pathParts: string[]) {
+  if (!host.endsWith('instagram.com')) return '';
+  if (!['p', 'reel', 'tv'].includes(pathParts[0])) return '';
+  return validEmbedId(pathParts[1]);
+}
+
+function tiktokVideoId(host: string, pathParts: string[]) {
+  if (!host.endsWith('tiktok.com')) return '';
+  const videoIndex = pathParts.findIndex((part) => part === 'video');
+  return videoIndex >= 0 ? validNumericId(pathParts[videoIndex + 1]) : '';
+}
+
+function validEmbedId(value = '') {
+  return /^[A-Za-z0-9_-]{5,128}$/.test(value) ? value : '';
+}
+
+function validNumericId(value = '') {
+  return /^\d{5,32}$/.test(value) ? value : '';
+}
+
 function hrefForNostrReference(value: string) {
   try {
     const decoded = nip19.decode(value);
     if (decoded.type === 'npub') return appPath(`/profile/${decoded.data}`);
     if (decoded.type === 'nprofile') return appPath(`/profile/${decoded.data.pubkey}`);
     if (decoded.type === 'note') return appPath(`/thread/${decoded.data}`);
-    if (decoded.type === 'nevent') return appPath(`/thread/${decoded.data.id}`);
+    if (decoded.type === 'nevent') return appPath(`/thread/${value}`);
   } catch {
     // Leave unknown or future NIP-19 values as external nostr URIs.
   }

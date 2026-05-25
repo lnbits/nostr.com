@@ -7,13 +7,16 @@
   import ThreadReplyTree from '$lib/components/ThreadReplyTree.svelte';
   import { deletedEventIds, eventStats, events, mergeEvents, mergeProfileRecords, profiles, refreshEventStats, relays, session } from '$lib/stores/app';
   import { eventStatsFromEvents, fetchMissingEvents, fetchProfiles, fetchThreadReplies } from '$lib/nostr/client';
+  import { eventPointerFromIdentifier } from '$lib/nostr/identifiers';
   import { appPath } from '$lib/paths';
   import type { NostrEvent } from '$lib/nostr/types';
 
   const initialThreadReplyLimit = 40;
   const nestedThreadReplyLimit = 80;
 
-  $: id = $page.params.id;
+  $: routeId = decodeURIComponent($page.params.id ?? '');
+  $: pointer = eventPointerFromIdentifier(routeId);
+  $: id = pointer?.id ?? routeId;
   $: focusedReplyId = $page.url.searchParams.get('focus') ?? '';
   $: threadEvents = mergeThreadEvents(localThreadEvents, $events);
   $: root = rootEvent?.id === id ? rootEvent : threadEvents.find((event) => event.id === id);
@@ -80,7 +83,7 @@
     loading = true;
     try {
       const cached = $events.find((event) => event.id === id);
-      const [found] = cached ? [cached] : await fetchMissingEvents([id], $relays).catch(() => []);
+      const [found] = cached ? [cached] : await fetchMissingEvents([id], $relays, pointer?.relays ?? []).catch(() => []);
       if (found) {
         rootEvent = found;
         localThreadEvents = mergeThreadEvents([found], localThreadEvents);

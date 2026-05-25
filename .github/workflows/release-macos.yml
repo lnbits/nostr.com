@@ -6,6 +6,11 @@ on:
       - 'v*'
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to upload the macOS DMG to
+        required: true
 
 permissions:
   contents: write
@@ -13,6 +18,10 @@ permissions:
 jobs:
   macos:
     runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, arm64]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -20,9 +29,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run desktop:mac
+      - run: npm run desktop:mac:${{ matrix.arch }}
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.release.tag_name || github.ref_name }}
-          name: ${{ github.event.release.name || github.ref_name }}
-          files: release/Nostr-Social-macOS-arm64.dmg
+          tag_name: ${{ github.event.release.tag_name || github.event.inputs.tag || github.ref_name }}
+          name: ${{ github.event.release.name || github.event.inputs.tag || github.ref_name }}
+          files: release/Nostr-Social-macOS-${{ matrix.arch }}.dmg

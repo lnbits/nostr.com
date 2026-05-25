@@ -6,6 +6,11 @@ on:
       - 'v*'
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to upload the Windows installer to
+        required: true
 
 permissions:
   contents: write
@@ -23,6 +28,6 @@ jobs:
       - run: npm run desktop:win
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.release.tag_name || github.ref_name }}
-          name: ${{ github.event.release.name || github.ref_name }}
+          tag_name: ${{ github.event.release.tag_name || github.event.inputs.tag || github.ref_name }}
+          name: ${{ github.event.release.name || github.event.inputs.tag || github.ref_name }}
           files: release/Nostr-Social-Windows-x64.exe

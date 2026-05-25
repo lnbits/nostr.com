@@ -81,13 +81,43 @@ export function createGuestSession(): Session {
 
 export async function loginWithNip07(): Promise<Session> {
   if (!window.nostr) throw new Error('No NIP-07 extension was found.');
-  return { pubkey: await window.nostr.getPublicKey(), mode: 'nip07' };
+  const pubkey = await withTimeout(window.nostr.getPublicKey(), 30_000, 'The NIP-07 extension did not respond.');
+  if (!/^[0-9a-f]{64}$/i.test(pubkey)) throw new Error('The NIP-07 extension returned an invalid public key.');
+  return { pubkey: pubkey.toLowerCase(), mode: 'nip07' };
 }
 
 export function loginWithPrivateKey(secret: string): Session {
   const normalized = secret.trim();
   const bytes = normalized.startsWith('nsec1') ? decodeNsec(normalized) : hexToBytes(normalized);
   return { pubkey: getPublicKey(bytes), mode: 'private-key', secret: bytesToHex(bytes) };
+}
+
+async function withTimeout<T>(promise: Promise<T>, ms: number, message: string) {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error(message)), ms);
+      })
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
+async function mapWithConcurrency<T, R>(items: T[], concurrency: number, mapper: (item: T) => Promise<R>) {
+  const results: R[] = [];
+  let index = 0;
+  const workers = Array.from({ length: Math.max(1, Math.min(concurrency, items.length)) }, async () => {
+    while (index < items.length) {
+      const currentIndex = index;
+      index += 1;
+      results[currentIndex] = await mapper(items[currentIndex]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
 }
 
 export async function loginWithBunker(uri: string): Promise<Session> {
@@ -534,9 +564,9 @@ export async function subscribeZapReceipts(invoice: string, recipientPubkey: str
   });
 }
 
-export async function fetchMissingEvents(ids: string[], relays = defaultRelays) {
+export async function fetchMissingEvents(ids: string[], relays = defaultRelays, relayHints: string[] = []) {
   if (!ids.length) return [];
-  const relayUrls = activeRelayUrls(relays, 'read');
+  const relayUrls = [...new Set([...relayHints.filter((url) => /^wss?:\/\//i.test(url)), ...activeRelayUrls(relays, 'read')])];
   const events = verifiedRelayEvents(await queryShortLived(relayUrls, { ids }, 5000));
   const clean = dedupeEvents(events);
   await cacheEvents(clean);
@@ -636,8 +666,8 @@ export async function fetchDirectMessages(session: Session, relays = defaultRela
       queryShortLived(relayUrls, nip17Filter, 5000)
     ])).flat()
   );
-  const messages = await Promise.all(
-    dedupeEvents(events).map((event) => (event.kind === 1059 ? toNip17DirectMessage(event, session) : toNip04DirectMessage(event, session)))
+  const messages = await mapWithConcurrency(dedupeEvents(events), 3, (event) =>
+    event.kind === 1059 ? toNip17DirectMessage(event, session) : toNip04DirectMessage(event, session)
   );
   return messages.filter((message): message is DirectMessage => Boolean(message));
 }

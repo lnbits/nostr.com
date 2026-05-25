@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ImagePlus, Loader2, Send, X } from '@lucide/svelte';
   import { composerOpen, editNote, editTarget, postNote, replyTarget, session } from '$lib/stores/app';
+  import { shouldSubmitTextareaOnEnter } from '$lib/keyboard';
   import { uploadToNostrBuild } from '$lib/nostr/upload';
 
   let content = '';
@@ -60,7 +61,7 @@
   }
 
   function submitOnEnter(event: KeyboardEvent) {
-    if (event.key !== 'Enter' || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (!shouldSubmitTextareaOnEnter(event)) return;
     event.preventDefault();
     void submit();
   }

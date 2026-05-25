@@ -1,8 +1,8 @@
 :root {
   color-scheme: light;
-  --bg: #efeadf;
-  --surface: #f8f4ea;
-  --panel: #fffaf1;
+  --bg: #fffdf8;
+  --surface: #fffffd;
+  --panel: #ffffff;
   --text: #1b1b1f;
   --muted: #55545c;
   --line: #25252a;
@@ -856,6 +856,49 @@ label span, label strong { color: var(--text); }
 }
 .quoted-note.loading {
   color: var(--muted);
+}
+.social-embed-list {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0;
+}
+.social-embed {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--line) 24%, transparent);
+  border-radius: 8px;
+  background: #050505;
+}
+.social-embed.portrait {
+  max-width: 360px;
+  aspect-ratio: 9 / 16;
+}
+.social-embed.square {
+  aspect-ratio: 1 / 1;
+}
+.social-embed iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.social-embed > a {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  max-width: calc(100% - 16px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.62);
+  font-size: 12px;
+  font-weight: 750;
 }
 .media-grid {
   display: grid;

@@ -21,7 +21,9 @@
     relays,
     session,
     startCompose,
-    activeHashtag
+    activeHashtag,
+    customFeedSettings,
+    displayEventsForFeedMode
   } from '$lib/stores/app';
   import { topLevelFeedEvents } from '$lib/nostr/client';
   import { appPath } from '$lib/paths';
@@ -41,7 +43,7 @@
   const pullThreshold = 78;
   const newerBubbleCooldownMs = 5000;
   $: hasReadRelays = $relays.some((relay) => relay.enabled && relay.read);
-  $: feedEvents = hashtagFilteredEvents(topLevelFeedEvents($events), $activeHashtag);
+  $: feedEvents = hashtagFilteredEvents(displayEventsForFeedMode($feedMode, topLevelFeedEvents($events), $follows, $customFeedSettings), $activeHashtag);
   $: pullProgress = Math.min(1, pullDistance / pullThreshold);
   $: showNewerBubble = canLoadNewerForFeed() && $pendingNewerEvents.length && !pullingNewer && !hideNewerBubble && !pullStartedAtTop && pullDistance <= 0;
   $: emptyMessage = !hasReadRelays

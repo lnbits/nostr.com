@@ -1,5 +1,5 @@
 import { nip19 } from 'nostr-tools';
-import { extractMediaUrls, extractQuotedNoteReferences, isVideoUrl, parseHashtags, parseNoteText } from './media';
+import { extractMediaUrls, extractQuotedNoteReferences, extractSocialEmbeds, isVideoUrl, parseHashtags, parseNoteText } from './media';
 
 describe('media helpers', () => {
   it('extracts unique image and video urls from note content', () => {
@@ -28,6 +28,56 @@ describe('media helpers', () => {
     expect(parseNoteText(`watch this ${media}\nread ${link}`, [media])).toEqual([
       { type: 'text', value: 'watch this\nread ' },
       { type: 'link', value: link, href: link }
+    ]);
+  });
+
+  it('extracts playable social embeds from common video links', () => {
+    expect(
+      extractSocialEmbeds(
+        [
+          'https://youtu.be/7UtgB_enTw8',
+          'https://www.youtube.com/watch?v=IpOktupkl0c',
+          'https://vimeo.com/123456789',
+          'https://www.instagram.com/reel/Cabc123_def/',
+          'https://www.tiktok.com/@nostr/video/7330000000000000000'
+        ].join('\n')
+      )
+    ).toEqual([
+      {
+        provider: 'youtube',
+        url: 'https://youtu.be/7UtgB_enTw8',
+        embedUrl: 'https://www.youtube-nocookie.com/embed/7UtgB_enTw8',
+        title: 'YouTube video',
+        aspect: 'video'
+      },
+      {
+        provider: 'youtube',
+        url: 'https://www.youtube.com/watch?v=IpOktupkl0c',
+        embedUrl: 'https://www.youtube-nocookie.com/embed/IpOktupkl0c',
+        title: 'YouTube video',
+        aspect: 'video'
+      },
+      {
+        provider: 'vimeo',
+        url: 'https://vimeo.com/123456789',
+        embedUrl: 'https://player.vimeo.com/video/123456789',
+        title: 'Vimeo video',
+        aspect: 'video'
+      },
+      {
+        provider: 'instagram',
+        url: 'https://www.instagram.com/reel/Cabc123_def/',
+        embedUrl: 'https://www.instagram.com/reel/Cabc123_def/embed',
+        title: 'Instagram reel',
+        aspect: 'portrait'
+      },
+      {
+        provider: 'tiktok',
+        url: 'https://www.tiktok.com/@nostr/video/7330000000000000000',
+        embedUrl: 'https://www.tiktok.com/embed/v2/7330000000000000000',
+        title: 'TikTok video',
+        aspect: 'portrait'
+      }
     ]);
   });
 
@@ -81,5 +131,12 @@ describe('media helpers', () => {
       { id: second, raw: nevent },
       { id: third, raw: '#[2]' }
     ]);
+  });
+
+  it('keeps nevent route links intact so relay hints survive navigation', () => {
+    const id = 'f'.repeat(64);
+    const nevent = nip19.neventEncode({ id, relays: ['wss://relay.example'] });
+
+    expect(parseNoteText(nevent)).toEqual([{ type: 'nostr', value: nevent, href: `/thread/${nevent}`, label: 'note' }]);
   });
 });
