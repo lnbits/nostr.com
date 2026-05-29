@@ -31,7 +31,7 @@
       pomegranateCentral = '';
       loginDialogOpen.set(false);
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Could not sign in.';
+      error = err instanceof Error ? err.message : typeof err === 'string' ? err : 'Could not sign in.';
     } finally {
       loggingIn = false;
     }

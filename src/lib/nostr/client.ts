@@ -132,19 +132,23 @@ export async function loginWithBunker(uri: string): Promise<Session> {
       if (typeof window !== 'undefined') window.open(url, '_blank', 'noopener,noreferrer');
     }
   });
-  await signer.connect();
-  const pubkey = await signer.getPublicKey();
-  const session: Session = {
-    pubkey,
-    mode: 'bunker',
-    bunker,
-    bunkerClientSecret: bytesToHex(clientSecret),
-    bunkerRelays: pointer.relays,
-    bunkerRemotePubkey: pointer.pubkey,
-    bunkerSecret: pointer.secret
-  };
-  bunkerSigners.set(bunkerSignerKey(session), signer);
-  return session;
+  try {
+    await withTimeout(signer.connect(), 15000, 'The bunker did not acknowledge the connection request.');
+    const pubkey = await withTimeout(signer.getPublicKey(), 15000, 'The bunker did not return a public key.');
+    const session: Session = {
+      pubkey,
+      mode: 'bunker',
+      bunker,
+      bunkerClientSecret: bytesToHex(clientSecret),
+      bunkerRelays: pointer.relays,
+      bunkerRemotePubkey: pointer.pubkey,
+      bunkerSecret: pointer.secret
+    };
+    bunkerSigners.set(bunkerSignerKey(session), signer);
+    return session;
+  } catch (err) {
+    throw err instanceof Error ? err : new Error(typeof err === 'string' ? err : 'Could not sign in to the bunker.');
+  }
 }
 
 export async function loginWithPomegranate(centralInput: string): Promise<Session> {
