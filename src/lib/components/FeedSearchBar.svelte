@@ -1,13 +1,15 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { onDestroy } from 'svelte';
-  import { Hash, Loader2, Search, UserRound } from '@lucide/svelte';
+  import { Hash, Loader2, Search, SlidersHorizontal, UserRound, X } from '@lucide/svelte';
   import { filterByHashtag, mergeProfileRecords, profiles, relays } from '$lib/stores/app';
   import { resolvePubkeyIdentifier, searchProfiles } from '$lib/nostr/client';
   import { appPath } from '$lib/paths';
+  import AlgorithmPanel from './AlgorithmPanel.svelte';
   import type { Profile } from '$lib/nostr/types';
 
   let query = '';
+  let algorithmDialogOpen = false;
   let remoteProfiles: Profile[] = [];
   let searchingProfiles = false;
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
@@ -102,11 +104,14 @@
 </script>
 
 <section class="feed-search" aria-label="Global search">
-  <form class="feed-search-form" on:submit|preventDefault={submitSearch}>
-    <Search size={18} />
-    <input bind:value={query} on:input={scheduleProfileSearch} placeholder="Search keyword, profile, npub, or NIP-05" autocomplete="off" />
-    {#if searchingProfiles}<Loader2 size={17} class="spin" />{/if}
-  </form>
+  <div class="feed-search-row">
+    <form class="feed-search-form" on:submit|preventDefault={submitSearch}>
+      <Search size={18} />
+      <input bind:value={query} on:input={scheduleProfileSearch} placeholder="Search keyword, profile, npub, or NIP-05" autocomplete="off" />
+      {#if searchingProfiles}<Loader2 size={17} class="spin" />{/if}
+    </form>
+    <button class="mobile-algo-button" type="button" on:click={() => (algorithmDialogOpen = true)} aria-label="Open algorithm settings"><SlidersHorizontal size={17} /> Algo</button>
+  </div>
 
   {#if cleanQuery.length >= 2}
     <div class="feed-search-results">
@@ -138,3 +143,15 @@
     </div>
   {/if}
 </section>
+
+{#if algorithmDialogOpen}
+  <div class="dialog-backdrop algorithm-dialog-backdrop" role="presentation" tabindex="-1" on:click={(event) => event.target === event.currentTarget && (algorithmDialogOpen = false)}>
+    <div class="dialog-panel compact algorithm-dialog" role="dialog" aria-modal="true" aria-labelledby="mobile-algorithm-title">
+      <div class="dialog-head">
+        <h2 id="mobile-algorithm-title">Your algorithm</h2>
+        <button class="icon-button" on:click={() => (algorithmDialogOpen = false)} aria-label="Close algorithm settings"><X size={20} /></button>
+      </div>
+      <AlgorithmPanel title="" labelledBy="mobile-algorithm-title" />
+    </div>
+  </div>
+{/if}

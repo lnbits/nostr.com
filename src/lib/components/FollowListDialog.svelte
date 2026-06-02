@@ -7,6 +7,8 @@
   import type { Profile } from '$lib/nostr/types';
 
   export let open = false;
+  export let embedded = false;
+  export let onClose = () => {};
 
   let entries: string[] = [];
   let newFollow = '';
@@ -17,17 +19,17 @@
   let suggestTimer: ReturnType<typeof setTimeout> | undefined;
   let hydratedEntries = '';
 
-  $: if (open) {
+  $: if (open || embedded) {
     entries = [...$follows];
     error = '';
   }
 
-  $: if (open) {
+  $: if (open || embedded) {
     clearTimeout(suggestTimer);
     suggestTimer = setTimeout(() => void updateSuggestions(newFollow), 250);
   }
 
-  $: if (open) {
+  $: if (open || embedded) {
     const key = entries.join(',');
     if (key && key !== hydratedEntries) {
       hydratedEntries = key;
@@ -37,6 +39,7 @@
 
   function close() {
     open = false;
+    onClose();
   }
 
   function normalizePubkey(value: string) {
@@ -155,7 +158,61 @@
   }
 </script>
 
-{#if open}
+{#if embedded}
+  <div class="algorithm-editor-body">
+    <div class="follow-add-row">
+      <div class="follow-search">
+        <input bind:value={newFollow} placeholder="@jack, name@domain.com, npub1..., or hex" on:keydown={(event) => event.key === 'Enter' && addFollow()} />
+        {#if suggestions.length || suggesting}
+          <div class="profile-suggestions" aria-label="Profile suggestions">
+            {#if suggesting}
+              <span class="muted-copy">Searching profiles...</span>
+            {/if}
+            {#each suggestions as profile (profile.pubkey)}
+              <button on:click={() => addSuggested(profile)}>
+                <span class="avatar mini">
+                  {#if profile.picture}<img src={profile.picture} alt="" />{:else}{profileLabel(profile).slice(0, 1).toUpperCase()}{/if}
+                </span>
+                <span>
+                  <strong>{profileLabel(profile)}</strong>
+                  <small>{profileSubline(profile)}</small>
+                </span>
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </div>
+      <button on:click={addFollow}><UserPlus size={18} /> Add</button>
+    </div>
+
+    <div class="follow-list-manager" aria-label="Follow list">
+      {#each entries as pubkey}
+        {@const profile = profileFor(pubkey)}
+        <div class="follow-list-row">
+          <a class="follow-profile-link" href={appPath(`/profile/${pubkey}`)} on:click={close}>
+            <span class="avatar mini">
+              {#if profile.picture}<img src={profile.picture} alt="" />{:else}{profileLabel(profile).slice(0, 1).toUpperCase()}{/if}
+            </span>
+            <span>
+              <strong>{profileLabel(profile)}</strong>
+              <small>{profileSubline(profile)}</small>
+            </span>
+          </a>
+          <button class="icon-button" on:click={() => removeFollow(pubkey)} aria-label="Remove follow"><Trash2 size={17} /></button>
+        </div>
+      {:else}
+        <p class="muted-copy">No follows yet.</p>
+      {/each}
+    </div>
+
+    {#if error}<p class="error">{error}</p>{/if}
+  </div>
+
+  <div class="dialog-actions algorithm-editor-actions">
+    <button on:click={close}>Cancel</button>
+    <button class="primary" disabled={saving} on:click={save}><Save size={18} /> {saving ? 'Saving' : 'Save'}</button>
+  </div>
+{:else if open}
   <div class="dialog-backdrop" role="presentation" tabindex="-1" on:click={(event) => event.target === event.currentTarget && close()}>
     <div class="dialog-panel compact" role="dialog" aria-modal="true" aria-labelledby="follow-list-title">
       <div class="dialog-head">

@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { Check, Copy, LogOut, Moon, Plus, RefreshCw, Save, SlidersHorizontal, Sun, Trash2 } from '@lucide/svelte';
+  import { Check, Copy, LogOut, Moon, Plus, Save, SlidersHorizontal, Sun, Trash2 } from '@lucide/svelte';
   import { nip19 } from 'nostr-tools';
-  import { customFeedSettings, feedMode, loadingFeed, refreshFeed, relays, session, signOut } from '$lib/stores/app';
+  import { customFeedSettings, feedMode, refreshFeed, relays, session, signOut } from '$lib/stores/app';
   import { normalizeRelayUrl } from '$lib/nostr/client';
   import { parseKeywordInput } from '$lib/nostr/keywords';
   import { setThemeMode, themeMode, type ThemeMode } from '$lib/stores/theme';
-  import FeedTabs from '$lib/components/FeedTabs.svelte';
+  import AlgorithmPanel from '$lib/components/AlgorithmPanel.svelte';
   import { relayStatus } from '$lib/stores/relayStatus';
 
   const themes: { mode: ThemeMode; label: string; icon: typeof Sun }[] = [
@@ -83,9 +83,7 @@
   </section>
 
   <section class="panel settings-feed-card">
-    <h2>Your algorithm</h2>
-    <FeedTabs layout="vertical" disabled={!$session} />
-    <button disabled={!$session || $loadingFeed} on:click={() => refreshFeed()} aria-label="Refresh feed"><RefreshCw size={18} class={$loadingFeed ? 'spin' : ''} /> Refresh</button>
+    <AlgorithmPanel />
   </section>
 
   <section class="panel">

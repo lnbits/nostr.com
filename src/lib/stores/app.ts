@@ -1136,9 +1136,12 @@ export async function saveFollowList(pubkeys: string[]) {
   session.subscribe((value) => (currentSession = value))();
   if (!currentSession) throw new Error('Sign in before updating your follow list.');
   const clean = [...new Set(pubkeys.filter((pubkey) => /^[0-9a-f]{64}$/i.test(pubkey)))];
-  await publishContactList(currentSession, clean, currentRelays, currentContactItems, getStoreSnapshot(profiles));
+  const previousContacts = new Map(currentContactItems.map((contact) => [contact.pubkey, contact]));
+  currentContactItems = clean.map((pubkey) => previousContacts.get(pubkey) ?? { pubkey });
   follows.set(clean);
-  if (currentMode === 'follow' || currentMode === 'custom') void refreshFeed(currentMode);
+  void publishContactList(currentSession, clean, currentRelays, currentContactItems, getStoreSnapshot(profiles)).catch((err) => {
+    console.warn('Could not publish follow list.', err);
+  });
 }
 
 export async function saveRelayListMetadata() {

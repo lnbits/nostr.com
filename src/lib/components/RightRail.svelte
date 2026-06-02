@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import { Apple, ChevronsLeft, ChevronsRight, Download, Globe, LogIn, Monitor, RefreshCw, Smartphone, Terminal, X } from '@lucide/svelte';
-  import FeedTabs from './FeedTabs.svelte';
-  import { loadingFeed, loginDialogOpen, refreshFeed, relays, session } from '$lib/stores/app';
+  import { Apple, ChevronsLeft, ChevronsRight, Download, Globe, LogIn, Monitor, Smartphone, Terminal, X } from '@lucide/svelte';
+  import AlgorithmPanel from './AlgorithmPanel.svelte';
+  import { loginDialogOpen, relays, session } from '$lib/stores/app';
   import { relayStatus } from '$lib/stores/relayStatus';
 
   interface BeforeInstallPromptEvent extends Event {
@@ -89,9 +89,7 @@
     {/if}
 
     <section class="panel algorithm-panel">
-      <h2>Your algorythm</h2>
-      <FeedTabs layout="vertical" disabled={!$session} />
-      <button disabled={!$session} on:click={() => refreshFeed()} aria-label="Refresh feed"><RefreshCw size={18} class={$loadingFeed ? 'spin' : ''} /> Refresh</button>
+      <AlgorithmPanel />
     </section>
 
     <section class="panel">
