@@ -5,7 +5,6 @@
   import { page } from '$app/stores';
   import { ArrowLeft } from '@lucide/svelte';
   import NoteCard from '$lib/components/NoteCard.svelte';
-  import ThreadReplyTree from '$lib/components/ThreadReplyTree.svelte';
   import { getCachedThreadEvents } from '$lib/nostr/cache';
   import { deletedEventIds, eventStats, events, mergeEvents, mergeProfileRecords, profiles, refreshEventStats, relays } from '$lib/stores/app';
   import { eventStatsFromEvents, fetchMissingEvents, fetchProfiles, fetchThreadReplies } from '$lib/nostr/client';
@@ -48,7 +47,7 @@
   $: threadEvents = mergeThreadEvents(rootEvent ? [rootEvent, ...localThreadEvents] : localThreadEvents, []);
   $: root = rootEvent?.id === id ? rootEvent : threadEvents.find((event) => event.id === id);
   $: replies = id ? threadReplyEvents(threadEvents, id) : [];
-  $: repliesByParent = id ? groupRepliesByParent(replies, id) : {};
+  $: sortedReplies = [...replies].sort((a, b) => a.created_at - b.created_at);
   $: if (browser && routeKey && root && routeKey !== restoredThreadRouteKey) void restoreThreadScrollPosition(routeKey);
 
   beforeNavigate(() => {
@@ -106,17 +105,6 @@
       }
     }
     return candidates.filter((event) => included.has(event.id));
-  }
-
-  function groupRepliesByParent(items: NostrEvent[], rootId: string) {
-    const byParent: Record<string, NostrEvent[]> = {};
-    for (const event of items) {
-      const parent = replyParentId(event, rootId);
-      if (!parent) continue;
-      byParent[parent] = [...(byParent[parent] ?? []), event];
-    }
-    Object.values(byParent).forEach((events) => events.sort((a, b) => b.created_at - a.created_at));
-    return byParent;
   }
 
   function replyParentId(event: NostrEvent, rootId: string) {
@@ -364,6 +352,7 @@
       }
       return next;
     });
+
     void refreshEventStats(statIds, true);
   }
 </script>
@@ -378,7 +367,9 @@
     <div class="feed-list">
       <NoteCard event={root} profile={$profiles[root.pubkey]} />
       {#if replies.length}
-        <ThreadReplyTree parentId={root.id} {repliesByParent} profiles={$profiles} focusedId={focusedReplyId} />
+        {#each sortedReplies as reply (reply.id)}
+          <NoteCard event={reply} profile={$profiles[reply.pubkey]} featured={reply.id === focusedReplyId} hiddenQuotedNoteIds={[root.id]} />
+        {/each}
       {:else if loading}
         <div class="empty-state"><span>Loading replies</span></div>
       {:else}

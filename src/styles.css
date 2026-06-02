@@ -760,6 +760,12 @@ label span, label strong { color: var(--text); }
   color: var(--accent);
   font-weight: inherit;
 }
+.capped-note-copy {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 14px;
+}
 .note-open-text {
   min-height: 0;
   display: inline;

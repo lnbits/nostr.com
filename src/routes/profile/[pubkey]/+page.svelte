@@ -480,7 +480,7 @@
   <section class="feed-list narrow">
     {#if userItems.length}
       {#each userItems as item (item.id)}
-        <NoteCard event={item.event} profile={$profiles[item.event.pubkey] ?? (item.event.pubkey === pubkey ? profile : undefined)} />
+        <NoteCard event={item.event} profile={$profiles[item.event.pubkey] ?? (item.event.pubkey === pubkey ? profile : undefined)} prefetchThread />
       {/each}
     {:else if loadingProfile}
       <div class="empty-state"><strong>Loading profile notes</strong><span>Checking relays for this profile’s posts.</span></div>

@@ -22,9 +22,17 @@
   export let featured = false;
   export let embedded = false;
   export let prefetchThread = false;
+  export let hiddenQuotedNoteIds: string[] = [];
   export let onOpen: ((event: NostrEvent) => void) | undefined = undefined;
 
   const previewLength = 400;
+  const maxParsedContentLength = 8000;
+  const maxExpandedContentLength = 6000;
+  const maxRenderableTags = 300;
+  const maxRenderedTextParts = 240;
+  const maxMediaAttachments = 6;
+  const maxSocialEmbeds = 3;
+  const maxQuotedNotes = 3;
   let expanded = false;
   let openImage: { url: string; alt?: string } | null = null;
   let menuOpen = false;
@@ -92,13 +100,19 @@
   $: displayEvent = $editedEvents[event.id] ?? event;
   $: name = profile?.display_name || profile?.name || displayEvent.pubkey.slice(0, 10);
   $: avatar = profile?.picture;
-  $: mediaAttachments = extractMediaAttachments(displayEvent);
-  $: socialEmbeds = extractSocialEmbeds(displayEvent.content);
-  $: quotedNoteReferences = extractQuotedNoteReferences(displayEvent.content, displayEvent.tags);
-  $: quotedNoteRawValues = quotedNoteReferences.map((reference) => reference.raw);
+  $: safeTags = displayEvent.tags.slice(0, maxRenderableTags);
+  $: parsedContent = displayEvent.content.slice(0, maxParsedContentLength);
+  $: renderedContent = displayEvent.content.slice(0, maxExpandedContentLength);
+  $: contentWasCapped = displayEvent.content.length > maxExpandedContentLength;
+  $: mediaAttachments = extractMediaAttachments({ ...displayEvent, content: parsedContent, tags: safeTags }).slice(0, maxMediaAttachments);
+  $: socialEmbeds = extractSocialEmbeds(parsedContent).slice(0, maxSocialEmbeds);
+  $: hiddenQuotedNoteIdSet = new Set(hiddenQuotedNoteIds);
+  $: allQuotedNoteReferences = extractQuotedNoteReferences(parsedContent, safeTags).slice(0, maxQuotedNotes);
+  $: quotedNoteReferences = allQuotedNoteReferences.filter((reference) => !hiddenQuotedNoteIdSet.has(reference.id));
+  $: quotedNoteRawValues = allQuotedNoteReferences.map((reference) => reference.raw);
   $: isLong = displayEvent.content.length > previewLength;
-  $: visibleContent = !isLong || expanded ? displayEvent.content : displayEvent.content.slice(0, previewLength).trimEnd();
-  $: contentParts = parseNoteText(visibleContent, [...mediaAttachments.map((media) => media.url), ...socialEmbeds.map((embed) => embed.url), ...quotedNoteRawValues], displayEvent.tags);
+  $: visibleContent = !isLong || expanded ? renderedContent : renderedContent.slice(0, previewLength).trimEnd();
+  $: contentParts = parseNoteText(visibleContent, [...mediaAttachments.map((media) => media.url), ...socialEmbeds.map((embed) => embed.url), ...quotedNoteRawValues], safeTags).slice(0, maxRenderedTextParts);
   $: counts = $eventStats[event.id] ?? { replies: 0, reposts: 0, likes: 0, zaps: 0, zapSats: 0, dislikes: 0, emoji: 0 };
   $: liked = $likedEvents.has(event.id);
   $: reposted = $repostedEvents.has(event.id);
@@ -473,6 +487,9 @@
           {/if}
         {/if}
       {/each}
+      {#if expanded && contentWasCapped}
+        <span class="capped-note-copy">… post content truncated</span>
+      {/if}
       {#if isLong && !expanded}
         <span class="fade-tail" aria-hidden="true"></span>
       {/if}
