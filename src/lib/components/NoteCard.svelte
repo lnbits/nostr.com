@@ -287,8 +287,13 @@
 
   function scheduleThreadPrefetch(visible: boolean) {
     clearTimeout(prefetchTimer);
+    prefetchTimer = undefined;
     if (!visible || !prefetchThread || embedded) return;
-    prefetchTimer = setTimeout(() => prefetchThreadPreview(event), 650);
+    prefetchTimer = setTimeout(() => {
+      prefetchTimer = undefined;
+      if (!statsVisible || embedded || !prefetchThread) return;
+      prefetchThreadPreview(event);
+    }, 650);
   }
 
   async function confirmReport() {

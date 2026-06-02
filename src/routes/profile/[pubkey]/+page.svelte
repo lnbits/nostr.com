@@ -31,6 +31,10 @@
   const targetProfileEventCount = 12;
   const maxAutomaticProfilePages = 1;
   const profileScrollStateMaxAgeMs = 30 * 60 * 1000;
+  const profilePageWindowSeconds = 60 * 60 * 24 * 30;
+  const profileWindowScanLimit = 6;
+  const profilePreloadDistancePx = 1800;
+  const profilePreloadRootMargin = `0px 0px ${profilePreloadDistancePx}px 0px`;
   type ProfileTimelineItem = { id: string; event: NostrEvent };
 
   $: pubkey = normalizePubkey($page.params.pubkey ?? '');
@@ -65,7 +69,8 @@
   let loadingProfile = true;
   let triedProfileRelays = false;
   let hasMoreProfile = true;
-  let profilePaginationCursor: number | undefined;
+  let profilePaginationCursor = 0;
+  let profilePreloadTimer: ReturnType<typeof setTimeout> | undefined;
   let pictureInput: HTMLInputElement;
   let bannerInput: HTMLInputElement;
   let editingProfilePubkey = '';
@@ -89,14 +94,15 @@
   onMount(() => {
     profileObserver = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) void loadMoreProfileEvents();
+        if (entry.isIntersecting) scheduleProfilePreload();
       },
-      { rootMargin: '360px 0px' }
+      { rootMargin: profilePreloadRootMargin }
     );
     if (profileLoadMoreSentinel) profileObserver.observe(profileLoadMoreSentinel);
     void restoreProfileScrollPosition(routeKey);
     return () => {
       saveCurrentProfileScrollPosition();
+      clearTimeout(profilePreloadTimer);
       profileObserver?.disconnect();
     };
   });
@@ -154,15 +160,20 @@
     loadingProfile = true;
     triedProfileRelays = false;
     loadingMoreProfile = false;
-    profilePaginationCursor = undefined;
+    profilePaginationCursor = profileRecentWindowUpperBound();
     profileEvents = [];
     const cachedProfileEvents = await getCachedProfileEvents(nextPubkey, initialProfileEventLimit);
     if (nextPubkey !== pubkey) return;
-    profileEvents = cleanProfileEvents([...cachedProfileEvents, ...$events.filter((event) => event.pubkey === nextPubkey)]);
+    profileEvents = cleanProfileEvents([...cachedProfileEvents, ...$events.filter((event) => event.pubkey === nextPubkey)]).filter((event) =>
+      eventInProfileWindow(event, profileRecentWindowLowerBound(), profileRecentWindowUpperBound())
+    );
     void refreshProfileStats();
     const [found, fetchedProfileEvents] = await Promise.all([
       $profiles[nextPubkey] ? Promise.resolve([]) : fetchProfiles([nextPubkey], $relays).catch(() => []),
-      fetchProfileEvents(nextPubkey, $relays, initialProfileEventLimit).catch(() => [])
+      fetchProfileEvents(nextPubkey, $relays, initialProfileEventLimit, {
+        since: profileRecentWindowLowerBound(),
+        until: profileRecentWindowUpperBound()
+      }).catch(() => [])
     ]);
     if (nextPubkey !== pubkey) return;
     triedProfileRelays = true;
@@ -172,30 +183,69 @@
       events.update((existing) => mergeEvents(fetchedProfileEvents, existing));
       addProfileEvents(fetchedProfileEvents);
     }
-    updateProfilePaginationCursor([...cachedProfileEvents, ...fetchedProfileEvents]);
+    profilePaginationCursor = nextProfilePaginationCursor(fetchedProfileEvents, profileRecentWindowLowerBound(), initialProfileEventLimit);
     loadingProfile = false;
     void autoFillProfileEvents(nextPubkey);
   }
 
   async function loadMoreProfileEvents(targetPubkey = pubkey) {
     if (!targetPubkey || loadingMoreProfile || !hasMoreProfile) return false;
-    const oldest = profilePaginationCursor ?? oldestProfileTimestamp();
-    if (!oldest) return false;
 
     loadingMoreProfile = true;
     try {
-      const nextEvents = await fetchProfileEvents(targetPubkey, $relays, profileEventPageLimit, { until: oldest - 1 }).catch(() => []);
-      if (targetPubkey !== pubkey) return false;
-      hasMoreProfile = nextEvents.length > 0;
-      if (nextEvents.length) {
-        events.update((existing) => mergeEvents(nextEvents, existing));
-        addProfileEvents(nextEvents);
-        updateProfilePaginationCursor(nextEvents);
+      const nextEvents: NostrEvent[] = [];
+      let cursor = profilePaginationCursor || oldestProfileTimestamp() || profileRecentWindowUpperBound();
+      let scannedWindows = 0;
+
+      while (cursor > 0 && nextEvents.length < profileEventPageLimit && scannedWindows < profileWindowScanLimit) {
+        const windowLower = Math.max(0, cursor - profilePageWindowSeconds);
+        const requestLimit = profileEventPageLimit - nextEvents.length;
+        const fetched = await fetchProfileEvents(targetPubkey, $relays, requestLimit, {
+          since: windowLower,
+          until: Math.max(0, cursor - 1)
+        }).catch(() => []);
+        if (targetPubkey !== pubkey) return false;
+
+        nextEvents.push(...fetched);
+        if (fetched.length >= requestLimit) {
+          cursor = nextProfilePaginationCursor(fetched, windowLower, requestLimit);
+          break;
+        }
+        cursor = windowLower;
+        scannedWindows += 1;
       }
-      return nextEvents.length > 0;
+
+      if (targetPubkey !== pubkey) return false;
+      profilePaginationCursor = cursor;
+      hasMoreProfile = cursor > 0;
+      const cleanNextEvents = cleanProfileEvents(nextEvents);
+      if (cleanNextEvents.length) {
+        events.update((existing) => mergeEvents(cleanNextEvents, existing));
+        addProfileEvents(cleanNextEvents);
+      }
+      return cleanNextEvents.length > 0;
     } finally {
       loadingMoreProfile = false;
+      scheduleProfilePreloadIfNeeded();
     }
+  }
+
+  function scheduleProfilePreload() {
+    if (profilePreloadTimer || loadingProfile || loadingMoreProfile || !hasMoreProfile) return;
+    profilePreloadTimer = setTimeout(() => {
+      profilePreloadTimer = undefined;
+      if (!loadingProfile && !loadingMoreProfile && hasMoreProfile) void loadMoreProfileEvents();
+    }, 120);
+  }
+
+  function scheduleProfilePreloadIfNeeded() {
+    if (!browser || !hasMoreProfile || loadingProfile || loadingMoreProfile) return;
+    if (distanceToPageBottom() <= profilePreloadDistancePx) scheduleProfilePreload();
+  }
+
+  function distanceToPageBottom() {
+    if (!browser) return Number.POSITIVE_INFINITY;
+    return document.documentElement.scrollHeight - window.scrollY - window.innerHeight;
   }
 
   async function autoFillProfileEvents(targetPubkey: string) {
@@ -221,14 +271,26 @@
     if (statIds.length) void refreshEventStats(statIds, true);
   }
 
-  function updateProfilePaginationCursor(nextEvents: NostrEvent[]) {
-    if (!nextEvents.length) return;
-    const oldest = Math.min(...nextEvents.map((event) => event.created_at));
-    profilePaginationCursor = Math.min(profilePaginationCursor ?? oldest, oldest);
-  }
-
   function cleanProfileEvents(nextEvents: NostrEvent[]) {
     return dedupeEvents(nextEvents).filter((event) => event.kind === 6 || (event.kind === 1 && topLevelFeedEvents([event]).length));
+  }
+
+  function profileRecentWindowUpperBound() {
+    return Math.floor(Date.now() / 1000);
+  }
+
+  function profileRecentWindowLowerBound() {
+    return Math.max(0, profileRecentWindowUpperBound() - profilePageWindowSeconds);
+  }
+
+  function eventInProfileWindow(event: NostrEvent, since: number, until: number) {
+    return event.created_at >= since && event.created_at <= until;
+  }
+
+  function nextProfilePaginationCursor(nextEvents: NostrEvent[], windowLower: number, limit: number) {
+    const cleanEvents = cleanProfileEvents(nextEvents);
+    if (cleanEvents.length >= limit) return Math.max(windowLower, Math.min(...cleanEvents.map((event) => event.created_at)));
+    return windowLower;
   }
 
   function openEditor() {

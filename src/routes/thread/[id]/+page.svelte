@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
   import { browser } from '$app/environment';
-  import { beforeNavigate } from '$app/navigation';
+  import { beforeNavigate, goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { ArrowLeft } from '@lucide/svelte';
   import NoteCard from '$lib/components/NoteCard.svelte';
@@ -11,8 +11,8 @@
   import { eventPointerFromIdentifier } from '$lib/nostr/identifiers';
   import { appPath } from '$lib/paths';
   import { readRouteScrollState, saveRouteScrollState } from '$lib/stores/routeScroll';
-  import { readThreadReturnTarget } from '$lib/stores/threadNavigation';
-  import { readPrefetchedThreadReplies, readThreadSeed } from '$lib/stores/threadSeed';
+  import { currentThreadReturnTarget, readThreadReturnTarget, saveThreadReturnTarget } from '$lib/stores/threadNavigation';
+  import { readHydratedThread, readPrefetchedThreadReplies, readThreadSeed, saveHydratedThread, saveThreadSeed } from '$lib/stores/threadSeed';
   import { timelineCursor, windowTimelineItems } from '$lib/timeline/window';
   import type { TimelineTrimEdge } from '$lib/timeline/window';
   import type { NostrEvent } from '$lib/nostr/types';
@@ -22,20 +22,22 @@
   const threadReplyPageLimit = 40;
   const maxThreadReplies = 160;
   const threadScrollStateMaxAgeMs = 30 * 60 * 1000;
+  const threadReplyWindowSeconds = 60 * 60 * 24 * 30;
+  const threadReplyWindowScanLimit = 6;
 
   let loading = true;
-  let loadingNewerReplies = false;
   let loadingOlderReplies = false;
   let hasOlderReplies = true;
+  let olderThreadReplyCursor = 0;
   let hydratedId = '';
   let seededId = '';
   let rootEvent: NostrEvent | undefined;
   let localThreadEvents: NostrEvent[] = [];
-  let topSentinel: HTMLDivElement;
   let bottomSentinel: HTMLDivElement;
-  let topObserver: IntersectionObserver | undefined;
   let bottomObserver: IntersectionObserver | undefined;
   let restoredThreadRouteKey = '';
+  let activeRouteId = '';
+  let hydrationRunId = 0;
 
   $: routeId = decodeURIComponent($page.params.id ?? '');
   $: pointer = eventPointerFromIdentifier(routeId);
@@ -43,44 +45,42 @@
   $: focusedReplyId = $page.url.searchParams.get('focus') ?? '';
   $: routeKey = currentThreadRouteKey();
   $: backHref = (id && readThreadReturnTarget(id)) || appPath('/');
-  $: if (id && id !== seededId) seedThreadFromCache(id, focusedReplyId);
+  $: if (id && id !== activeRouteId) {
+    saveCurrentThreadState();
+    resetThreadRouteState(id, focusedReplyId);
+  }
+  $: if (id && id !== seededId && !readHydratedThread(id)) seedThreadFromCache(id, focusedReplyId);
   $: threadEvents = mergeThreadEvents(rootEvent ? [rootEvent, ...localThreadEvents] : localThreadEvents, []);
   $: root = rootEvent?.id === id ? rootEvent : threadEvents.find((event) => event.id === id);
   $: replies = id ? threadReplyEvents(threadEvents, id) : [];
   $: sortedReplies = [...replies].sort((a, b) => a.created_at - b.created_at);
+  $: hiddenThreadQuoteIds = id ? sameThreadQuotedNoteIds(id, threadEvents) : [];
   $: if (browser && routeKey && root && routeKey !== restoredThreadRouteKey) void restoreThreadScrollPosition(routeKey);
 
   beforeNavigate(() => {
+    saveCurrentThreadState();
     saveCurrentThreadScrollPosition();
   });
 
   onMount(() => {
-    topObserver = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) void loadNewerThreadReplies();
-      },
-      { rootMargin: '260px 0px 0px 0px' }
-    );
     bottomObserver = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) void loadOlderThreadReplies();
       },
       { rootMargin: '0px 0px 420px 0px' }
     );
-    if (topSentinel) topObserver.observe(topSentinel);
     if (bottomSentinel) bottomObserver.observe(bottomSentinel);
     void hydrateThread();
     void restoreThreadScrollPosition(routeKey);
   });
 
   onDestroy(() => {
+    saveCurrentThreadState();
     saveCurrentThreadScrollPosition();
-    topObserver?.disconnect();
     bottomObserver?.disconnect();
   });
 
   $: if (browser && id && id !== hydratedId) void hydrateThread();
-  $: if (browser && topObserver && topSentinel) topObserver.observe(topSentinel);
   $: if (browser && bottomObserver && bottomSentinel) bottomObserver.observe(bottomSentinel);
 
   function mergeThreadEvents(incoming: NostrEvent[], existing: NostrEvent[]) {
@@ -117,56 +117,78 @@
 
   async function hydrateThread() {
     if (!id || hydratedId === id) return;
-    hydratedId = id;
-    seedThreadFromCache(id, focusedReplyId);
-    hasOlderReplies = true;
-    loading = true;
+    const rootId = id;
+    const runId = ++hydrationRunId;
+    hydratedId = rootId;
+    const restored = restoreHydratedThread(rootId);
+    if (restored) {
+      loading = false;
+    } else {
+      seedThreadFromCache(rootId, focusedReplyId);
+      hasOlderReplies = true;
+      olderThreadReplyCursor = 0;
+      loading = true;
+    }
     try {
-      const cached = $events.find((event) => event.id === id);
-      const [found] = cached ? [cached] : await fetchMissingEvents([id], $relays, pointer?.relays ?? []).catch(() => []);
+      const cached = $events.find((event) => event.id === rootId);
+      const [found] = cached ? [cached] : await fetchMissingEvents([rootId], $relays, pointer?.relays ?? []).catch(() => []);
+      if (!isCurrentHydration(rootId, runId)) return;
       if (found) {
         rootEvent = found;
         localThreadEvents = mergeThreadEvents([found], localThreadEvents).filter((event) => event.id !== found.id);
         events.update((existing) => mergeEvents([found], existing));
       }
       if (rootEvent) refreshThreadStats([rootEvent]);
-      void hydrateCachedThreadReplies();
+      if (!restored) void hydrateCachedThreadReplies(rootId, runId);
 
-      const directReplies = await fetchDirectThreadReplies({ limit: initialThreadReplyLimit });
-      if (directReplies.length) {
-        localThreadEvents = mergeThreadEvents(directReplies, localThreadEvents);
-        trimThreadReplyWindow('bottom');
-        hydrateThreadProfiles(directReplies);
-        refreshThreadStats(directReplies);
+      const replyBatch =
+        restored && rootEvent
+          ? await fetchLatestThreadReplyBatch(rootId, initialThreadReplyLimit)
+          : rootEvent
+            ? await fetchForwardThreadReplyBatch(rootEvent.created_at, initialThreadReplyLimit)
+            : await fetchThreadReplyWindow({ limit: initialThreadReplyLimit });
+      if (!isCurrentHydration(rootId, runId)) return;
+      if ('cursor' in replyBatch) {
+        olderThreadReplyCursor = replyBatch.cursor;
+        hasOlderReplies = replyBatch.hasMore;
+      } else if (!restored) {
+        olderThreadReplyCursor = nextThreadForwardCursor(replyBatch.events, 0);
+        hasOlderReplies = Boolean(rootEvent && replyBatch.directCount >= initialThreadReplyLimit);
       }
-
-      const nestedReplies = await fetchNestedThreadReplies(directReplies);
-      if (nestedReplies.length) {
-        localThreadEvents = mergeThreadEvents(nestedReplies, localThreadEvents);
+      if (replyBatch.events.length) {
+        localThreadEvents = mergeThreadEvents(replyBatch.events, localThreadEvents);
         trimThreadReplyWindow('bottom');
-        hydrateThreadProfiles(nestedReplies);
-        refreshThreadStats(nestedReplies);
+        hydrateThreadProfiles(replyBatch.events);
+        refreshThreadStats(replyBatch.events);
+        saveCurrentThreadState();
       }
     } finally {
-      loading = false;
+      if (isCurrentHydration(rootId, runId)) {
+        loading = false;
+        saveCurrentThreadState();
+      }
     }
   }
 
-  async function hydrateCachedThreadReplies() {
-    if (!id) return;
-    const cached = mergeThreadEvents(await getCachedThreadEvents(id, maxThreadReplies).catch(() => []), []);
+  function isCurrentHydration(rootId: string, runId: number) {
+    return id === rootId && hydrationRunId === runId;
+  }
+
+  async function hydrateCachedThreadReplies(rootId: string, runId: number) {
+    const cached = mergeThreadEvents(await getCachedThreadEvents(rootId, maxThreadReplies).catch(() => []), []);
+    if (!isCurrentHydration(rootId, runId)) return;
     if (!cached.length) return;
-    localThreadEvents = mergeThreadEvents(cached.filter((event) => event.id !== id), localThreadEvents);
-    const cachedRoot = cached.find((event) => event.id === id);
+    localThreadEvents = mergeThreadEvents(cached.filter((event) => event.id !== rootId), localThreadEvents);
+    const cachedRoot = cached.find((event) => event.id === rootId);
     if (cachedRoot && !rootEvent) rootEvent = cachedRoot;
     trimThreadReplyWindow('bottom');
     hydrateThreadProfiles(cached);
     refreshThreadStats(cached);
+    saveCurrentThreadState();
   }
 
-  async function fetchDirectThreadReplies(options: { limit?: number; since?: number; until?: number } = {}) {
-    if (!id) return [];
-    return fetchThreadReplies(id, $relays, options.limit ?? threadReplyPageLimit, {
+  async function fetchDirectThreadReplies(rootId: string, options: { limit?: number; since?: number; until?: number } = {}) {
+    return fetchThreadReplies(rootId, $relays, options.limit ?? threadReplyPageLimit, {
       since: options.since,
       until: options.until
     }).catch(() => []);
@@ -182,47 +204,68 @@
       : [];
   }
 
-  async function fetchThreadReplyPage(options: { limit?: number; since?: number; until?: number } = {}) {
-    if (!id) return [];
-    const fetchedReplies = await fetchDirectThreadReplies(options);
+  async function fetchThreadReplyWindow(options: { limit?: number; since?: number; until?: number } = {}) {
+    if (!id) return { events: [], directCount: 0 };
+    const rootId = id;
+    const fetchedReplies = await fetchDirectThreadReplies(rootId, options);
+    if (id !== rootId) return { events: [], directCount: 0 };
     const nestedReplies = await fetchNestedThreadReplies(fetchedReplies);
-    return mergeThreadEvents(nestedReplies, fetchedReplies).filter((event) => event.id !== id);
+    if (id !== rootId) return { events: [], directCount: 0 };
+    return { events: mergeThreadEvents(nestedReplies, fetchedReplies).filter((event) => event.id !== rootId), directCount: fetchedReplies.length };
   }
 
-  async function loadNewerThreadReplies() {
-    if (!id || loading || loadingNewerReplies || !replies.length) return;
-    const newest = timelineCursor(replies, 'newest');
-    if (!newest) return;
-    const beforeHeight = document.documentElement.scrollHeight;
-    loadingNewerReplies = true;
-    try {
-      const nextReplies = await fetchThreadReplyPage({ since: newest + 1 });
-      if (!nextReplies.length) return;
-      localThreadEvents = mergeThreadEvents(nextReplies, localThreadEvents);
-      trimThreadReplyWindow('bottom');
-      hydrateThreadProfiles(nextReplies);
-      refreshThreadStats(nextReplies);
-      await preserveScrollAfterTopMutation(beforeHeight);
-    } finally {
-      loadingNewerReplies = false;
+  async function fetchForwardThreadReplyBatch(cursorStart: number, limit: number) {
+    const nextReplies: NostrEvent[] = [];
+    let cursor = cursorStart;
+    let scannedWindows = 0;
+    const upperBound = nowSeconds();
+
+    while (cursor < upperBound && nextReplies.length < limit && scannedWindows < threadReplyWindowScanLimit) {
+      const windowUpper = Math.min(upperBound, cursor + threadReplyWindowSeconds);
+      const requestLimit = limit - nextReplies.length;
+      const { events: fetchedReplies, directCount } = await fetchThreadReplyWindow({
+        limit: requestLimit,
+        since: cursor + 1,
+        until: windowUpper
+      });
+      nextReplies.push(...fetchedReplies);
+      if (directCount >= requestLimit) {
+        cursor = nextThreadForwardCursor(fetchedReplies, cursor);
+        break;
+      }
+      cursor = windowUpper;
+      scannedWindows += 1;
     }
+
+    return { events: mergeThreadEvents(nextReplies, []), cursor, hasMore: cursor < upperBound };
+  }
+
+  async function fetchLatestThreadReplyBatch(rootId: string, limit: number) {
+    const loadedReplies = threadReplyEvents(threadEventsForCache(), rootId);
+    const newestLoadedReply = timelineCursor(loadedReplies, 'newest');
+    return fetchThreadReplyWindow({
+      limit,
+      since: newestLoadedReply ? newestLoadedReply + 1 : rootEvent?.created_at
+    });
   }
 
   async function loadOlderThreadReplies() {
     if (!id || loading || loadingOlderReplies || !hasOlderReplies) return;
-    const oldest = timelineCursor(replies, 'oldest');
-    if (!oldest) return;
+    const cursorStart = olderThreadReplyCursor || timelineCursor(replies, 'newest') || rootEvent?.created_at;
+    if (!cursorStart) return;
     loadingOlderReplies = true;
     try {
-      const nextReplies = await fetchThreadReplyPage({ until: oldest - 1 });
-      if (!nextReplies.length) {
-        hasOlderReplies = false;
+      const replyBatch = await fetchForwardThreadReplyBatch(cursorStart, threadReplyPageLimit);
+      olderThreadReplyCursor = replyBatch.cursor;
+      hasOlderReplies = replyBatch.hasMore;
+      if (!replyBatch.events.length) {
         return;
       }
-      localThreadEvents = mergeThreadEvents(nextReplies, localThreadEvents);
-      trimThreadReplyWindow('top');
-      hydrateThreadProfiles(nextReplies);
-      refreshThreadStats(nextReplies);
+      localThreadEvents = mergeThreadEvents(replyBatch.events, localThreadEvents);
+      trimThreadReplyWindow('bottom');
+      hydrateThreadProfiles(replyBatch.events);
+      refreshThreadStats(replyBatch.events);
+      saveCurrentThreadState();
     } finally {
       loadingOlderReplies = false;
     }
@@ -241,6 +284,121 @@
     seededId = rootId;
     localThreadEvents = cachedThreadSeed(rootId, focusId);
     rootEvent = localThreadEvents.find((event) => event.id === rootId);
+  }
+
+  function resetThreadRouteState(nextId: string, focusId: string) {
+    activeRouteId = nextId;
+    hydrationRunId += 1;
+    hydratedId = '';
+    seededId = '';
+    restoredThreadRouteKey = '';
+    rootEvent = undefined;
+    localThreadEvents = [];
+    loading = true;
+    loadingOlderReplies = false;
+    hasOlderReplies = true;
+    olderThreadReplyCursor = 0;
+    if (restoreHydratedThread(nextId)) {
+      loading = false;
+      return;
+    }
+    seedThreadFromCache(nextId, focusId);
+    loading = !rootEvent;
+  }
+
+  function restoreHydratedThread(rootId: string) {
+    const cached = readHydratedThread(rootId);
+    if (!cached?.events.length) return false;
+    const cachedRoot = cached.events.find((event) => event.id === rootId);
+    if (!cachedRoot) return false;
+    seededId = rootId;
+    rootEvent = cachedRoot;
+    localThreadEvents = mergeThreadEvents(
+      cached.events.filter((event) => event.id !== rootId),
+      localThreadEvents.filter((event) => event.id !== rootId)
+    );
+    hasOlderReplies = cached.hasOlderReplies;
+    olderThreadReplyCursor = 0;
+    hydrateThreadProfiles(cached.events);
+    return true;
+  }
+
+  function saveCurrentThreadState() {
+    if (!rootEvent) return;
+    const threadItems = threadEventsForCache();
+    saveHydratedThread(rootEvent.id, threadItems, hasOlderReplies);
+    saveThreadStateToReturnChain(rootEvent.id, threadItems);
+  }
+
+  function openThreadNote(event: NostrEvent) {
+    if (!browser) return;
+    const threadPath = appPath(`/thread/${event.id}`);
+    if ($page.url.pathname === threadPath) return;
+    const currentItems = threadEventsForCache();
+    const childItems = threadEventsForRoot(event.id, mergeThreadEvents([event], currentItems));
+    saveCurrentThreadState();
+    saveCurrentThreadScrollPosition();
+    saveThreadSeed(event);
+    saveHydratedThread(event.id, childItems, true);
+    saveThreadReturnTarget(event.id, currentThreadReturnTarget($page.url.pathname, $page.url.search, $page.url.hash));
+    void goto(threadPath);
+  }
+
+  function threadEventsForCache() {
+    return mergeThreadEvents(rootEvent ? [rootEvent, ...localThreadEvents] : localThreadEvents, []);
+  }
+
+  function saveThreadStateToReturnChain(currentRootId: string, threadItems: NostrEvent[]) {
+    let parentId = threadIdFromTarget(readThreadReturnTarget(currentRootId));
+    const visited = new Set([currentRootId]);
+
+    while (parentId && !visited.has(parentId)) {
+      visited.add(parentId);
+      const parentRoot = readThreadSeed(parentId) ?? readHydratedThread(parentId)?.events.find((event) => event.id === parentId);
+      saveHydratedThread(parentId, mergeThreadEvents(parentRoot ? [parentRoot, ...threadItems] : threadItems, []), true);
+      parentId = threadIdFromTarget(readThreadReturnTarget(parentId));
+    }
+  }
+
+  function threadEventsForRoot(rootId: string, items: NostrEvent[]) {
+    const rootItem = items.find((event) => event.id === rootId);
+    return mergeThreadEvents([...(rootItem ? [rootItem] : []), ...threadReplyEvents(items, rootId)], []);
+  }
+
+  function sameThreadQuotedNoteIds(rootId: string, items: NostrEvent[]) {
+    const ids = new Set(items.map((event) => event.id));
+    ids.add(rootId);
+
+    let parentId = threadIdFromTarget(readThreadReturnTarget(rootId));
+    const visited = new Set([rootId]);
+    while (parentId && !visited.has(parentId)) {
+      visited.add(parentId);
+      ids.add(parentId);
+      for (const event of readHydratedThread(parentId)?.events ?? []) ids.add(event.id);
+      parentId = threadIdFromTarget(readThreadReturnTarget(parentId));
+    }
+
+    return [...ids];
+  }
+
+  function threadIdFromTarget(target: string) {
+    try {
+      const parsed = new URL(target, 'http://local');
+      const match = parsed.pathname.match(/\/thread\/([^/]+)/);
+      const targetId = match?.[1] ? (eventPointerFromIdentifier(decodeURIComponent(match[1]))?.id ?? decodeURIComponent(match[1])) : '';
+      return /^[0-9a-f]{64}$/i.test(targetId) ? targetId : '';
+    } catch {
+      return '';
+    }
+  }
+
+  function nextThreadForwardCursor(nextEvents: NostrEvent[], fallback: number) {
+    if (!nextEvents.length) return fallback;
+    return Math.max(fallback, Math.max(...nextEvents.map((event) => event.created_at)));
+  }
+
+  function nowSeconds() {
+    return Math.floor(Date.now() / 1000);
   }
 
   function trimThreadReplyWindow(trimFrom: 'top' | 'bottom') {
@@ -268,13 +426,6 @@
     }
 
     return mergeThreadEvents([...kept.values()], []);
-  }
-
-  async function preserveScrollAfterTopMutation(beforeHeight: number) {
-    if (!browser) return;
-    await tick();
-    const heightDelta = document.documentElement.scrollHeight - beforeHeight;
-    if (heightDelta > 0) window.scrollBy({ top: heightDelta, left: 0, behavior: 'instant' });
   }
 
   function currentThreadRouteKey() {
@@ -359,16 +510,13 @@
 
 <section class="thread-page">
   <a class="page-back" href={backHref} aria-label="Back"><ArrowLeft size={18} /> Back</a>
-  <div class="thread-load-sentinel" bind:this={topSentinel} aria-live="polite">
-    {#if loadingNewerReplies}<span>Loading newer replies</span>{/if}
-  </div>
 
   {#if root}
     <div class="feed-list">
-      <NoteCard event={root} profile={$profiles[root.pubkey]} />
+      <NoteCard event={root} profile={$profiles[root.pubkey]} hiddenQuotedNoteIds={hiddenThreadQuoteIds} onOpen={openThreadNote} />
       {#if replies.length}
         {#each sortedReplies as reply (reply.id)}
-          <NoteCard event={reply} profile={$profiles[reply.pubkey]} featured={reply.id === focusedReplyId} hiddenQuotedNoteIds={[root.id]} />
+          <NoteCard event={reply} profile={$profiles[reply.pubkey]} featured={reply.id === focusedReplyId} hiddenQuotedNoteIds={hiddenThreadQuoteIds} onOpen={openThreadNote} />
         {/each}
       {:else if loading}
         <div class="empty-state"><span>Loading replies</span></div>
@@ -378,14 +526,14 @@
     </div>
     <div class="thread-load-sentinel" bind:this={bottomSentinel} aria-live="polite">
       {#if loadingOlderReplies}
-        <span>Loading older replies</span>
+        <span>Loading more replies</span>
       {:else if hasOlderReplies && replies.length}
-        <span>Scroll down for older replies</span>
+        <span>Scroll down for more replies</span>
       {/if}
     </div>
   {:else if loading}
     <div class="empty-state"><span>Loading thread</span></div>
   {:else}
-    <div class="empty-state"><strong>Thread not cached</strong><span>Open a note from the feed or refresh relays to hydrate it.</span></div>
+    <div class="empty-state"><span>Loading thread</span></div>
   {/if}
 </section>

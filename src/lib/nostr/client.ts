@@ -9,6 +9,8 @@ import type { ContactListDetails, ContactListItem, CustomFeedSettings, DirectMes
 const pool = new SimplePool();
 type SearchFilter = Filter & { search?: string };
 const bunkerSigners = new Map<string, nip46.BunkerSigner>();
+const connectedBunkerSignerKeys = new Set<string>();
+const bunkerConnectionPromises = new Map<string, Promise<void>>();
 type SubCloser = { close: (reason?: string) => void };
 type PomegranateProfile = { name: string; handler_pubkey: string; email?: string };
 type PomegranateAccount = { pubkey: string; email?: string };
@@ -163,6 +165,7 @@ export async function loginWithBunker(uri: string): Promise<Session> {
       bunkerSecret: pointer.secret
     };
     bunkerSigners.set(bunkerSignerKey(session), signer);
+    connectedBunkerSignerKeys.add(bunkerSignerKey(session));
     return session;
   } catch (err) {
     throw err instanceof Error ? err : new Error(typeof err === 'string' ? err : 'Could not sign in to the bunker.');
@@ -1093,7 +1096,7 @@ async function decryptNip04(session: Session, peer: string, ciphertext: string) 
   if (!peer) return undefined;
   if (session.secret) return nip04.decrypt(hexToBytes(session.secret), peer, ciphertext);
   if (typeof window !== 'undefined' && session.mode === 'nip07' && window.nostr?.nip04) return window.nostr.nip04.decrypt(peer, ciphertext);
-  if (isRemoteSignerSession(session)) return getBunkerSigner(session).nip04Decrypt(peer, ciphertext);
+  if (isRemoteSignerSession(session)) return (await getConnectedBunkerSigner(session)).nip04Decrypt(peer, ciphertext);
   return undefined;
 }
 
@@ -1109,7 +1112,7 @@ async function unwrapNip17Event(event: NostrEvent, session: Session) {
 async function decryptNip44(session: Session, peer: string, ciphertext: string) {
   let plaintext: string | undefined;
   if (typeof window !== 'undefined' && session.mode === 'nip07' && window.nostr?.nip44) plaintext = await window.nostr.nip44.decrypt(peer, ciphertext);
-  if (isRemoteSignerSession(session)) plaintext = await getBunkerSigner(session).nip44Decrypt(peer, ciphertext);
+  if (isRemoteSignerSession(session)) plaintext = await (await getConnectedBunkerSigner(session)).nip44Decrypt(peer, ciphertext);
   if (!plaintext) throw new Error('NIP-44 decrypt is not available for this session.');
   return JSON.parse(plaintext) as unknown;
 }
@@ -1118,7 +1121,7 @@ async function encryptNip44(session: Session, peer: string, payload: unknown) {
   const plaintext = JSON.stringify(payload);
   if (session.secret) return nip44.encrypt(plaintext, nip44.getConversationKey(hexToBytes(session.secret), peer));
   if (typeof window !== 'undefined' && session.mode === 'nip07' && window.nostr?.nip44) return window.nostr.nip44.encrypt(peer, plaintext);
-  if (isRemoteSignerSession(session)) return getBunkerSigner(session).nip44Encrypt(peer, plaintext);
+  if (isRemoteSignerSession(session)) return (await getConnectedBunkerSigner(session)).nip44Encrypt(peer, plaintext);
   throw new Error('NIP-44 encrypt is not available for this session.');
 }
 
@@ -1233,7 +1236,7 @@ export async function signEventTemplate(session: Session, draft: Pick<NostrTools
   } else if (session.secret) {
     event = finalizeEvent(draft, hexToBytes(session.secret));
   } else if (isRemoteSignerSession(session)) {
-    event = (await getBunkerSigner(session).signEvent(draft)) as NostrToolsEvent;
+    event = (await (await getConnectedBunkerSigner(session)).signEvent(draft)) as NostrToolsEvent;
   } else {
     throw new Error('No signer is available for this session.');
   }
@@ -1279,6 +1282,28 @@ function getBunkerSigner(session: Session) {
     }
   });
   bunkerSigners.set(key, signer);
+  return signer;
+}
+
+async function getConnectedBunkerSigner(session: Session) {
+  const signer = getBunkerSigner(session);
+  const key = bunkerSignerKey(session);
+  if (connectedBunkerSignerKeys.has(key)) return signer;
+
+  let connection = bunkerConnectionPromises.get(key);
+  if (!connection) {
+    connection = withTimeout(signer.connect(), 15000, 'The bunker did not acknowledge the connection request.').then(() => {
+      connectedBunkerSignerKeys.add(key);
+    });
+    bunkerConnectionPromises.set(
+      key,
+      connection.finally(() => {
+        bunkerConnectionPromises.delete(key);
+      })
+    );
+  }
+
+  await connection;
   return signer;
 }
 

@@ -66,8 +66,8 @@ const olderFetchBatchLimit = 80;
 const olderFetchTarget = pageFeedLimit;
 const olderFetchMaxAttempts = 5;
 const olderFetchEmptyAttemptLimit = 2;
-const feedRecentWindowSeconds = 60 * 60 * 24 * 7;
-const olderFetchPageWindowSeconds = 60 * 60 * 24 * 7;
+const feedRecentWindowSeconds = 60 * 60 * 24 * 30;
+const olderFetchPageWindowSeconds = 60 * 60 * 24 * 30;
 const threadPrefetchReplyLimit = 10;
 const threadPrefetchCooldownMs = 5 * 60 * 1000;
 const maxThreadPrefetchConcurrent = 2;
@@ -1280,11 +1280,15 @@ function hydrateSession() {
 
 function persistSession(next: Session) {
   if (!browser) return;
-  if (next.mode === 'nip07' || next.mode === 'private-key') {
+  if (next.mode === 'nip07') {
     localStorage.setItem(
       sessionStorageKey,
-      JSON.stringify(next.mode === 'nip07' ? ({ pubkey: next.pubkey, mode: next.mode } satisfies Session) : next)
+      JSON.stringify({ pubkey: next.pubkey, mode: next.mode } satisfies Session)
     );
+    return;
+  }
+  if (next.mode === 'private-key' || isStoredRemoteSignerSession(next)) {
+    localStorage.setItem(sessionStorageKey, JSON.stringify(next));
     return;
   }
   localStorage.removeItem(sessionStorageKey);
@@ -1295,18 +1299,35 @@ function readStoredSession() {
   if (!raw) return null;
   try {
     const saved = JSON.parse(raw) as Session;
-    if (!saved?.pubkey || !saved?.mode) return null;
-    if (saved.bunkerClientSecret || saved.bunkerSecret) {
-      localStorage.removeItem(sessionStorageKey);
-      return null;
-    }
+    if (!saved?.pubkey || !saved?.mode || !isHexKey(saved.pubkey)) return clearStoredSession();
     if (saved.mode === 'nip07') return { pubkey: saved.pubkey, mode: saved.mode };
-    if (saved.mode === 'private-key' && saved.secret) return saved;
-    return null;
+    if (saved.mode === 'private-key' && isHexKey(saved.secret)) return saved;
+    if (isStoredRemoteSignerSession(saved)) return saved;
+    return clearStoredSession();
   } catch {
-    localStorage.removeItem(sessionStorageKey);
-    return null;
+    return clearStoredSession();
   }
+}
+
+function isStoredRemoteSignerSession(value: Session) {
+  return (
+    (value.mode === 'bunker' || value.mode === 'pomegranate') &&
+    isHexKey(value.pubkey) &&
+    isHexKey(value.bunkerClientSecret) &&
+    isHexKey(value.bunkerRemotePubkey) &&
+    Array.isArray(value.bunkerRelays) &&
+    value.bunkerRelays.some((relay) => /^wss?:\/\//i.test(relay)) &&
+    (value.bunkerSecret == null || typeof value.bunkerSecret === 'string')
+  );
+}
+
+function isHexKey(value: unknown) {
+  return typeof value === 'string' && /^[0-9a-f]{64}$/i.test(value);
+}
+
+function clearStoredSession() {
+  localStorage.removeItem(sessionStorageKey);
+  return null;
 }
 
 function readLastSeen(storageKey: string, pubkey: string) {
