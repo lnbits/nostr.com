@@ -1,9 +1,14 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
+  import { page } from '$app/stores';
   import { onMount } from 'svelte';
   import { MessageSquareText } from '@lucide/svelte';
   import { events, mergeProfileRecords, profiles, relays } from '$lib/stores/app';
   import { fetchMissingEvents, fetchProfiles } from '$lib/nostr/client';
   import { appPath } from '$lib/paths';
+  import { saveRouteScrollState } from '$lib/stores/routeScroll';
+  import { currentThreadReturnTarget, saveThreadReturnTarget } from '$lib/stores/threadNavigation';
+  import { saveThreadSeed } from '$lib/stores/threadSeed';
   import type { NostrEvent, Profile } from '$lib/nostr/types';
 
   export let ids: string[] = [];
@@ -44,13 +49,43 @@
   function preview(content: string) {
     return content.replace(/\s+/g, ' ').trim().slice(0, 180);
   }
+
+  function openQuotedNote(clickEvent: MouseEvent, event: NostrEvent) {
+    if (clickEvent.button !== 0 || clickEvent.metaKey || clickEvent.ctrlKey || clickEvent.shiftKey || clickEvent.altKey) return;
+    clickEvent.preventDefault();
+    const threadPath = appPath(`/thread/${event.id}`);
+    if ($page.url.pathname === threadPath) return;
+    saveCurrentRoutePosition(clickEvent.currentTarget);
+    saveThreadSeed(event);
+    saveThreadReturnTarget(event.id, currentThreadReturnTarget($page.url.pathname, $page.url.search, $page.url.hash));
+    void goto(threadPath);
+  }
+
+  function saveCurrentRoutePosition(target: EventTarget | null) {
+    const anchor = target instanceof Element ? target.closest<HTMLElement>('[data-note-id]') : null;
+    if (!anchor?.dataset.noteId) return;
+    saveRouteScrollState(
+      currentThreadReturnTarget($page.url.pathname, $page.url.search, $page.url.hash),
+      {
+        scrollY: window.scrollY,
+        anchorId: anchor.dataset.noteId,
+        anchorOffset: anchor.getBoundingClientRect().top
+      },
+      { exact: true }
+    );
+  }
 </script>
 
 {#if quotedEvents.length}
   <div class="quoted-note-list" class:compact>
     {#each quotedEvents as event (event.id)}
       {@const profile = $profiles[event.pubkey]}
-      <a class="quoted-note" href={appPath(`/thread/${event.id}`)} aria-label="Open quoted note">
+      <a
+        class="quoted-note"
+        href={appPath(`/thread/${event.id}`)}
+        aria-label="Open quoted note"
+        on:click={(clickEvent) => openQuotedNote(clickEvent, event)}
+      >
         <span class="avatar mini">
           {#if profile?.picture}
             <img src={profile.picture} alt="" loading="lazy" referrerpolicy="no-referrer" />

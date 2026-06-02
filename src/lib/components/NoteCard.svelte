@@ -2,6 +2,7 @@
   import { onDestroy, onMount } from 'svelte';
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
+  import { page } from '$app/stores';
   import { Copy, ExternalLink, Flag, Heart, Link, MessageCircle, MoreHorizontal, Pencil, Repeat2, Trash2, UserX, Zap } from '@lucide/svelte';
   import { nip19 } from 'nostr-tools';
   import type { NostrEvent, Profile } from '$lib/nostr/types';
@@ -11,6 +12,9 @@
   import { deleteNote, editedEvents, eventStats, filterByHashtag, likedEvents, mergeProfileRecords, muteAccount, prefetchThreadPreview, profiles, reactToNote, refreshEventStats, relays, reportNote, repostedEvents, repostNote, session, startEdit, startReply, watchVisibleNoteStats } from '$lib/stores/app';
   import { appPath } from '$lib/paths';
   import { pauseWhenHidden } from '$lib/actions/pauseWhenHidden';
+  import { saveRouteScrollState } from '$lib/stores/routeScroll';
+  import { saveThreadReturnTarget, currentThreadReturnTarget } from '$lib/stores/threadNavigation';
+  import { saveThreadSeed } from '$lib/stores/threadSeed';
   import QuotedNotePreview from './QuotedNotePreview.svelte';
 
   export let event: NostrEvent;
@@ -137,7 +141,27 @@
 
   function openNote() {
     if (onOpen) onOpen(event);
-    else if (browser && !embedded) void goto(appPath(`/thread/${event.id}`));
+    else if (browser && !embedded) {
+      const threadPath = appPath(`/thread/${event.id}`);
+      if ($page.url.pathname === threadPath) return;
+      saveCurrentRoutePosition(noteElement);
+      saveThreadSeed(event);
+      saveThreadReturnTarget(event.id, currentThreadReturnTarget($page.url.pathname, $page.url.search, $page.url.hash));
+      void goto(threadPath);
+    }
+  }
+
+  function saveCurrentRoutePosition(anchor: HTMLElement | undefined) {
+    if (!browser || !anchor?.dataset.noteId) return;
+    saveRouteScrollState(
+      currentThreadReturnTarget($page.url.pathname, $page.url.search, $page.url.hash),
+      {
+        scrollY: window.scrollY,
+        anchorId: anchor.dataset.noteId,
+        anchorOffset: anchor.getBoundingClientRect().top
+      },
+      { exact: true }
+    );
   }
 
   function openFromNoteBody(pointerEvent: MouseEvent) {

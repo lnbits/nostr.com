@@ -27,6 +27,7 @@
   import { topLevelFeedEvents } from '$lib/nostr/client';
   import { appPath } from '$lib/paths';
   import { readFeedScrollState, saveFeedScrollState } from '$lib/stores/feedScroll';
+  import { currentThreadReturnTarget, saveThreadReturnTarget } from '$lib/stores/threadNavigation';
   import { saveThreadSeed } from '$lib/stores/threadSeed';
   import type { NostrEvent } from '$lib/nostr/types';
 
@@ -228,6 +229,7 @@
     const anchor = document.querySelector<HTMLElement>(`.feed-list [data-note-id="${event.id}"]`);
     saveFeedScrollPositionForAnchor(anchor);
     saveThreadSeed(event);
+    saveThreadReturnTarget(event.id, currentThreadReturnTarget($page.url.pathname, $page.url.search, $page.url.hash));
     clickedFeedNoteSaved = true;
     void goto(appPath(`/thread/${event.id}`));
   }

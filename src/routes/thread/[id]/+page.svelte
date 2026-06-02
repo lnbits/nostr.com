@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
   import { browser } from '$app/environment';
+  import { beforeNavigate } from '$app/navigation';
   import { page } from '$app/stores';
   import { ArrowLeft } from '@lucide/svelte';
   import NoteCard from '$lib/components/NoteCard.svelte';
@@ -10,6 +11,8 @@
   import { eventStatsFromEvents, fetchMissingEvents, fetchProfiles, fetchThreadReplies } from '$lib/nostr/client';
   import { eventPointerFromIdentifier } from '$lib/nostr/identifiers';
   import { appPath } from '$lib/paths';
+  import { readRouteScrollState, saveRouteScrollState } from '$lib/stores/routeScroll';
+  import { readThreadReturnTarget } from '$lib/stores/threadNavigation';
   import { readPrefetchedThreadReplies, readThreadSeed } from '$lib/stores/threadSeed';
   import { timelineCursor, windowTimelineItems } from '$lib/timeline/window';
   import type { TimelineTrimEdge } from '$lib/timeline/window';
@@ -19,6 +22,7 @@
   const nestedThreadReplyLimit = 80;
   const threadReplyPageLimit = 40;
   const maxThreadReplies = 160;
+  const threadScrollStateMaxAgeMs = 30 * 60 * 1000;
 
   let loading = true;
   let loadingNewerReplies = false;
@@ -32,16 +36,24 @@
   let bottomSentinel: HTMLDivElement;
   let topObserver: IntersectionObserver | undefined;
   let bottomObserver: IntersectionObserver | undefined;
+  let restoredThreadRouteKey = '';
 
   $: routeId = decodeURIComponent($page.params.id ?? '');
   $: pointer = eventPointerFromIdentifier(routeId);
   $: id = pointer?.id ?? routeId;
   $: focusedReplyId = $page.url.searchParams.get('focus') ?? '';
+  $: routeKey = currentThreadRouteKey();
+  $: backHref = (id && readThreadReturnTarget(id)) || appPath('/');
   $: if (id && id !== seededId) seedThreadFromCache(id, focusedReplyId);
   $: threadEvents = mergeThreadEvents(rootEvent ? [rootEvent, ...localThreadEvents] : localThreadEvents, []);
   $: root = rootEvent?.id === id ? rootEvent : threadEvents.find((event) => event.id === id);
   $: replies = id ? threadReplyEvents(threadEvents, id) : [];
   $: repliesByParent = id ? groupRepliesByParent(replies, id) : {};
+  $: if (browser && routeKey && root && routeKey !== restoredThreadRouteKey) void restoreThreadScrollPosition(routeKey);
+
+  beforeNavigate(() => {
+    saveCurrentThreadScrollPosition();
+  });
 
   onMount(() => {
     topObserver = new IntersectionObserver(
@@ -59,9 +71,11 @@
     if (topSentinel) topObserver.observe(topSentinel);
     if (bottomSentinel) bottomObserver.observe(bottomSentinel);
     void hydrateThread();
+    void restoreThreadScrollPosition(routeKey);
   });
 
   onDestroy(() => {
+    saveCurrentThreadScrollPosition();
     topObserver?.disconnect();
     bottomObserver?.disconnect();
   });
@@ -275,6 +289,52 @@
     if (heightDelta > 0) window.scrollBy({ top: heightDelta, left: 0, behavior: 'instant' });
   }
 
+  function currentThreadRouteKey() {
+    if (!browser) return '';
+    return `${$page.url.pathname}${$page.url.search}${$page.url.hash}`;
+  }
+
+  function saveCurrentThreadScrollPosition() {
+    if (!browser || !routeKey) return;
+    const anchor = firstVisibleThreadNote();
+    saveRouteScrollState(routeKey, {
+      scrollY: window.scrollY,
+      anchorId: anchor?.dataset.noteId,
+      anchorOffset: anchor?.getBoundingClientRect().top
+    });
+  }
+
+  async function restoreThreadScrollPosition(nextRouteKey: string) {
+    if (!browser || !nextRouteKey || restoredThreadRouteKey === nextRouteKey) return;
+    const state = readRouteScrollState(nextRouteKey);
+    if (!state || Date.now() - state.savedAt > threadScrollStateMaxAgeMs) {
+      restoredThreadRouteKey = nextRouteKey;
+      return;
+    }
+    restoredThreadRouteKey = nextRouteKey;
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      await tick();
+      await nextAnimationFrame();
+      const anchor = state.anchorId ? document.querySelector<HTMLElement>(`.thread-page [data-note-id="${state.anchorId}"]`) : null;
+      if (anchor) {
+        const top = window.scrollY + anchor.getBoundingClientRect().top - (state.anchorOffset ?? 0);
+        window.scrollTo({ top: Math.max(0, top), left: 0, behavior: 'instant' });
+      } else {
+        window.scrollTo({ top: state.scrollY, left: 0, behavior: 'instant' });
+      }
+    }
+  }
+
+  function firstVisibleThreadNote() {
+    if (!browser) return undefined;
+    return [...document.querySelectorAll<HTMLElement>('.thread-page [data-note-id]')].find((element) => element.getBoundingClientRect().bottom > 0);
+  }
+
+  function nextAnimationFrame() {
+    return new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  }
+
   async function hydrateThreadProfiles(threadItems: NostrEvent[]) {
     const missingPubkeys = [...new Set(threadItems.map((event) => event.pubkey).filter((pubkey) => !$profiles[pubkey]))];
     if (!missingPubkeys.length) return;
@@ -309,7 +369,7 @@
 </script>
 
 <section class="thread-page">
-  <a class="page-back" href={appPath('/')} aria-label="Back to feed"><ArrowLeft size={18} /> Back</a>
+  <a class="page-back" href={backHref} aria-label="Back"><ArrowLeft size={18} /> Back</a>
   <div class="thread-load-sentinel" bind:this={topSentinel} aria-live="polite">
     {#if loadingNewerReplies}<span>Loading newer replies</span>{/if}
   </div>

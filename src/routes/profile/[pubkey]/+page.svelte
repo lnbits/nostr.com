@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { goto } from '$app/navigation';
+  import { onMount, tick } from 'svelte';
+  import { browser } from '$app/environment';
+  import { beforeNavigate, goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { ArrowLeft, Check, Copy, Globe2, MessageCircle, Pencil, Save, UserMinus, UserX, Upload, UserPlus, X } from '@lucide/svelte';
   import { nip19 } from 'nostr-tools';
@@ -10,6 +11,7 @@
   import { dedupeEvents, fetchProfileEvents, fetchProfiles, topLevelFeedEvents } from '$lib/nostr/client';
   import { uploadToNostrBuild } from '$lib/nostr/upload';
   import { appPath } from '$lib/paths';
+  import { readRouteScrollState, saveRouteScrollState } from '$lib/stores/routeScroll';
   import type { NostrEvent, Profile } from '$lib/nostr/types';
 
   const emptyProfile = (): Profile => ({
@@ -28,6 +30,7 @@
   const profileEventPageLimit = 60;
   const targetProfileEventCount = 12;
   const maxAutomaticProfilePages = 1;
+  const profileScrollStateMaxAgeMs = 30 * 60 * 1000;
   type ProfileTimelineItem = { id: string; event: NostrEvent };
 
   $: pubkey = normalizePubkey($page.params.pubkey ?? '');
@@ -43,6 +46,7 @@
   $: avatarInitial = (profile?.display_name || profile?.name || npub || pubkey || '?').slice(0, 1).toUpperCase();
   $: websiteHref = safeHttpUrl(profile?.website);
   $: websiteLabel = websiteHref.replace(/^https?:\/\//, '').replace(/\/$/, '');
+  $: routeKey = currentProfileRouteKey();
 
   let saving = false;
   let copied = false;
@@ -65,6 +69,7 @@
   let pictureInput: HTMLInputElement;
   let bannerInput: HTMLInputElement;
   let editingProfilePubkey = '';
+  let restoredProfileRouteKey = '';
 
   $: if (pubkey && !editorOpen) draft = { ...emptyProfile(), ...profile, pubkey };
 
@@ -75,6 +80,11 @@
   $: if ($deletedEventIds.size && profileEvents.some((event) => $deletedEventIds.has(event.id))) {
     profileEvents = profileEvents.filter((event) => !$deletedEventIds.has(event.id));
   }
+  $: if (browser && routeKey && userItems.length && routeKey !== restoredProfileRouteKey) void restoreProfileScrollPosition(routeKey);
+
+  beforeNavigate(() => {
+    saveCurrentProfileScrollPosition();
+  });
 
   onMount(() => {
     profileObserver = new IntersectionObserver(
@@ -84,7 +94,11 @@
       { rootMargin: '360px 0px' }
     );
     if (profileLoadMoreSentinel) profileObserver.observe(profileLoadMoreSentinel);
-    return () => profileObserver?.disconnect();
+    void restoreProfileScrollPosition(routeKey);
+    return () => {
+      saveCurrentProfileScrollPosition();
+      profileObserver?.disconnect();
+    };
   });
 
   async function copyNpub() {
@@ -284,6 +298,52 @@
     } catch {
       return '';
     }
+  }
+
+  function currentProfileRouteKey() {
+    if (!browser) return '';
+    return `${$page.url.pathname}${$page.url.search}${$page.url.hash}`;
+  }
+
+  function saveCurrentProfileScrollPosition() {
+    if (!browser || !routeKey) return;
+    const anchor = firstVisibleProfileNote();
+    saveRouteScrollState(routeKey, {
+      scrollY: window.scrollY,
+      anchorId: anchor?.dataset.noteId,
+      anchorOffset: anchor?.getBoundingClientRect().top
+    });
+  }
+
+  async function restoreProfileScrollPosition(nextRouteKey: string) {
+    if (!browser || !nextRouteKey || restoredProfileRouteKey === nextRouteKey) return;
+    const state = readRouteScrollState(nextRouteKey);
+    if (!state || Date.now() - state.savedAt > profileScrollStateMaxAgeMs) {
+      restoredProfileRouteKey = nextRouteKey;
+      return;
+    }
+    restoredProfileRouteKey = nextRouteKey;
+
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      await tick();
+      await nextAnimationFrame();
+      const anchor = state.anchorId ? document.querySelector<HTMLElement>(`.profile-page [data-note-id="${state.anchorId}"]`) : null;
+      if (anchor) {
+        const top = window.scrollY + anchor.getBoundingClientRect().top - (state.anchorOffset ?? 0);
+        window.scrollTo({ top: Math.max(0, top), left: 0, behavior: 'instant' });
+      } else {
+        window.scrollTo({ top: state.scrollY, left: 0, behavior: 'instant' });
+      }
+    }
+  }
+
+  function firstVisibleProfileNote() {
+    if (!browser) return undefined;
+    return [...document.querySelectorAll<HTMLElement>('.profile-page [data-note-id]')].find((element) => element.getBoundingClientRect().bottom > 0);
+  }
+
+  function nextAnimationFrame() {
+    return new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
   }
 </script>
 
