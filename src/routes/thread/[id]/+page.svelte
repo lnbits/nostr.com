@@ -5,10 +5,12 @@
   import { ArrowLeft } from '@lucide/svelte';
   import NoteCard from '$lib/components/NoteCard.svelte';
   import ThreadReplyTree from '$lib/components/ThreadReplyTree.svelte';
+  import { getCachedThreadEvents } from '$lib/nostr/cache';
   import { deletedEventIds, eventStats, events, mergeEvents, mergeProfileRecords, profiles, refreshEventStats, relays } from '$lib/stores/app';
   import { eventStatsFromEvents, fetchMissingEvents, fetchProfiles, fetchThreadReplies } from '$lib/nostr/client';
   import { eventPointerFromIdentifier } from '$lib/nostr/identifiers';
   import { appPath } from '$lib/paths';
+  import { readThreadSeed } from '$lib/stores/threadSeed';
   import { timelineCursor, windowTimelineItems } from '$lib/timeline/window';
   import type { TimelineTrimEdge } from '$lib/timeline/window';
   import type { NostrEvent } from '$lib/nostr/types';
@@ -18,25 +20,28 @@
   const threadReplyPageLimit = 40;
   const maxThreadReplies = 160;
 
-  $: routeId = decodeURIComponent($page.params.id ?? '');
-  $: pointer = eventPointerFromIdentifier(routeId);
-  $: id = pointer?.id ?? routeId;
-  $: focusedReplyId = $page.url.searchParams.get('focus') ?? '';
-  $: threadEvents = mergeThreadEvents(rootEvent ? [rootEvent, ...localThreadEvents] : localThreadEvents, []);
-  $: root = rootEvent?.id === id ? rootEvent : threadEvents.find((event) => event.id === id);
-  $: replies = id ? threadReplyEvents(threadEvents, id) : [];
-  $: repliesByParent = id ? groupRepliesByParent(replies, id) : {};
   let loading = true;
   let loadingNewerReplies = false;
   let loadingOlderReplies = false;
   let hasOlderReplies = true;
   let hydratedId = '';
+  let seededId = '';
   let rootEvent: NostrEvent | undefined;
   let localThreadEvents: NostrEvent[] = [];
   let topSentinel: HTMLDivElement;
   let bottomSentinel: HTMLDivElement;
   let topObserver: IntersectionObserver | undefined;
   let bottomObserver: IntersectionObserver | undefined;
+
+  $: routeId = decodeURIComponent($page.params.id ?? '');
+  $: pointer = eventPointerFromIdentifier(routeId);
+  $: id = pointer?.id ?? routeId;
+  $: focusedReplyId = $page.url.searchParams.get('focus') ?? '';
+  $: if (id && id !== seededId) seedThreadFromCache(id, focusedReplyId);
+  $: threadEvents = mergeThreadEvents(rootEvent ? [rootEvent, ...localThreadEvents] : localThreadEvents, []);
+  $: root = rootEvent?.id === id ? rootEvent : threadEvents.find((event) => event.id === id);
+  $: replies = id ? threadReplyEvents(threadEvents, id) : [];
+  $: repliesByParent = id ? groupRepliesByParent(replies, id) : {};
 
   onMount(() => {
     topObserver = new IntersectionObserver(
@@ -111,8 +116,7 @@
   async function hydrateThread() {
     if (!id || hydratedId === id) return;
     hydratedId = id;
-    localThreadEvents = cachedThreadSeed(id, focusedReplyId);
-    rootEvent = localThreadEvents.find((event) => event.id === id);
+    seedThreadFromCache(id, focusedReplyId);
     hasOlderReplies = true;
     loading = true;
     try {
@@ -123,37 +127,63 @@
         localThreadEvents = mergeThreadEvents([found], localThreadEvents).filter((event) => event.id !== found.id);
         events.update((existing) => mergeEvents([found], existing));
       }
-      const allReplies = await fetchThreadReplyPage({ limit: initialThreadReplyLimit });
-      if (allReplies.length) {
-        localThreadEvents = mergeThreadEvents(allReplies, localThreadEvents);
-      }
-      trimThreadReplyWindow('bottom');
-      refreshThreadStats(mergeThreadEvents([...(found ? [found] : []), ...allReplies], localThreadEvents));
+      if (rootEvent) refreshThreadStats([rootEvent]);
+      void hydrateCachedThreadReplies();
 
-      const pubkeys = [...(found ? [found.pubkey] : []), ...allReplies.map((event) => event.pubkey)];
-      const missingPubkeys = [...new Set(pubkeys.filter((pubkey) => !$profiles[pubkey]))];
-      if (missingPubkeys.length) {
-        const fetchedProfiles = await fetchProfiles(missingPubkeys, $relays).catch(() => []);
-        if (fetchedProfiles.length) profiles.update((existing) => mergeProfileRecords(existing, fetchedProfiles));
+      const directReplies = await fetchDirectThreadReplies({ limit: initialThreadReplyLimit });
+      if (directReplies.length) {
+        localThreadEvents = mergeThreadEvents(directReplies, localThreadEvents);
+        trimThreadReplyWindow('bottom');
+        hydrateThreadProfiles(directReplies);
+        refreshThreadStats(directReplies);
+      }
+
+      const nestedReplies = await fetchNestedThreadReplies(directReplies);
+      if (nestedReplies.length) {
+        localThreadEvents = mergeThreadEvents(nestedReplies, localThreadEvents);
+        trimThreadReplyWindow('bottom');
+        hydrateThreadProfiles(nestedReplies);
+        refreshThreadStats(nestedReplies);
       }
     } finally {
       loading = false;
     }
   }
 
-  async function fetchThreadReplyPage(options: { limit?: number; since?: number; until?: number } = {}) {
+  async function hydrateCachedThreadReplies() {
+    if (!id) return;
+    const cached = mergeThreadEvents(await getCachedThreadEvents(id, maxThreadReplies).catch(() => []), []);
+    if (!cached.length) return;
+    localThreadEvents = mergeThreadEvents(cached.filter((event) => event.id !== id), localThreadEvents);
+    const cachedRoot = cached.find((event) => event.id === id);
+    if (cachedRoot && !rootEvent) rootEvent = cachedRoot;
+    trimThreadReplyWindow('bottom');
+    hydrateThreadProfiles(cached);
+    refreshThreadStats(cached);
+  }
+
+  async function fetchDirectThreadReplies(options: { limit?: number; since?: number; until?: number } = {}) {
     if (!id) return [];
-    const fetchedReplies = await fetchThreadReplies(id, $relays, options.limit ?? threadReplyPageLimit, {
+    return fetchThreadReplies(id, $relays, options.limit ?? threadReplyPageLimit, {
       since: options.since,
       until: options.until
     }).catch(() => []);
-    const nestedReplies = fetchedReplies.length
-      ? await fetchThreadReplies(
-          fetchedReplies.map((event) => event.id),
+  }
+
+  async function fetchNestedThreadReplies(parentReplies: NostrEvent[]) {
+    return parentReplies.length
+      ? fetchThreadReplies(
+          parentReplies.map((event) => event.id),
           $relays,
           nestedThreadReplyLimit
         ).catch(() => [])
       : [];
+  }
+
+  async function fetchThreadReplyPage(options: { limit?: number; since?: number; until?: number } = {}) {
+    if (!id) return [];
+    const fetchedReplies = await fetchDirectThreadReplies(options);
+    const nestedReplies = await fetchNestedThreadReplies(fetchedReplies);
     return mergeThreadEvents(nestedReplies, fetchedReplies).filter((event) => event.id !== id);
   }
 
@@ -197,7 +227,17 @@
   }
 
   function cachedThreadSeed(rootId: string, focusId: string) {
-    return $events.filter((event) => event.id === rootId || (focusId && event.id === focusId));
+    const directSeed = readThreadSeed(rootId);
+    return mergeThreadEvents(
+      [...(directSeed ? [directSeed] : []), ...$events.filter((event) => event.id === rootId || (focusId && event.id === focusId))],
+      []
+    );
+  }
+
+  function seedThreadFromCache(rootId: string, focusId: string) {
+    seededId = rootId;
+    localThreadEvents = cachedThreadSeed(rootId, focusId);
+    rootEvent = localThreadEvents.find((event) => event.id === rootId);
   }
 
   function trimThreadReplyWindow(trimFrom: 'top' | 'bottom') {
@@ -278,6 +318,8 @@
       <NoteCard event={root} profile={$profiles[root.pubkey]} />
       {#if replies.length}
         <ThreadReplyTree parentId={root.id} {repliesByParent} profiles={$profiles} focusedId={focusedReplyId} />
+      {:else if loading}
+        <div class="empty-state"><span>Loading replies</span></div>
       {:else}
         <div class="empty-state"><strong>No replies found yet</strong><span>Relays did not return replies for this thread.</span></div>
       {/if}

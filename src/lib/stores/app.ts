@@ -64,6 +64,7 @@ const olderFetchBatchLimit = 80;
 const olderFetchTarget = pageFeedLimit;
 const olderFetchMaxAttempts = 5;
 const olderFetchEmptyAttemptLimit = 2;
+const feedRecentWindowSeconds = 60 * 60 * 24 * 7;
 
 const initialSession = browser ? readStoredSession() : null;
 const initialCustomFeedSettings = browser ? readStoredCustomFeedSettings() : defaultCustomFeedSettings;
@@ -186,7 +187,7 @@ export async function bootstrap() {
   addEventListener('offline', () => online.set(false));
 
   const [cachedEvents, cachedProfiles] = await Promise.all([getCachedEvents(cachedFeedBufferLimit), getCachedProfiles()]);
-  const cachedTopLevelEvents = cachedEventsForMode(currentMode, topLevelFeedEvents(filterSpam(cachedEvents, currentMutedPubkeys)), cachedFeedBufferLimit);
+  const cachedTopLevelEvents = recentFeedEvents(cachedEventsForMode(currentMode, topLevelFeedEvents(filterSpam(cachedEvents, currentMutedPubkeys)), cachedFeedBufferLimit));
   const visibleEvents = cachedTopLevelEvents.slice(0, Math.min(initialFeedLimit, maxFeedEvents));
   cachedOlderEvents = limitFeedBuffer(cachedTopLevelEvents.slice(visibleEvents.length), maxCachedOlderEvents);
   events.set(visibleEvents);
@@ -276,8 +277,16 @@ function cachedEventsForMode(mode: FeedMode, items: NostrEvent[], limit = initia
   return eventsForFeedMode(mode, items).slice(0, limit);
 }
 
-export function displayEventsForFeedMode(mode: FeedMode, items: NostrEvent[], follows = currentFollows, settings = currentSettings, friendsOfFriends = currentFriendsOfFriends) {
-  return eventsForFeedMode(mode, items, follows, settings, friendsOfFriends);
+export function displayEventsForFeedMode(
+  mode: FeedMode,
+  items: NostrEvent[],
+  follows = currentFollows,
+  settings = currentSettings,
+  friendsOfFriends = currentFriendsOfFriends,
+  enforceRecentWindow = false
+) {
+  const feedItems = enforceRecentWindow ? recentFeedEvents(items) : items;
+  return eventsForFeedMode(mode, feedItems, follows, settings, friendsOfFriends);
 }
 
 function eventsForFeedMode(mode: FeedMode, items: NostrEvent[], follows = currentFollows, settings = currentSettings, friendsOfFriends = currentFriendsOfFriends) {
@@ -300,7 +309,7 @@ function eventsForFeedMode(mode: FeedMode, items: NostrEvent[], follows = curren
 
 async function getCachedFeedCandidates(mode: FeedMode, limit = cachedFeedBufferLimit) {
   const cachedEvents = currentHashtag ? await getCachedHashtagEvents(currentHashtag, limit) : await getCachedEvents(limit);
-  return topLevelFeedEvents(filterSpam(cachedEventsForMode(mode, topLevelFeedEvents(filterSpam(cachedEvents, currentMutedPubkeys)), limit), currentMutedPubkeys));
+  return recentFeedEvents(topLevelFeedEvents(filterSpam(cachedEventsForMode(mode, topLevelFeedEvents(filterSpam(cachedEvents, currentMutedPubkeys)), limit), currentMutedPubkeys)));
 }
 
 async function primeCachedFeedBuffers(mode: FeedMode, visibleEvents: NostrEvent[]) {
@@ -542,6 +551,7 @@ async function fetchOlderFeedPage(fetchMode: FeedMode, target = olderFetchTarget
     const nextEvents = filterMutedEvents(
       await fetchFeed(fetchMode, currentRelays, currentFollows, effectiveFeedSettings(fetchMode), {
         limit: olderFetchBatchLimit,
+        since: recentFeedCutoff(),
         until: olderThan,
         hashtag: currentHashtag
       })
@@ -608,6 +618,15 @@ function cacheTrimmedOlderFeedEvents(incoming: NostrEvent[]) {
 
 function limitFeedBuffer(items: NostrEvent[], limit: number) {
   return mergeFeedEvents([], items).slice(0, limit);
+}
+
+function recentFeedCutoff() {
+  return nowSeconds() - feedRecentWindowSeconds;
+}
+
+function recentFeedEvents(items: NostrEvent[]) {
+  const cutoff = recentFeedCutoff();
+  return items.filter((event) => event.created_at >= cutoff);
 }
 
 export async function refreshEventStats(ids: string[], force = false) {

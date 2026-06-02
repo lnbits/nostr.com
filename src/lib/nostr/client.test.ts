@@ -6,6 +6,7 @@ import {
   customFeedSliceLimits,
   dedupeEvents,
   eventStatsFromEvents,
+  eventMatchesTimeWindow,
   extractContactListDetails,
   feedFiltersForMode,
   fetchFeed,
@@ -85,6 +86,12 @@ describe('nostr client helpers', () => {
 
     expect(dedupeEvents([older, newer, older]).map((item) => item.id)).toEqual([newer.id, older.id]);
     expect(dedupeEvents([older]).map((item) => item.id)).toEqual([older.id]);
+  });
+
+  it('rejects relay results outside the requested time window', () => {
+    expect(eventMatchesTimeWindow(event({ created_at: 100 }), 90, 110)).toBe(true);
+    expect(eventMatchesTimeWindow(event({ created_at: 89 }), 90, 110)).toBe(false);
+    expect(eventMatchesTimeWindow(event({ created_at: 111 }), 90, 110)).toBe(false);
   });
 
   it('limits consecutive authors and only restores deferred notes after other authors', () => {

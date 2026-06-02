@@ -179,6 +179,33 @@ export async function getCachedEvents(limit = 80) {
   }).catch(() => []);
 }
 
+export async function getCachedThreadEvents(rootId: string, limit = 160, scanLimit = MAX_CACHED_EVENTS) {
+  if (!/^[0-9a-f]{64}$/i.test(rootId)) return [];
+  return withStore<NostrEvent[]>('events', 'readonly', (store) => {
+    const request = store.index('created_at').openCursor(null, 'prev');
+    const candidates: NostrEvent[] = [];
+    const includedIds = new Set([rootId]);
+    let scanned = 0;
+
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor || scanned >= scanLimit || candidates.length >= limit) {
+        (store as IDBObjectStore & { __setResult(value: NostrEvent[]): void }).__setResult(candidates);
+        return;
+      }
+
+      scanned += 1;
+      const event = cursor.value as NostrEvent;
+      const referencedIds = event.tags.filter((tag) => tag[0] === 'e' && tag[1]).map((tag) => tag[1]);
+      if (event.id === rootId || referencedIds.some((id) => includedIds.has(id))) {
+        candidates.push(event);
+        includedIds.add(event.id);
+      }
+      cursor.continue();
+    };
+  }).catch(() => []);
+}
+
 export async function getCachedProfileEvents(pubkey: string, limit = 120) {
   if (!pubkey) return [];
   return withStore<NostrEvent[]>('profileEvents', 'readonly', (store) => {

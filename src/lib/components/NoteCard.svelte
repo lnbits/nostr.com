@@ -105,13 +105,21 @@
   }
 
   function formatNoteTime(date: Date, now = new Date()) {
+    const futureMs = date.getTime() - now.getTime();
+    if (futureMs > 120_000) return formatAbsoluteNoteTime(date, now);
     const elapsedMs = Math.max(0, now.getTime() - date.getTime());
     const elapsedMinutes = Math.floor(elapsedMs / 60000);
     if (elapsedMinutes < 1) return 'now';
     if (elapsedMinutes < 60) return `${elapsedMinutes}min`;
     if (elapsedMinutes < 120) return '1hr';
     if (isSameDay(date, now)) return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-    return date.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    return formatAbsoluteNoteTime(date, now);
+  }
+
+  function formatAbsoluteNoteTime(date: Date, now = new Date()) {
+    const options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' };
+    if (date.getFullYear() !== now.getFullYear()) options.year = 'numeric';
+    return date.toLocaleString('en-GB', options);
   }
 
   function isSameDay(date: Date, other: Date) {
@@ -373,7 +381,7 @@
 
 <svelte:window on:pointerdown={closeMenuFromOutside} />
 
-<article class="note-card" class:featured class:embedded class:menu-open={menuOpen} bind:this={noteElement}>
+<article class="note-card" class:featured class:embedded class:menu-open={menuOpen} data-note-id={event.id} bind:this={noteElement}>
   <a class="avatar" href={appPath(`/profile/${displayEvent.pubkey}`)} aria-label={`${name} profile`}>
     {#if avatar}
       <img src={avatar} alt="" loading="lazy" />
@@ -423,7 +431,7 @@
         {:else if part.type === 'link'}
           <a href={part.href} target="_blank" rel="noreferrer">{part.value}</a>
         {:else}
-          {#if onOpen}
+          {#if onOpen && embedded}
             <button class="note-open-text" on:click={openNote}>{part.value}</button>
           {:else}
             {part.value}

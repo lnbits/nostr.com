@@ -541,11 +541,19 @@ export async function fetchFeed(
   if (options.until) base.until = options.until;
   const filters = await feedFiltersForMode(mode, base, follows, settings, since, relayUrls, options);
 
-  const events = verifiedRelayEvents((await Promise.all(filters.map((filter) => queryShortLived(relayUrls, filter, 5000)))).flat());
+  const events = verifiedRelayEvents((await Promise.all(filters.map((filter) => queryShortLived(relayUrls, filter, 5000)))).flat()).filter((event) =>
+    filters.some((filter) => eventMatchesTimeWindow(event, filter.since, filter.until))
+  );
   const clean = dedupeEvents(topLevelFeedEvents(filterSpam(events)));
   const output = mode === 'global' ? limitCryptoTopicDensity(limitConsecutiveAuthors(clean, 2), 10) : clean;
   await cacheEvents(output);
   return output;
+}
+
+export function eventMatchesTimeWindow(event: NostrEvent, since?: number, until?: number) {
+  if (since !== undefined && event.created_at < since) return false;
+  if (until !== undefined && event.created_at > until) return false;
+  return true;
 }
 
 export async function subscribeFeed(
