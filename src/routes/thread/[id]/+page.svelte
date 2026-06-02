@@ -10,7 +10,7 @@
   import { eventStatsFromEvents, fetchMissingEvents, fetchProfiles, fetchThreadReplies } from '$lib/nostr/client';
   import { eventPointerFromIdentifier } from '$lib/nostr/identifiers';
   import { appPath } from '$lib/paths';
-  import { readThreadSeed } from '$lib/stores/threadSeed';
+  import { readPrefetchedThreadReplies, readThreadSeed } from '$lib/stores/threadSeed';
   import { timelineCursor, windowTimelineItems } from '$lib/timeline/window';
   import type { TimelineTrimEdge } from '$lib/timeline/window';
   import type { NostrEvent } from '$lib/nostr/types';
@@ -228,8 +228,9 @@
 
   function cachedThreadSeed(rootId: string, focusId: string) {
     const directSeed = readThreadSeed(rootId);
+    const prefetchedReplies = readPrefetchedThreadReplies(rootId);
     return mergeThreadEvents(
-      [...(directSeed ? [directSeed] : []), ...$events.filter((event) => event.id === rootId || (focusId && event.id === focusId))],
+      [...(directSeed ? [directSeed] : []), ...prefetchedReplies, ...$events.filter((event) => event.id === rootId || (focusId && event.id === focusId))],
       []
     );
   }

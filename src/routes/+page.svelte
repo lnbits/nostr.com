@@ -286,7 +286,7 @@
     <section class="feed-list" aria-label="Feed">
       {#if feedEvents.length}
         {#each feedEvents as event (event.id)}
-          <NoteCard {event} profile={$profiles[event.pubkey]} onOpen={openFeedNote} />
+          <NoteCard {event} profile={$profiles[event.pubkey]} prefetchThread onOpen={openFeedNote} />
         {/each}
       {:else if $loadingFeed}
         <div class="empty-state">

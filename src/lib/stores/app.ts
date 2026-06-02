@@ -21,6 +21,7 @@ import {
   fetchNotifications,
   fetchRelayInfoDocuments,
   fetchRelayListMetadata,
+  fetchThreadReplies,
   filterSpam,
   eventStatsFromEvents,
   limitCryptoTopicDensity,
@@ -48,6 +49,7 @@ import {
   subscribeNotifications,
   topLevelFeedEvents
 } from '$lib/nostr/client';
+import { savePrefetchedThreadReplies } from '$lib/stores/threadSeed';
 import type { ContactListItem, CustomFeedSettings, DirectMessage, EventStats, FeedMode, LoginMode, NostrEvent, NotificationItem, Profile, RelayState, Session } from '$lib/nostr/types';
 
 const sessionStorageKey = 'nostr-session';
@@ -65,6 +67,9 @@ const olderFetchTarget = pageFeedLimit;
 const olderFetchMaxAttempts = 5;
 const olderFetchEmptyAttemptLimit = 2;
 const feedRecentWindowSeconds = 60 * 60 * 24 * 7;
+const threadPrefetchReplyLimit = 10;
+const threadPrefetchCooldownMs = 5 * 60 * 1000;
+const maxThreadPrefetchConcurrent = 2;
 
 const initialSession = browser ? readStoredSession() : null;
 const initialCustomFeedSettings = browser ? readStoredCustomFeedSettings() : defaultCustomFeedSettings;
@@ -148,6 +153,10 @@ const requestedStats = new Map<string, number>();
 const statsRetryMs = 60_000;
 const pendingLikeToggles = new Set<string>();
 const pendingRepostToggles = new Set<string>();
+const queuedThreadPrefetches: NostrEvent[] = [];
+const queuedThreadPrefetchIds = new Set<string>();
+const recentThreadPrefetches = new Map<string, number>();
+let activeThreadPrefetches = 0;
 
 relays.subscribe((value) => {
   currentRelays = value;
@@ -636,6 +645,54 @@ export async function refreshEventStats(ids: string[], force = false) {
   if (!nextIds.length) return;
   const stats = await fetchEventStats(nextIds, currentRelays).catch(() => ({}));
   eventStats.update((existing) => mergeStats(existing, stats));
+}
+
+export function prefetchThreadPreview(event: NostrEvent) {
+  if (!browser || event.kind !== 1 || !/^[0-9a-f]{64}$/i.test(event.id)) return;
+  const checkedAt = Date.now();
+  if (checkedAt - (recentThreadPrefetches.get(event.id) ?? 0) < threadPrefetchCooldownMs) return;
+  if (queuedThreadPrefetchIds.has(event.id)) return;
+
+  recentThreadPrefetches.set(event.id, checkedAt);
+  queuedThreadPrefetchIds.add(event.id);
+  queuedThreadPrefetches.push(event);
+  pruneThreadPrefetchHistory(checkedAt);
+  drainThreadPrefetchQueue();
+}
+
+function drainThreadPrefetchQueue() {
+  while (activeThreadPrefetches < maxThreadPrefetchConcurrent && queuedThreadPrefetches.length) {
+    const event = queuedThreadPrefetches.shift();
+    if (!event) return;
+    queuedThreadPrefetchIds.delete(event.id);
+    activeThreadPrefetches += 1;
+    void runThreadPreviewPrefetch(event).finally(() => {
+      activeThreadPrefetches = Math.max(0, activeThreadPrefetches - 1);
+      drainThreadPrefetchQueue();
+    });
+  }
+}
+
+async function runThreadPreviewPrefetch(event: NostrEvent) {
+  refreshThreadPreviewStats(event);
+  const replies = await fetchThreadReplies(event.id, currentRelays, threadPrefetchReplyLimit).catch(() => []);
+  if (!replies.length) return;
+  savePrefetchedThreadReplies(event.id, replies);
+  refreshThreadPreviewStats(event, replies);
+  void hydrateMissingProfiles(replies, 12);
+}
+
+function refreshThreadPreviewStats(event: NostrEvent, replies: NostrEvent[] = []) {
+  const statIds = [event.id, ...replies.map((reply) => reply.id)];
+  const localStats = eventStatsFromEvents([event.id], replies);
+  eventStats.update((existing) => mergeStats(existing, localStats));
+  void refreshEventStats(statIds);
+}
+
+function pruneThreadPrefetchHistory(now = Date.now()) {
+  for (const [id, checkedAt] of recentThreadPrefetches) {
+    if (now - checkedAt > threadPrefetchCooldownMs) recentThreadPrefetches.delete(id);
+  }
 }
 
 function mergeStats(existing: Record<string, EventStats>, incoming: Record<string, EventStats>) {

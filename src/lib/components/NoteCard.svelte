@@ -8,7 +8,7 @@
   import { extractMediaAttachments, extractQuotedNoteReferences, extractSocialEmbeds, parseNoteText } from '$lib/nostr/media';
   import { activeRelayUrls, fetchLikeAuthors, fetchProfiles, subscribeZapReceipts } from '$lib/nostr/client';
   import { createZapInvoice, loadZapInfo, type ZapInfo } from '$lib/nostr/zap';
-  import { deleteNote, editedEvents, eventStats, filterByHashtag, likedEvents, mergeProfileRecords, muteAccount, profiles, reactToNote, refreshEventStats, relays, reportNote, repostedEvents, repostNote, session, startEdit, startReply, watchVisibleNoteStats } from '$lib/stores/app';
+  import { deleteNote, editedEvents, eventStats, filterByHashtag, likedEvents, mergeProfileRecords, muteAccount, prefetchThreadPreview, profiles, reactToNote, refreshEventStats, relays, reportNote, repostedEvents, repostNote, session, startEdit, startReply, watchVisibleNoteStats } from '$lib/stores/app';
   import { appPath } from '$lib/paths';
   import { pauseWhenHidden } from '$lib/actions/pauseWhenHidden';
   import QuotedNotePreview from './QuotedNotePreview.svelte';
@@ -17,6 +17,7 @@
   export let profile: Profile | undefined;
   export let featured = false;
   export let embedded = false;
+  export let prefetchThread = false;
   export let onOpen: ((event: NostrEvent) => void) | undefined = undefined;
 
   const previewLength = 400;
@@ -50,6 +51,7 @@
   let noteElement: HTMLElement;
   let menuElement: HTMLElement;
   let noteObserver: IntersectionObserver | undefined;
+  let prefetchTimer: ReturnType<typeof setTimeout> | undefined;
   let statsVisible = false;
   let statsEventId = event.id;
 
@@ -58,6 +60,7 @@
     if (!('IntersectionObserver' in window)) {
       statsVisible = true;
       watchVisibleNoteStats(event.id, true);
+      scheduleThreadPrefetch(true);
       return;
     }
     noteObserver = new IntersectionObserver(
@@ -69,6 +72,7 @@
 
   onDestroy(() => {
     noteObserver?.disconnect();
+    clearTimeout(prefetchTimer);
     if (statsVisible) watchVisibleNoteStats(statsEventId, false);
     zapReceiptSub?.close('note destroyed');
   });
@@ -240,6 +244,13 @@
     if (visible === statsVisible) return;
     statsVisible = visible;
     watchVisibleNoteStats(event.id, visible);
+    scheduleThreadPrefetch(visible);
+  }
+
+  function scheduleThreadPrefetch(visible: boolean) {
+    clearTimeout(prefetchTimer);
+    if (!visible || !prefetchThread || embedded) return;
+    prefetchTimer = setTimeout(() => prefetchThreadPreview(event), 650);
   }
 
   async function confirmReport() {
