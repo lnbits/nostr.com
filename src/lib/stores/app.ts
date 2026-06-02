@@ -5,9 +5,11 @@ import { getCachedEvents, getCachedHashtagEvents, getCachedProfiles } from '$lib
 import { defaultCustomFeedSettings, defaultGuestNip05, defaultRelays, keywordsForInterests } from '$lib/nostr/config';
 import { appPath } from '$lib/paths';
 import { markRelaysOnline, syncRelayStatus } from '$lib/stores/relayStatus';
+import { insertTimelineItems, timelineCursor, uniqueFreshItems } from '$lib/timeline/window';
 import { mergeDirectMessages } from './directMessages';
 import {
   activeRelayUrls,
+  connectedRelayUrls,
   createGuestSession,
   fetchDirectMessages,
   fetchContactListDetails,
@@ -61,6 +63,7 @@ const cachedFeedBufferLimit = maxFeedEvents + maxPendingNewerEvents + maxCachedO
 const olderFetchBatchLimit = 80;
 const olderFetchTarget = pageFeedLimit;
 const olderFetchMaxAttempts = 5;
+const olderFetchEmptyAttemptLimit = 2;
 
 const initialSession = browser ? readStoredSession() : null;
 const initialCustomFeedSettings = browser ? readStoredCustomFeedSettings() : defaultCustomFeedSettings;
@@ -126,6 +129,7 @@ let friendsOfFriendsToken = 0;
 let currentDeletedEventIds = new Set<string>();
 let hasExplicitFeedModeSelection = false;
 let oldestFeedTimestamp: number | undefined;
+let olderFeedEmptyAttempts = 0;
 let liveFeedSub: { close: (reason?: string) => void } | undefined;
 let liveFeedToken = 0;
 let liveStatsSub: { close: (reason?: string) => void } | undefined;
@@ -186,7 +190,7 @@ export async function bootstrap() {
   const visibleEvents = cachedTopLevelEvents.slice(0, Math.min(initialFeedLimit, maxFeedEvents));
   cachedOlderEvents = limitFeedBuffer(cachedTopLevelEvents.slice(visibleEvents.length), maxCachedOlderEvents);
   events.set(visibleEvents);
-  oldestFeedTimestamp = getOldestTimestamp(visibleEvents);
+  oldestFeedTimestamp = timelineCursor(visibleEvents, 'oldest');
   profiles.set(mergeProfileRecords({}, cachedProfiles));
 
   const relayCountBeforeContext = currentRelays.length;
@@ -210,13 +214,15 @@ export async function refreshFeed(mode = currentMode, options: { replaceVisible?
   const shouldReplaceVisible = options.replaceVisible || !visibleEvents.length;
   loadingFeed.set(true);
   hasMoreFeed.set(true);
+  olderFeedEmptyAttempts = 0;
   requestedStats.clear();
 
-  if ((fetchMode === 'follow' || fetchMode === 'custom') && !currentFollows.length) {
+  if ((fetchMode === 'follow' && !currentFollows.length) || (fetchMode === 'custom' && !currentFollows.length && !hasCustomFeedKeywords())) {
     if (!visibleEvents.length) events.set([]);
     cachedOlderEvents = [];
     pendingNewerEvents.set([]);
     oldestFeedTimestamp = undefined;
+    olderFeedEmptyAttempts = 0;
     stopLiveFeed();
     loadingFeed.set(false);
     return;
@@ -224,7 +230,7 @@ export async function refreshFeed(mode = currentMode, options: { replaceVisible?
 
   try {
     if (fetchMode === 'custom') await refreshFriendsOfFriendsAuthors();
-    const newestTimestamp = getNewestTimestamp([...visibleEvents, ...getStoreSnapshot(pendingNewerEvents)]);
+    const newestTimestamp = timelineCursor([...visibleEvents, ...getStoreSnapshot(pendingNewerEvents)], 'newest');
     const nextEvents = filterMutedEvents(
       await fetchFeed(fetchMode, currentRelays, currentFollows, effectiveFeedSettings(fetchMode), {
         limit: initialFeedLimit,
@@ -232,11 +238,11 @@ export async function refreshFeed(mode = currentMode, options: { replaceVisible?
         hashtag: currentHashtag
       })
     );
+    markConnectedRelaysOnline();
     if (nextEvents.length) {
-      markRelaysOnline(activeRelayUrls(currentRelays, 'read'));
       if (shouldReplaceVisible) {
         events.set(nextEvents);
-        oldestFeedTimestamp = getOldestTimestamp(nextEvents);
+        oldestFeedTimestamp = timelineCursor(nextEvents, 'oldest');
         pendingNewerEvents.set([]);
       } else {
         queuePendingNewer(nextEvents);
@@ -245,7 +251,7 @@ export async function refreshFeed(mode = currentMode, options: { replaceVisible?
       void hydrateMissingProfiles(nextEvents, 60);
       void primeCachedFeedBuffers(fetchMode, getStoreSnapshot(events));
     }
-    void restartLiveFeed(fetchMode, getNewestTimestamp([...visibleEvents, ...nextEvents]));
+    void restartLiveFeed(fetchMode, timelineCursor([...visibleEvents, ...nextEvents], 'newest'));
   } finally {
     loadingFeed.set(false);
   }
@@ -259,7 +265,8 @@ async function hydrateCachedFeed(mode = currentMode) {
   const visibleEvents = clean.slice(0, Math.min(initialFeedLimit, maxFeedEvents));
   cachedOlderEvents = limitFeedBuffer(clean.slice(visibleEvents.length), maxCachedOlderEvents);
   events.set(visibleEvents);
-  oldestFeedTimestamp = getOldestTimestamp(visibleEvents);
+  oldestFeedTimestamp = timelineCursor(visibleEvents, 'oldest');
+  olderFeedEmptyAttempts = 0;
   primeCachedNewerFeed(visibleEvents);
   void refreshEventStats(visibleEvents.map((event) => event.id));
   void hydrateMissingProfiles(visibleEvents, 40);
@@ -275,14 +282,15 @@ export function displayEventsForFeedMode(mode: FeedMode, items: NostrEvent[], fo
 
 function eventsForFeedMode(mode: FeedMode, items: NostrEvent[], follows = currentFollows, settings = currentSettings, friendsOfFriends = currentFriendsOfFriends) {
   if (mode === 'follow') return items.filter((event) => follows.includes(event.pubkey));
-  if (mode === 'custom' && follows.length) {
+  if (mode === 'custom') {
     const feedHashtags = feedKeywordHashtags(settings);
     const friendAuthors = settings.friendsOfFriends ? new Set(friendsOfFriends) : new Set<string>();
     const feedKeywords = feedKeywordTerms(settings);
+    if (!follows.length && !feedHashtags.length && !feedKeywords.length) return [];
     return items.filter(
       (event) =>
         follows.includes(event.pubkey) ||
-        friendAuthors.has(event.pubkey) ||
+        (follows.length > 0 && friendAuthors.has(event.pubkey)) ||
         feedHashtags.some((tag) => eventHasHashtag(event, tag)) ||
         feedKeywords.some((keyword) => eventMatchesKeyword(event, keyword))
     );
@@ -300,8 +308,8 @@ async function primeCachedFeedBuffers(mode: FeedMode, visibleEvents: NostrEvent[
   if (!cachedEvents.length) return;
 
   const visibleIds = new Set(visibleEvents.map((event) => event.id));
-  const newestTimestamp = getNewestTimestamp(visibleEvents);
-  const oldestTimestamp = getOldestTimestamp(visibleEvents);
+  const newestTimestamp = timelineCursor(visibleEvents, 'newest');
+  const oldestTimestamp = timelineCursor(visibleEvents, 'oldest');
 
   cachedOlderEvents = cachedEvents
     .filter((event) => !visibleIds.has(event.id) && (oldestTimestamp === undefined || event.created_at < oldestTimestamp))
@@ -316,7 +324,7 @@ async function primeCachedFeedBuffers(mode: FeedMode, visibleEvents: NostrEvent[
 }
 
 function primeCachedNewerFeed(visibleEvents: NostrEvent[]) {
-  const newestTimestamp = getNewestTimestamp(visibleEvents);
+  const newestTimestamp = timelineCursor(visibleEvents, 'newest');
   if (newestTimestamp === undefined) return;
   const visibleIds = new Set(visibleEvents.map((event) => event.id));
   const cachedNewerEvents = cachedOlderEvents.filter((event) => !visibleIds.has(event.id) && event.created_at > newestTimestamp);
@@ -331,7 +339,7 @@ export async function loadNewerFeed() {
   loadingNewerFeed.subscribe((value) => (loading = value))();
   if (loading) return;
 
-  const newestTimestamp = getNewestTimestamp(feedEventsForActiveHashtag([...getStoreSnapshot(events), ...getStoreSnapshot(pendingNewerEvents)]));
+  const newestTimestamp = timelineCursor(feedEventsForActiveHashtag([...getStoreSnapshot(events), ...getStoreSnapshot(pendingNewerEvents)]), 'newest');
   if (!newestTimestamp) return;
 
   loadingNewerFeed.set(true);
@@ -342,11 +350,11 @@ export async function loadNewerFeed() {
       since: newestTimestamp + 1,
       hashtag: currentHashtag
     }));
+    markConnectedRelaysOnline();
     if (!nextEvents.length) return [];
     const existingIds = new Set(getStoreSnapshot(events).map((event) => event.id));
     const freshEvents = nextEvents.filter((event) => !existingIds.has(event.id));
     if (!freshEvents.length) return [];
-    markRelaysOnline(activeRelayUrls(currentRelays, 'read'));
     queuePendingNewer(freshEvents);
     void refreshEventStats(nextEvents.map((event) => event.id));
     void hydrateMissingProfiles(nextEvents, 60);
@@ -501,10 +509,16 @@ export async function loadMoreFeed(force = false) {
     const revealedEvents = revealCachedOlderFeed();
     const freshEvents = await fetchOlderFeedPage(fetchMode, olderFetchTarget);
     if (!freshEvents.length) {
-      hasMoreFeed.set(true);
+      if (revealedEvents.length) {
+        olderFeedEmptyAttempts = 0;
+        hasMoreFeed.set(true);
+        return;
+      }
+      olderFeedEmptyAttempts += 1;
+      hasMoreFeed.set(olderFeedEmptyAttempts < olderFetchEmptyAttemptLimit);
       return;
     }
-    markRelaysOnline(activeRelayUrls(currentRelays, 'read'));
+    olderFeedEmptyAttempts = 0;
     hasMoreFeed.set(true);
     appendVisibleEvents(freshEvents);
     void primeCachedFeedBuffers(fetchMode, getStoreSnapshot(events));
@@ -521,7 +535,7 @@ export async function loadMoreFeed(force = false) {
 
 async function fetchOlderFeedPage(fetchMode: FeedMode, target = olderFetchTarget) {
   const collected: NostrEvent[] = [];
-  let cursor = getOldestTimestamp(feedEventsForActiveHashtag([...getStoreSnapshot(events), ...cachedOlderEvents])) ?? oldestFeedTimestamp;
+  let cursor = timelineCursor(feedEventsForActiveHashtag([...getStoreSnapshot(events), ...cachedOlderEvents]), 'oldest') ?? oldestFeedTimestamp;
 
   for (let attempt = 0; attempt < olderFetchMaxAttempts && collected.length < target; attempt += 1) {
     const olderThan = cursor ? cursor - 1 : undefined;
@@ -532,20 +546,20 @@ async function fetchOlderFeedPage(fetchMode: FeedMode, target = olderFetchTarget
         hashtag: currentHashtag
       })
     );
+    markConnectedRelaysOnline();
     if (!nextEvents.length) break;
 
-    const knownIds = new Set([...getStoreSnapshot(events), ...getStoreSnapshot(pendingNewerEvents), ...cachedOlderEvents, ...collected].map((event) => event.id));
-    const freshEvents = nextEvents.filter((event) => !knownIds.has(event.id));
+    const freshEvents = uniqueFreshItems(nextEvents, [...getStoreSnapshot(events), ...getStoreSnapshot(pendingNewerEvents), ...cachedOlderEvents, ...collected]);
     if (freshEvents.length) collected.push(...freshEvents);
 
-    const batchOldest = getOldestTimestamp(nextEvents);
+    const batchOldest = timelineCursor(nextEvents, 'oldest');
     if (batchOldest === undefined || batchOldest >= (cursor ?? Number.MAX_SAFE_INTEGER)) break;
     cursor = batchOldest;
   }
 
-  const nextOldest = getOldestTimestamp(collected);
+  const nextOldest = timelineCursor(collected, 'oldest');
   if (nextOldest !== undefined) {
-    const currentOldest = getOldestTimestamp(feedEventsForActiveHashtag(getStoreSnapshot(events))) ?? oldestFeedTimestamp;
+    const currentOldest = timelineCursor(feedEventsForActiveHashtag(getStoreSnapshot(events)), 'oldest') ?? oldestFeedTimestamp;
     oldestFeedTimestamp = currentOldest === undefined ? nextOldest : Math.min(currentOldest, nextOldest);
   }
   return collected.slice(0, target);
@@ -562,11 +576,13 @@ function queuePendingNewer(incoming: NostrEvent[]) {
 function prependVisibleEvents(incoming: NostrEvent[]) {
   if (!incoming.length) return;
   events.update((existing) => {
-    const merged = mergeFeedEvents(eventsForFeedMode(currentMode, incoming), eventsForFeedMode(currentMode, existing));
-    const visible = merged.slice(0, maxFeedEvents);
-    const overflowOlder = merged.slice(maxFeedEvents);
-    cacheTrimmedOlderFeedEvents(overflowOlder);
-    oldestFeedTimestamp = getOldestTimestamp(feedEventsForActiveHashtag(visible));
+    const { visible, trimmed } = insertTimelineItems(eventsForFeedMode(currentMode, existing), eventsForFeedMode(currentMode, incoming), {
+      direction: 'newer',
+      limit: maxFeedEvents,
+      merge: mergeFeedEvents
+    });
+    cacheTrimmedOlderFeedEvents(trimmed);
+    oldestFeedTimestamp = timelineCursor(feedEventsForActiveHashtag(visible), 'oldest');
     return visible;
   });
 }
@@ -574,11 +590,13 @@ function prependVisibleEvents(incoming: NostrEvent[]) {
 function appendVisibleEvents(incoming: NostrEvent[]) {
   if (!incoming.length) return;
   events.update((existing) => {
-    const merged = mergeFeedEvents(eventsForFeedMode(currentMode, incoming), eventsForFeedMode(currentMode, existing));
-    const visible = merged.slice(-maxFeedEvents);
-    const overflowNewer = merged.slice(0, Math.max(0, merged.length - maxFeedEvents));
-    if (overflowNewer.length) pendingNewerEvents.update((pending) => limitFeedBuffer(mergeFeedEvents(overflowNewer, pending), maxPendingNewerEvents));
-    oldestFeedTimestamp = getOldestTimestamp(feedEventsForActiveHashtag(visible));
+    const { visible, trimmed } = insertTimelineItems(eventsForFeedMode(currentMode, existing), eventsForFeedMode(currentMode, incoming), {
+      direction: 'older',
+      limit: maxFeedEvents,
+      merge: mergeFeedEvents
+    });
+    if (trimmed.length) pendingNewerEvents.update((pending) => limitFeedBuffer(mergeFeedEvents(trimmed, pending), maxPendingNewerEvents));
+    oldestFeedTimestamp = timelineCursor(feedEventsForActiveHashtag(visible), 'oldest');
     return visible;
   });
 }
@@ -626,6 +644,8 @@ export function filterByHashtag(tag: string) {
   const clean = tag.trim().replace(/^#/, '').toLowerCase();
   activeHashtag.set(clean);
   cachedOlderEvents = [];
+  olderFeedEmptyAttempts = 0;
+  hasMoreFeed.set(true);
   void hydrateCachedHashtagFeed(clean);
   void refreshFeed('global');
 }
@@ -636,7 +656,8 @@ async function hydrateCachedHashtagFeed(tag: string) {
   const visibleEvents = cached.slice(0, initialFeedLimit);
   cachedOlderEvents = cached.slice(initialFeedLimit);
   events.set(visibleEvents);
-  oldestFeedTimestamp = getOldestTimestamp(visibleEvents);
+  oldestFeedTimestamp = timelineCursor(visibleEvents, 'oldest');
+  olderFeedEmptyAttempts = 0;
   primeCachedNewerFeed(visibleEvents);
   void refreshEventStats(visibleEvents.map((event) => event.id));
   void hydrateMissingProfiles(visibleEvents, 40);
@@ -646,6 +667,8 @@ export function selectFeedMode(mode: FeedMode) {
   hasExplicitFeedModeSelection = true;
   activeHashtag.set('');
   cachedOlderEvents = [];
+  olderFeedEmptyAttempts = 0;
+  hasMoreFeed.set(true);
   pendingNewerEvents.set([]);
   feedMode.set(mode);
   void hydrateCachedFeed(mode);
@@ -655,6 +678,8 @@ export function selectFeedMode(mode: FeedMode) {
 export function goHome() {
   activeHashtag.set('');
   cachedOlderEvents = [];
+  olderFeedEmptyAttempts = 0;
+  hasMoreFeed.set(true);
   void hydrateCachedFeed(currentMode);
   void refreshFeed(currentMode);
 }
@@ -662,6 +687,10 @@ export function goHome() {
 export async function refreshRelayInfo() {
   const enriched = await fetchRelayInfoDocuments(currentRelays).catch(() => currentRelays);
   relays.set(enriched);
+}
+
+function markConnectedRelaysOnline() {
+  markRelaysOnline(connectedRelayUrls());
 }
 
 export async function refreshMessages() {
@@ -778,6 +807,8 @@ export async function signOut() {
   activeHashtag.set('');
   hasExplicitFeedModeSelection = false;
   feedMode.set('global');
+  customFeedSettings.set(defaultCustomFeedSettings);
+  if (browser) localStorage.removeItem(customFeedStorageKey);
   cachedOlderEvents = [];
   if (browser) await goto(appPath('/'));
   await hydrateGuestFeedContext();
@@ -1051,16 +1082,6 @@ function normalizePubkey(value: string) {
   return /^[0-9a-f]{64}$/.test(clean) ? clean : '';
 }
 
-function getOldestTimestamp(items: NostrEvent[]) {
-  if (!items.length) return undefined;
-  return Math.min(...items.map((event) => event.created_at));
-}
-
-function getNewestTimestamp(items: NostrEvent[]) {
-  if (!items.length) return undefined;
-  return Math.max(...items.map((event) => event.created_at));
-}
-
 function feedEventsForActiveHashtag(items: NostrEvent[]) {
   if (!currentHashtag) return items;
   return items.filter((event) => eventHasHashtag(event, currentHashtag));
@@ -1077,7 +1098,6 @@ function feedKeywordHashtags(settings: CustomFeedSettings) {
   return [
     ...new Set(
       settings.keywords
-        .filter((keyword) => keyword.trim().startsWith('#'))
         .map((keyword) => keyword.trim().replace(/^#/, '').toLowerCase())
         .filter((keyword) => /^[a-z0-9_]{2,64}$/.test(keyword))
     )
@@ -1093,6 +1113,10 @@ function feedKeywordTerms(settings: CustomFeedSettings) {
         .filter((keyword) => /^[a-z0-9][a-z0-9 _-]{1,63}$/.test(keyword))
     )
   ];
+}
+
+function hasCustomFeedKeywords(settings = currentSettings) {
+  return Boolean(feedKeywordHashtags(settings).length || feedKeywordTerms(settings).length);
 }
 
 function eventMatchesKeyword(event: NostrEvent, keyword: string) {

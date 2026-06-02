@@ -1,12 +1,15 @@
 import { nip19 } from 'nostr-tools';
 import { bytesToHex } from '@noble/hashes/utils.js';
+import { afterEach, vi } from 'vitest';
 import {
   activeRelayUrls,
+  customFeedSliceLimits,
   dedupeEvents,
   eventStatsFromEvents,
   extractContactListDetails,
   feedFiltersForMode,
   fetchFeed,
+  fetchRelayInfoDocuments,
   filterSpam,
   isReplyEvent,
   isMachineGeneratedContent,
@@ -23,6 +26,10 @@ import {
 import type { NostrEvent, RelayState, Session } from './types';
 
 const pubkey = 'a'.repeat(64);
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 function event(overrides: Partial<NostrEvent> = {}): NostrEvent {
   return {
@@ -47,6 +54,29 @@ describe('nostr client helpers', () => {
 
     expect(activeRelayUrls(relays, 'read')).toEqual(['wss://read.example', 'wss://low.example']);
     expect(activeRelayUrls(relays, 'write')).toEqual(['wss://write.example', 'wss://low.example']);
+  });
+
+  it('preserves relays when relay info lookups fail', async () => {
+    const relays: RelayState[] = [
+      { url: 'wss://ok.example', enabled: true, read: true, write: true, score: 10 },
+      { url: 'wss://fail.example', enabled: true, read: true, write: false, score: 5 },
+      { url: 'wss://disabled.example', enabled: false, read: true, write: true, score: 1 }
+    ];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === 'https://ok.example') {
+        return new Response(JSON.stringify({ supported_nips: [1, 11], limitation: { max_message_length: 1024 } }), { status: 200 });
+      }
+      throw new Error('relay info unavailable');
+    });
+
+    const enriched = await fetchRelayInfoDocuments(relays);
+
+    expect(enriched).toHaveLength(relays.length);
+    expect(enriched[0]).toMatchObject({ url: 'wss://ok.example', supportedNips: [1, 11], limitation: { max_message_length: 1024 } });
+    expect(enriched[1]).toEqual(relays[1]);
+    expect(enriched[2]).toEqual(relays[2]);
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it('dedupes each relay batch and sorts newest first without poisoning future batches', () => {
@@ -120,9 +150,20 @@ describe('nostr client helpers', () => {
     ]);
     expect(await feedFiltersForMode('custom', base, follows, { friendsOfFriends: false, keywords: ['art'], interests: [] }, undefined, [], { until: 456 })).toEqual([
       { kinds: [1], limit: 8, until: 456, authors: follows },
-      { kinds: [1], limit: 2, until: 456, search: 'art' }
+      { kinds: [1], limit: 1, until: 456, '#t': ['art'] },
+      { kinds: [1], limit: 1, until: 456, search: 'art' }
     ]);
   });
+
+  it('uses the full follow list for custom follow slices instead of sampling authors', async () => {
+    const follows = ['a'.repeat(64), 'b'.repeat(64), 'c'.repeat(64), 'd'.repeat(64)];
+    const base = { kinds: [1], limit: 10 };
+
+    expect(await feedFiltersForMode('custom', base, follows, { friendsOfFriends: false, keywords: [], interests: [] }, 123, [])).toEqual([
+      { kinds: [1], limit: 10, authors: follows, since: 123 }
+    ]);
+  });
+
 
   it('reserves part of global and custom feeds for hashtag keywords', async () => {
     const follows = ['c'.repeat(64)];
@@ -139,16 +180,67 @@ describe('nostr client helpers', () => {
     ]);
   });
 
-  it('keeps custom feed mostly follows with optional hashtag and friends-of-friends slices', async () => {
+  it('uses follows and keywords when custom feed has follows, keywords, and no available friends-of-friends', async () => {
     const follows = ['c'.repeat(64)];
     const base = { kinds: [1], limit: 10 };
     const settings = { friendsOfFriends: true, keywords: ['#sports', 'cycling'], interests: [] };
 
     expect(await feedFiltersForMode('custom', base, follows, settings, 123, [])).toEqual([
       { kinds: [1], limit: 8, authors: follows, since: 123 },
-      { kinds: [1], limit: 1, '#t': ['sports'], since: 123 },
+      { kinds: [1], limit: 1, '#t': ['sports', 'cycling'], since: 123 },
       { kinds: [1], limit: 1, search: 'cycling', since: 123 }
     ]);
+  });
+
+  it('keeps keyword query filters within the allocated keyword limit', async () => {
+    const follows = ['c'.repeat(64)];
+    const base = { kinds: [1], limit: 10 };
+    const settings = { friendsOfFriends: false, keywords: ['guns', 'bitcoin', 'flowers'], interests: [] };
+
+    const filters = await feedFiltersForMode('custom', base, follows, settings, 123, []);
+    expect(filters).toEqual([
+      { kinds: [1], limit: 8, authors: follows, since: 123 },
+      { kinds: [1], limit: 1, '#t': ['guns', 'bitcoin', 'flowers'], since: 123 },
+      { kinds: [1], limit: 1, search: 'guns', since: 123 }
+    ]);
+    expect(filters.reduce((total, filter) => total + (filter.limit ?? 0), 0)).toBe(10);
+  });
+
+  it('uses only keyword filters when custom feed has keywords but no follows', async () => {
+    const base = { kinds: [1], limit: 10 };
+
+    expect(await feedFiltersForMode('custom', base, [], { friendsOfFriends: true, keywords: ['#sports', 'cycling'], interests: [] }, 123, [])).toEqual([
+      { kinds: [1], limit: 5, '#t': ['sports', 'cycling'], since: 123 },
+      { kinds: [1], limit: 5, search: 'cycling', since: 123 }
+    ]);
+  });
+
+  it('allocates custom feed slices and redistributes missing optional slices to follows', () => {
+    expect(customFeedSliceLimits(10, true, true, true)).toEqual({
+      followLimit: 6,
+      friendsOfFriendsLimit: 2,
+      keywordLimit: 2
+    });
+    expect(customFeedSliceLimits(10, true, true, false)).toEqual({
+      followLimit: 8,
+      friendsOfFriendsLimit: 2,
+      keywordLimit: 0
+    });
+    expect(customFeedSliceLimits(10, true, false, true)).toEqual({
+      followLimit: 8,
+      friendsOfFriendsLimit: 0,
+      keywordLimit: 2
+    });
+    expect(customFeedSliceLimits(10, true, false, false)).toEqual({
+      followLimit: 10,
+      friendsOfFriendsLimit: 0,
+      keywordLimit: 0
+    });
+    expect(customFeedSliceLimits(10, false, false, true)).toEqual({
+      followLimit: 0,
+      friendsOfFriendsLimit: 0,
+      keywordLimit: 10
+    });
   });
 
   it('filters muted pubkeys and obvious muted-word spam', () => {
@@ -276,6 +368,23 @@ describe('nostr client helpers', () => {
 
     expect(isMachineGeneratedContent(transport.content)).toBe(true);
     expect(filterSpam([transport, human])).toEqual([human]);
+  });
+
+  it('filters machine hostname payloads while allowing normal discussion', () => {
+    const payload = event({ content: 'sp_4c43bd1.lee73059.03.5XSLXRRCYOYAEVOKEZVTEF4A67LG3AYWG4DSTQNLXNTC2O2EPFMHAILOPKXVLWY.drift.gits.net' });
+    const rotatedDomain = event({ content: '  sp_4c43bd1.5cdc4f52.06.WJYMOTSU7XZBVZCU55RYUQB2SIRSBTOCFMOVTZBKFPU2OEJ5OJYLUPKLI24WKWA.example.net  ' });
+    const rotatedPrefix = event({ content: 'mx9a77fd.5cdc4f52.06.WJYMOTSU7XZBVZCU55RYUQB2SIRSBTOCFMOVTZBKFPU2OEJ5OJYLUPKLI24WKWA.example.net' });
+    const human = event({ content: 'I saw odd drift.gits.net hostnames on a relay and wrote notes about filtering them.' });
+    const normalHost = event({ content: 'sp_service.docs.example.net' });
+    const normalCacheBustUrl = event({ content: 'assets.2026-06-02.a1b2c3d4.example.net' });
+
+    expect(isMachineGeneratedContent(payload.content)).toBe(true);
+    expect(isMachineGeneratedContent(rotatedDomain.content)).toBe(true);
+    expect(isMachineGeneratedContent(rotatedPrefix.content)).toBe(true);
+    expect(isMachineGeneratedContent(human.content)).toBe(false);
+    expect(isMachineGeneratedContent(normalHost.content)).toBe(false);
+    expect(isMachineGeneratedContent(normalCacheBustUrl.content)).toBe(false);
+    expect(filterSpam([payload, rotatedDomain, rotatedPrefix, human, normalHost, normalCacheBustUrl])).toEqual([human, normalHost, normalCacheBustUrl]);
   });
 
   it('filters bot metadata json notes with emote payload fields', () => {

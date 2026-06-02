@@ -88,8 +88,7 @@ export async function cacheEvents(events: NostrEvent[]) {
 export async function cacheProfileEvents(events: NostrEvent[]) {
   if (!events.length) return;
   await cacheEvents(events);
-  const byPubkey = new Map<string, NostrEvent[]>();
-  events.forEach((event) => byPubkey.set(event.pubkey, [...(byPubkey.get(event.pubkey) ?? []), event]));
+  const touchedPubkeys = new Set(events.map((event) => event.pubkey));
 
   await withStore<void>('profileEvents', 'readwrite', (store) => {
     events.forEach((event) =>
@@ -100,33 +99,17 @@ export async function cacheProfileEvents(events: NostrEvent[]) {
         event
       } satisfies CachedProfileEvent)
     );
-    byPubkey.forEach((_, pubkey) => pruneOldProfileEvents(store, pubkey, MAX_CACHED_PROFILE_EVENTS));
+    touchedPubkeys.forEach((pubkey) => pruneOldProfileEvents(store, pubkey, MAX_CACHED_PROFILE_EVENTS));
   }).catch(() => undefined);
 }
 
 function pruneOldEvents(store: IDBObjectStore, maxEvents: number) {
-  let kept = 0;
-  const request = store.index('created_at').openCursor(null, 'prev');
-  request.onsuccess = () => {
-    const cursor = request.result;
-    if (!cursor) return;
-    kept += 1;
-    if (kept > maxEvents) cursor.delete();
-    cursor.continue();
-  };
+  pruneOverflow(store.index('created_at'), maxEvents);
 }
 
 function pruneOldProfileEvents(store: IDBObjectStore, pubkey: string, maxEvents: number) {
-  let kept = 0;
   const range = IDBKeyRange.bound([pubkey, 0], [pubkey, Number.MAX_SAFE_INTEGER]);
-  const request = store.index('pubkey_created_at').openCursor(range, 'prev');
-  request.onsuccess = () => {
-    const cursor = request.result;
-    if (!cursor) return;
-    kept += 1;
-    if (kept > maxEvents) cursor.delete();
-    cursor.continue();
-  };
+  pruneOverflow(store.index('pubkey_created_at'), maxEvents, range);
 }
 
 async function cacheHashtagEventIndex(events: NostrEvent[]) {
@@ -147,14 +130,23 @@ async function cacheHashtagEventIndex(events: NostrEvent[]) {
 }
 
 function pruneOldHashtagEvents(store: IDBObjectStore, maxEvents: number) {
-  let kept = 0;
-  const request = store.index('created_at').openCursor(null, 'prev');
-  request.onsuccess = () => {
-    const cursor = request.result;
-    if (!cursor) return;
-    kept += 1;
-    if (kept > maxEvents) cursor.delete();
-    cursor.continue();
+  pruneOverflow(store.index('created_at'), maxEvents);
+}
+
+function pruneOverflow(index: IDBIndex, maxItems: number, query?: IDBValidKey | IDBKeyRange) {
+  const countRequest = index.count(query);
+  countRequest.onsuccess = () => {
+    let remainingDeletes = Math.max(0, countRequest.result - maxItems);
+    if (!remainingDeletes) return;
+
+    const cursorRequest = index.openCursor(query, 'next');
+    cursorRequest.onsuccess = () => {
+      const cursor = cursorRequest.result;
+      if (!cursor || remainingDeletes <= 0) return;
+      cursor.delete();
+      remainingDeletes -= 1;
+      cursor.continue();
+    };
   };
 }
 

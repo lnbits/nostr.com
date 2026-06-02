@@ -1,6 +1,7 @@
 <script lang="ts">
   import { X } from '@lucide/svelte';
   import { customFeedSettings, feedMode, refreshFeed } from '$lib/stores/app';
+  import { parseKeywordInput } from '$lib/nostr/keywords';
 
   export let open = false;
 
@@ -17,12 +18,9 @@
   function save() {
     customFeedSettings.update((settings) => ({
       ...settings,
-      keywords: keywordText
-        .split(',')
-        .map((keyword) => keyword.trim())
-        .filter(Boolean)
+      keywords: parseKeywordInput(keywordText)
     }));
-    if ($feedMode === 'global' || $feedMode === 'custom') void refreshFeed($feedMode);
+    if ($feedMode === 'global' || $feedMode === 'custom') void refreshFeed($feedMode, { replaceVisible: true });
     close();
   }
 

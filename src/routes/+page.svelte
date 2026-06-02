@@ -48,7 +48,7 @@
   $: showNewerBubble = canLoadNewerForFeed() && $pendingNewerEvents.length && !pullingNewer && !hideNewerBubble && !pullStartedAtTop && pullDistance <= 0;
   $: emptyMessage = !hasReadRelays
     ? 'Please connect to relays'
-    : $session && ($feedMode === 'follow' || $feedMode === 'custom') && !$follows.length
+    : $session && ($feedMode === 'follow' || ($feedMode === 'custom' && !customFeedHasKeywords($customFeedSettings))) && !$follows.length
       ? 'Please follow someone'
       : 'Please connect to relays';
 
@@ -187,6 +187,10 @@
       if (event.tags.some((item) => item[0] === 't' && item[1]?.replace(/^#/, '').toLowerCase() === normalized)) return true;
       return new RegExp(`(^|\\s)#${normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(event.content);
     });
+  }
+
+  function customFeedHasKeywords(settings: typeof $customFeedSettings) {
+    return settings.keywords.some((keyword) => keyword.trim());
   }
 
 </script>

@@ -1955,6 +1955,13 @@ label span, label strong { color: var(--text); }
   max-width: 100%;
   overflow-x: hidden;
 }
+.thread-load-sentinel {
+  min-height: 24px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 13px;
+}
 .thread-reply {
   display: grid;
   min-width: 0;
