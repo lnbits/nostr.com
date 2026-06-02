@@ -66,4 +66,16 @@ describe('app store helpers', () => {
       displayEventsForFeedMode('custom', items, [follow], { friendsOfFriends: true, keywords: ['#coffee', 'quiche'], interests: [] }, [friend]).map((item) => item.id)
     ).toEqual(['follow', 'friend', 'hashtag', 'keyword']);
   });
+
+  it('does not fall back to unrelated global notes for custom display without follows', () => {
+    expect(displayEventsForFeedMode('custom', [authorEvent('global', 10, 'c'.repeat(64))], [], { friendsOfFriends: true, keywords: ['#nostr'], interests: [] })).toEqual([]);
+  });
+
+  it('allows keyword-only custom display when there are no follows', () => {
+    const matching = { ...authorEvent('keyword', 10, 'c'.repeat(64)), content: 'building with nostr today' };
+    const tagged = { ...authorEvent('tagged', 8, 'e'.repeat(64)), tags: [['t', 'nostr']], content: 'tagged only' };
+    const unrelated = authorEvent('other', 5, 'd'.repeat(64));
+
+    expect(displayEventsForFeedMode('custom', [matching, tagged, unrelated], [], { friendsOfFriends: true, keywords: ['nostr'], interests: [] }).map((item) => item.id)).toEqual(['keyword', 'tagged']);
+  });
 });

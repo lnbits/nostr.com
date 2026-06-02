@@ -9,6 +9,8 @@ import type { ContactListDetails, ContactListItem, CustomFeedSettings, DirectMes
 const pool = new SimplePool();
 type SearchFilter = Filter & { search?: string };
 const bunkerSigners = new Map<string, nip46.BunkerSigner>();
+const connectedBunkerSignerKeys = new Set<string>();
+const bunkerConnectionPromises = new Map<string, Promise<void>>();
 type SubCloser = { close: (reason?: string) => void };
 type PomegranateProfile = { name: string; handler_pubkey: string; email?: string };
 type PomegranateAccount = { pubkey: string; email?: string };
@@ -48,11 +50,24 @@ export function normalizeRelayUrl(url: string) {
   }
 }
 
+export function connectedRelayUrls() {
+  return [...pool.listConnectionStatus()]
+    .filter(([, connected]) => connected)
+    .map(([url]) => normalizeRelayUrl(url))
+    .filter(Boolean);
+}
+
 function queryShortLived(relayUrls: string[], filter: Filter, maxWait = 5000) {
   return new Promise<NostrEvent[]>((resolve) => {
+    if (!relayUrls.length) {
+      resolve([]);
+      return;
+    }
     const events: NostrEvent[] = [];
     let settled = false;
     let closer: SubCloser | undefined;
+    const filterLimit = filter.limit ?? 80;
+    const maxEvents = Math.min(160, Math.max(filterLimit, filterLimit * relayUrls.length));
     const timeout = setTimeout(() => finish(), maxWait + 250);
 
     const finish = () => {
@@ -66,7 +81,12 @@ function queryShortLived(relayUrls: string[], filter: Filter, maxWait = 5000) {
     closer = pool.subscribeManyEose(relayUrls, filter, {
       maxWait,
       onevent(event) {
+        if (events.length >= maxEvents) {
+          finish();
+          return;
+        }
         events.push(event as NostrEvent);
+        if (events.length >= maxEvents) finish();
       },
       onclose() {
         finish();
@@ -145,6 +165,7 @@ export async function loginWithBunker(uri: string): Promise<Session> {
       bunkerSecret: pointer.secret
     };
     bunkerSigners.set(bunkerSignerKey(session), signer);
+    connectedBunkerSignerKeys.add(bunkerSignerKey(session));
     return session;
   } catch (err) {
     throw err instanceof Error ? err : new Error(typeof err === 'string' ? err : 'Could not sign in to the bunker.');
@@ -322,6 +343,7 @@ export function isFamilySafeEvent(event: NostrEvent) {
 export function isMachineGeneratedContent(content: string) {
   const trimmed = content.trim();
   if (isTransportPayload(trimmed)) return true;
+  if (isMachineHostnamePayload(trimmed)) return true;
   if (!trimmed) return false;
   if (!/^[{[]/.test(trimmed) || !/[}\]]$/.test(trimmed)) return false;
 
@@ -366,6 +388,27 @@ function isTransportPayload(content: string) {
   if (/"route"\s*:/.test(content) && /"payload"\s*:/.test(content)) return true;
   if (/"type"\s*:\s*"ar_profile"/.test(content) && /"payload"\s*:/.test(content)) return true;
   return /[A-Za-z0-9+/=_-]{420,}/.test(content) && /"payload"\s*:/.test(content);
+}
+
+function isMachineHostnamePayload(content: string) {
+  const normalized = content.replace(/\s+/g, '');
+  if (!/^[a-z0-9][a-z0-9_-]*(?:\.[a-z0-9][a-z0-9_-]*){3,}$/i.test(normalized)) return false;
+  const labels = normalized.split('.');
+  if (labels.some((label) => label.length > 63)) return false;
+
+  const machineLabels = labels.slice(0, -2);
+  const highEntropyLabels = machineLabels.filter(isHighEntropyHostnameLabel);
+  const opaqueLabels = machineLabels.filter((label) => label.length >= 8 && /^[a-z0-9_-]+$/i.test(label) && /\d/.test(label));
+  const hasMachinePrefix = /^sp[_-]?[a-z0-9_-]*$/i.test(labels[0]);
+
+  return highEntropyLabels.length >= 1 && (opaqueLabels.length >= 3 || (hasMachinePrefix && opaqueLabels.length >= 2));
+}
+
+function isHighEntropyHostnameLabel(label: string) {
+  if (label.length < 24 || !/^[a-z0-9_-]+$/i.test(label)) return false;
+  if (!/[a-z]/i.test(label) || !/\d/.test(label)) return false;
+  const uniqueChars = new Set(label.toLowerCase()).size;
+  return uniqueChars >= 12;
 }
 
 function containsBlockedPhrase(text: string, phrase: string) {
@@ -480,7 +523,7 @@ export function feedFiltersForMode(
   const tag = normalizedHashtag(options.hashtag);
   const taggedBase = tag ? { ...base, '#t': [tag] } : base;
   if (mode === 'follow' && follows.length) return [withOptionalSince({ ...taggedBase, authors: follows }, since)];
-  if (mode === 'custom' && follows.length) return customFeedFilters(taggedBase, follows, settings, since, relayUrls);
+  if (mode === 'custom') return customFeedFilters(taggedBase, follows, settings, since, relayUrls);
   if (mode === 'global' && hashtagKeywords(settings).length) return globalFeedFilters(taggedBase, settings, since);
   return [withOptionalSince(taggedBase, since)];
 }
@@ -492,7 +535,8 @@ export async function fetchFeed(
   settings: CustomFeedSettings = { friendsOfFriends: true, keywords: [], interests: [] },
   options: FeedQueryOptions = {}
 ) {
-  if ((mode === 'follow' || mode === 'custom') && !follows.length) return [];
+  if (mode === 'follow' && !follows.length) return [];
+  if (mode === 'custom' && !follows.length && !keywordFilters(settings).length) return [];
 
   const relayUrls = activeRelayUrls(relays, 'read');
   const base: Filter = { kinds: [1], limit: options.limit ?? 24 };
@@ -500,11 +544,19 @@ export async function fetchFeed(
   if (options.until) base.until = options.until;
   const filters = await feedFiltersForMode(mode, base, follows, settings, since, relayUrls, options);
 
-  const events = verifiedRelayEvents((await Promise.all(filters.map((filter) => queryShortLived(relayUrls, filter, 5000)))).flat());
+  const events = verifiedRelayEvents((await Promise.all(filters.map((filter) => queryShortLived(relayUrls, filter, 5000)))).flat()).filter((event) =>
+    filters.some((filter) => eventMatchesTimeWindow(event, filter.since, filter.until))
+  );
   const clean = dedupeEvents(topLevelFeedEvents(filterSpam(events)));
   const output = mode === 'global' ? limitCryptoTopicDensity(limitConsecutiveAuthors(clean, 2), 10) : clean;
   await cacheEvents(output);
   return output;
+}
+
+export function eventMatchesTimeWindow(event: NostrEvent, since?: number, until?: number) {
+  if (since !== undefined && event.created_at < since) return false;
+  if (until !== undefined && event.created_at > until) return false;
+  return true;
 }
 
 export async function subscribeFeed(
@@ -578,11 +630,14 @@ export async function fetchMissingEvents(ids: string[], relays = defaultRelays, 
   return clean;
 }
 
-export async function fetchThreadReplies(rootId: string | string[], relays = defaultRelays, limit = 80) {
+export async function fetchThreadReplies(rootId: string | string[], relays = defaultRelays, limit = 80, options: Pick<FeedQueryOptions, 'until' | 'since'> = {}) {
   const ids = (Array.isArray(rootId) ? rootId : [rootId]).filter((id) => /^[0-9a-f]{64}$/i.test(id));
   if (!ids.length) return [];
   const relayUrls = activeRelayUrls(relays, 'read');
-  const events = verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [1], '#e': ids, limit }, 5000));
+  const filter: Filter = { kinds: [1], '#e': ids, limit };
+  if (options.until) filter.until = options.until;
+  if (options.since) filter.since = options.since;
+  const events = verifiedRelayEvents(await queryShortLived(relayUrls, filter, 5000));
   const clean = dedupeEvents(filterSpam(events));
   await cacheEvents(clean);
   return clean;
@@ -638,11 +693,27 @@ export async function fetchProfiles(pubkeys: string[], relays = defaultRelays) {
 export async function searchProfiles(query: string, relays = defaultRelays) {
   const search = query.trim().replace(/^@/, '');
   if (search.length < 2) return [];
+  const exactNip05 = normalizeNip05Identifier(search);
+  if (exactNip05) {
+    const resolved = await resolveNip05Profile(exactNip05).catch(() => null);
+    if (resolved) {
+      const [profile] = await fetchProfiles([resolved.pubkey], relays).catch(() => []);
+      return [{ ...(profile ?? {}), pubkey: resolved.pubkey, nip05: exactNip05 }];
+    }
+    return [];
+  }
+
   const relayUrls = activeRelayUrls(relays, 'read');
   const events = verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [0], search, limit: 12 }, 4000));
   const profiles = parseProfileEvents(events);
   await Promise.all(profiles.map(cacheProfile));
   return profiles;
+}
+
+export function normalizeNip05Identifier(value: string) {
+  const clean = value.trim().replace(/^@/, '').toLowerCase();
+  if (!/^[a-z0-9_.-]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(clean)) return '';
+  return clean;
 }
 
 export async function resolvePubkeyIdentifier(value: string, relays = defaultRelays) {
@@ -911,15 +982,18 @@ export async function fetchRelayListMetadata(pubkey: string, relays = defaultRel
 
 export async function fetchRelayInfoDocuments(relays = defaultRelays) {
   return Promise.all(
-    relays
-      .filter((relay) => relay.enabled)
-      .map(async (relay) => {
+    relays.map(async (relay) => {
+      if (!relay.enabled) return relay;
+      try {
         const httpUrl = relay.url.replace(/^wss:\/\//, 'https://').replace(/^ws:\/\//, 'http://');
         const response = await fetch(httpUrl, { headers: { accept: 'application/nostr+json' } });
         if (!response.ok) return relay;
         const info = (await response.json()) as { supported_nips?: number[]; limitation?: Record<string, unknown> };
         return { ...relay, supportedNips: info.supported_nips, limitation: info.limitation };
-      })
+      } catch {
+        return relay;
+      }
+    })
   );
 }
 
@@ -1022,7 +1096,7 @@ async function decryptNip04(session: Session, peer: string, ciphertext: string) 
   if (!peer) return undefined;
   if (session.secret) return nip04.decrypt(hexToBytes(session.secret), peer, ciphertext);
   if (typeof window !== 'undefined' && session.mode === 'nip07' && window.nostr?.nip04) return window.nostr.nip04.decrypt(peer, ciphertext);
-  if (isRemoteSignerSession(session)) return getBunkerSigner(session).nip04Decrypt(peer, ciphertext);
+  if (isRemoteSignerSession(session)) return (await getConnectedBunkerSigner(session)).nip04Decrypt(peer, ciphertext);
   return undefined;
 }
 
@@ -1038,7 +1112,7 @@ async function unwrapNip17Event(event: NostrEvent, session: Session) {
 async function decryptNip44(session: Session, peer: string, ciphertext: string) {
   let plaintext: string | undefined;
   if (typeof window !== 'undefined' && session.mode === 'nip07' && window.nostr?.nip44) plaintext = await window.nostr.nip44.decrypt(peer, ciphertext);
-  if (isRemoteSignerSession(session)) plaintext = await getBunkerSigner(session).nip44Decrypt(peer, ciphertext);
+  if (isRemoteSignerSession(session)) plaintext = await (await getConnectedBunkerSigner(session)).nip44Decrypt(peer, ciphertext);
   if (!plaintext) throw new Error('NIP-44 decrypt is not available for this session.');
   return JSON.parse(plaintext) as unknown;
 }
@@ -1047,7 +1121,7 @@ async function encryptNip44(session: Session, peer: string, payload: unknown) {
   const plaintext = JSON.stringify(payload);
   if (session.secret) return nip44.encrypt(plaintext, nip44.getConversationKey(hexToBytes(session.secret), peer));
   if (typeof window !== 'undefined' && session.mode === 'nip07' && window.nostr?.nip44) return window.nostr.nip44.encrypt(peer, plaintext);
-  if (isRemoteSignerSession(session)) return getBunkerSigner(session).nip44Encrypt(peer, plaintext);
+  if (isRemoteSignerSession(session)) return (await getConnectedBunkerSigner(session)).nip44Encrypt(peer, plaintext);
   throw new Error('NIP-44 encrypt is not available for this session.');
 }
 
@@ -1162,7 +1236,7 @@ export async function signEventTemplate(session: Session, draft: Pick<NostrTools
   } else if (session.secret) {
     event = finalizeEvent(draft, hexToBytes(session.secret));
   } else if (isRemoteSignerSession(session)) {
-    event = (await getBunkerSigner(session).signEvent(draft)) as NostrToolsEvent;
+    event = (await (await getConnectedBunkerSigner(session)).signEvent(draft)) as NostrToolsEvent;
   } else {
     throw new Error('No signer is available for this session.');
   }
@@ -1211,6 +1285,28 @@ function getBunkerSigner(session: Session) {
   return signer;
 }
 
+async function getConnectedBunkerSigner(session: Session) {
+  const signer = getBunkerSigner(session);
+  const key = bunkerSignerKey(session);
+  if (connectedBunkerSignerKeys.has(key)) return signer;
+
+  let connection = bunkerConnectionPromises.get(key);
+  if (!connection) {
+    connection = withTimeout(signer.connect(), 15000, 'The bunker did not acknowledge the connection request.').then(() => {
+      connectedBunkerSignerKeys.add(key);
+    });
+    bunkerConnectionPromises.set(
+      key,
+      connection.finally(() => {
+        bunkerConnectionPromises.delete(key);
+      })
+    );
+  }
+
+  await connection;
+  return signer;
+}
+
 function bunkerSignerKey(session: Session) {
   return `${session.bunker ?? ''}:${session.bunkerClientSecret ?? ''}`;
 }
@@ -1221,11 +1317,6 @@ function decodeNsec(value: string) {
   return decoded.data;
 }
 
-function sampleAuthors(follows: string[], count: number) {
-  if (count >= follows.length) return follows;
-  return [...follows].sort(() => Math.random() - 0.5).slice(0, count);
-}
-
 function normalizedHashtag(tag?: string) {
   const clean = tag?.trim().replace(/^#/, '').toLowerCase();
   return clean && /^[a-z0-9_]{2,64}$/.test(clean) ? clean : '';
@@ -1233,25 +1324,45 @@ function normalizedHashtag(tag?: string) {
 
 async function customFeedFilters(base: Filter, follows: string[], settings: CustomFeedSettings, since: number | undefined, relayUrls: string[]) {
   const total = base.limit ?? 24;
-  const keywordLimit = keywordFilters(settings).length ? Math.max(1, Math.round(total * 0.2)) : 0;
-  const friendsOfFriends = settings.friendsOfFriends ? await fetchFriendsOfFriends(follows, relayUrls) : [];
-  const friendsOfFriendsLimit = friendsOfFriends.length ? Math.max(1, Math.round(total * 0.2)) : 0;
-  const followLimit = Math.max(1, total - keywordLimit - friendsOfFriendsLimit);
-  const filters: Filter[] = [withOptionalSince({ ...base, authors: sampleAuthors(follows, followLimit), limit: followLimit }, since)];
+  const keywordFilterItems = keywordFilters(settings);
+  if (!follows.length && !keywordFilterItems.length) return [];
+  const friendsOfFriends = settings.friendsOfFriends && follows.length ? await fetchFriendsOfFriends(follows, relayUrls) : [];
+  const { followLimit, friendsOfFriendsLimit, keywordLimit } = customFeedSliceLimits(total, follows.length > 0, friendsOfFriends.length > 0, keywordFilterItems.length > 0);
+  const filters: Filter[] = followLimit ? [withOptionalSince({ ...base, authors: follows, limit: followLimit }, since)] : [];
 
   if (friendsOfFriendsLimit) {
-    filters.push(withOptionalSince({ ...base, authors: sampleAuthors(friendsOfFriends, friendsOfFriendsLimit), limit: friendsOfFriendsLimit }, since));
+    filters.push(withOptionalSince({ ...base, authors: friendsOfFriends, limit: friendsOfFriendsLimit }, since));
   }
 
-  filters.push(...keywordFeedFilters(base, settings, keywordLimit, since));
+  filters.push(...keywordFeedFilters(base, keywordFilterItems, keywordLimit, since));
   return filters;
+}
+
+export function customFeedSliceLimits(total: number, hasFollows: boolean, hasFriendsOfFriends: boolean, hasKeywords: boolean) {
+  const limit = Math.max(1, total);
+  if (!hasFollows && hasKeywords) {
+    return { followLimit: 0, friendsOfFriendsLimit: 0, keywordLimit: limit };
+  }
+  const optionalSlices = [hasFriendsOfFriends, hasKeywords].filter(Boolean).length;
+  const optionalLimit = Math.min(limit - 1, optionalSlices * Math.max(1, Math.round(limit * 0.2)));
+  const optionalParts = optionalSlices && optionalLimit > 0 ? splitOptionalLimit(optionalLimit, optionalSlices) : [];
+  const friendsOfFriendsLimit = hasFriendsOfFriends ? (optionalParts.shift() ?? 0) : 0;
+  const keywordLimit = hasKeywords ? (optionalParts.shift() ?? 0) : 0;
+  const followLimit = limit - friendsOfFriendsLimit - keywordLimit;
+  return { followLimit, friendsOfFriendsLimit, keywordLimit };
+}
+
+function splitOptionalLimit(total: number, parts: number) {
+  const base = Math.floor(total / parts);
+  const remainder = total - base * parts;
+  return Array.from({ length: parts }, (_, index) => base + (index < remainder ? 1 : 0));
 }
 
 function globalFeedFilters(base: Filter, settings: CustomFeedSettings, since?: number) {
   const total = base.limit ?? 24;
   const keywordLimit = Math.max(1, Math.round(total * 0.3));
   const generalLimit = Math.max(1, total - keywordLimit);
-  return [withOptionalSince({ ...base, limit: generalLimit }, since), ...keywordFeedFilters(base, settings, keywordLimit, since)];
+  return [withOptionalSince({ ...base, limit: generalLimit }, since), ...keywordFeedFilters(base, keywordFilters(settings), keywordLimit, since)];
 }
 
 function withOptionalSince(filter: Filter, since?: number) {
@@ -1259,7 +1370,7 @@ function withOptionalSince(filter: Filter, since?: number) {
 }
 
 function hashtagKeywords(settings: CustomFeedSettings) {
-  return [...new Set(settings.keywords.filter((keyword) => keyword.trim().startsWith('#')).map((keyword) => normalizedHashtag(keyword)).filter(Boolean))];
+  return [...new Set(settings.keywords.map((keyword) => normalizedHashtag(keyword)).filter(Boolean))];
 }
 
 function keywordSearchTerms(settings: CustomFeedSettings) {
@@ -1282,15 +1393,18 @@ function keywordFilters(settings: CustomFeedSettings) {
   return filters;
 }
 
-function keywordFeedFilters(base: Filter, settings: CustomFeedSettings, totalLimit: number, since?: number) {
-  const filters = keywordFilters(settings);
+function keywordFeedFilters(base: Filter, filters: SearchFilter[], totalLimit: number, since?: number) {
   if (!filters.length || totalLimit <= 0) return [];
   const perFilterLimit = splitLimit(totalLimit, filters.length);
-  return filters.map((filter, index) => withOptionalSince({ ...base, ...filter, limit: perFilterLimit[index] }, since));
+  return filters.flatMap((filter, index) => {
+    const limit = perFilterLimit[index] ?? 0;
+    return limit > 0 ? [withOptionalSince({ ...base, ...filter, limit }, since)] : [];
+  });
 }
 
 function splitLimit(total: number, parts: number) {
-  const base = Math.max(1, Math.floor(total / parts));
+  if (parts <= 0) return [];
+  const base = Math.floor(total / parts);
   const remainder = Math.max(0, total - base * parts);
   return Array.from({ length: parts }, (_, index) => base + (index < remainder ? 1 : 0));
 }

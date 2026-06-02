@@ -12,7 +12,7 @@
   --shadow: 0 18px 50px rgba(20, 20, 24, 0.12);
   --native-status-offset: 0px;
   --app-top-safe: max(env(safe-area-inset-top), var(--native-status-offset));
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: Inter, "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, ui-sans-serif, sans-serif;
 }
 
 :root.native-shell {
@@ -249,7 +249,7 @@ label span, label strong { color: var(--text); }
   color: var(--muted);
   font-size: 16px;
   font-style: italic;
-  font-weight: 400;
+  font-weight: 350;
 }
 .info-link {
   min-height: 34px;
@@ -749,12 +749,22 @@ label span, label strong { color: var(--text); }
   position: relative;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  line-height: 1.24;
+  line-height: 1.3;
   font-size: 16px;
+  font-family: "Helvetica Neue", Helvetica, Arial, Inter, ui-sans-serif, sans-serif;
+  font-weight: 300;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 .note-content a {
   color: var(--accent);
-  font-weight: 400;
+  font-weight: inherit;
+}
+.capped-note-copy {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 14px;
 }
 .note-open-text {
   min-height: 0;
@@ -785,7 +795,7 @@ label span, label strong { color: var(--text); }
   padding: 0;
   color: var(--accent);
   background: transparent;
-  font-weight: 400;
+  font-weight: inherit;
 }
 .fade-tail {
   position: absolute;
@@ -1954,6 +1964,13 @@ label span, label strong { color: var(--text); }
   min-width: 0;
   max-width: 100%;
   overflow-x: hidden;
+}
+.thread-load-sentinel {
+  min-height: 24px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 13px;
 }
 .thread-reply {
   display: grid;

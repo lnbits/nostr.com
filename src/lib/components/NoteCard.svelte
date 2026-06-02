@@ -2,24 +2,37 @@
   import { onDestroy, onMount } from 'svelte';
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
+  import { page } from '$app/stores';
   import { Copy, ExternalLink, Flag, Heart, Link, MessageCircle, MoreHorizontal, Pencil, Repeat2, Trash2, UserX, Zap } from '@lucide/svelte';
   import { nip19 } from 'nostr-tools';
   import type { NostrEvent, Profile } from '$lib/nostr/types';
   import { extractMediaAttachments, extractQuotedNoteReferences, extractSocialEmbeds, parseNoteText } from '$lib/nostr/media';
   import { activeRelayUrls, fetchLikeAuthors, fetchProfiles, subscribeZapReceipts } from '$lib/nostr/client';
   import { createZapInvoice, loadZapInfo, type ZapInfo } from '$lib/nostr/zap';
-  import { deleteNote, editedEvents, eventStats, filterByHashtag, likedEvents, mergeProfileRecords, muteAccount, profiles, reactToNote, refreshEventStats, relays, reportNote, repostedEvents, repostNote, session, startEdit, startReply, watchVisibleNoteStats } from '$lib/stores/app';
+  import { deleteNote, editedEvents, eventStats, filterByHashtag, likedEvents, mergeProfileRecords, muteAccount, prefetchThreadPreview, profiles, reactToNote, refreshEventStats, relays, reportNote, repostedEvents, repostNote, session, startEdit, startReply, watchVisibleNoteStats } from '$lib/stores/app';
   import { appPath } from '$lib/paths';
   import { pauseWhenHidden } from '$lib/actions/pauseWhenHidden';
+  import { saveRouteScrollState } from '$lib/stores/routeScroll';
+  import { saveThreadReturnTarget, currentThreadReturnTarget } from '$lib/stores/threadNavigation';
+  import { saveThreadSeed } from '$lib/stores/threadSeed';
   import QuotedNotePreview from './QuotedNotePreview.svelte';
 
   export let event: NostrEvent;
   export let profile: Profile | undefined;
   export let featured = false;
   export let embedded = false;
+  export let prefetchThread = false;
+  export let hiddenQuotedNoteIds: string[] = [];
   export let onOpen: ((event: NostrEvent) => void) | undefined = undefined;
 
   const previewLength = 400;
+  const maxParsedContentLength = 8000;
+  const maxExpandedContentLength = 6000;
+  const maxRenderableTags = 300;
+  const maxRenderedTextParts = 240;
+  const maxMediaAttachments = 6;
+  const maxSocialEmbeds = 3;
+  const maxQuotedNotes = 3;
   let expanded = false;
   let openImage: { url: string; alt?: string } | null = null;
   let menuOpen = false;
@@ -50,6 +63,7 @@
   let noteElement: HTMLElement;
   let menuElement: HTMLElement;
   let noteObserver: IntersectionObserver | undefined;
+  let prefetchTimer: ReturnType<typeof setTimeout> | undefined;
   let statsVisible = false;
   let statsEventId = event.id;
 
@@ -58,6 +72,7 @@
     if (!('IntersectionObserver' in window)) {
       statsVisible = true;
       watchVisibleNoteStats(event.id, true);
+      scheduleThreadPrefetch(true);
       return;
     }
     noteObserver = new IntersectionObserver(
@@ -69,6 +84,7 @@
 
   onDestroy(() => {
     noteObserver?.disconnect();
+    clearTimeout(prefetchTimer);
     if (statsVisible) watchVisibleNoteStats(statsEventId, false);
     zapReceiptSub?.close('note destroyed');
   });
@@ -84,13 +100,19 @@
   $: displayEvent = $editedEvents[event.id] ?? event;
   $: name = profile?.display_name || profile?.name || displayEvent.pubkey.slice(0, 10);
   $: avatar = profile?.picture;
-  $: mediaAttachments = extractMediaAttachments(displayEvent);
-  $: socialEmbeds = extractSocialEmbeds(displayEvent.content);
-  $: quotedNoteReferences = extractQuotedNoteReferences(displayEvent.content, displayEvent.tags);
-  $: quotedNoteRawValues = quotedNoteReferences.map((reference) => reference.raw);
+  $: safeTags = displayEvent.tags.slice(0, maxRenderableTags);
+  $: parsedContent = displayEvent.content.slice(0, maxParsedContentLength);
+  $: renderedContent = displayEvent.content.slice(0, maxExpandedContentLength);
+  $: contentWasCapped = displayEvent.content.length > maxExpandedContentLength;
+  $: mediaAttachments = extractMediaAttachments({ ...displayEvent, content: parsedContent, tags: safeTags }).slice(0, maxMediaAttachments);
+  $: socialEmbeds = extractSocialEmbeds(parsedContent).slice(0, maxSocialEmbeds);
+  $: hiddenQuotedNoteIdSet = new Set(hiddenQuotedNoteIds);
+  $: allQuotedNoteReferences = extractQuotedNoteReferences(parsedContent, safeTags).slice(0, maxQuotedNotes);
+  $: quotedNoteReferences = allQuotedNoteReferences.filter((reference) => !hiddenQuotedNoteIdSet.has(reference.id));
+  $: quotedNoteRawValues = allQuotedNoteReferences.map((reference) => reference.raw);
   $: isLong = displayEvent.content.length > previewLength;
-  $: visibleContent = !isLong || expanded ? displayEvent.content : displayEvent.content.slice(0, previewLength).trimEnd();
-  $: contentParts = parseNoteText(visibleContent, [...mediaAttachments.map((media) => media.url), ...socialEmbeds.map((embed) => embed.url), ...quotedNoteRawValues], displayEvent.tags);
+  $: visibleContent = !isLong || expanded ? renderedContent : renderedContent.slice(0, previewLength).trimEnd();
+  $: contentParts = parseNoteText(visibleContent, [...mediaAttachments.map((media) => media.url), ...socialEmbeds.map((embed) => embed.url), ...quotedNoteRawValues], safeTags).slice(0, maxRenderedTextParts);
   $: counts = $eventStats[event.id] ?? { replies: 0, reposts: 0, likes: 0, zaps: 0, zapSats: 0, dislikes: 0, emoji: 0 };
   $: liked = $likedEvents.has(event.id);
   $: reposted = $repostedEvents.has(event.id);
@@ -105,13 +127,21 @@
   }
 
   function formatNoteTime(date: Date, now = new Date()) {
+    const futureMs = date.getTime() - now.getTime();
+    if (futureMs > 120_000) return formatAbsoluteNoteTime(date, now);
     const elapsedMs = Math.max(0, now.getTime() - date.getTime());
     const elapsedMinutes = Math.floor(elapsedMs / 60000);
     if (elapsedMinutes < 1) return 'now';
     if (elapsedMinutes < 60) return `${elapsedMinutes}min`;
     if (elapsedMinutes < 120) return '1hr';
     if (isSameDay(date, now)) return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-    return date.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    return formatAbsoluteNoteTime(date, now);
+  }
+
+  function formatAbsoluteNoteTime(date: Date, now = new Date()) {
+    const options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' };
+    if (date.getFullYear() !== now.getFullYear()) options.year = 'numeric';
+    return date.toLocaleString('en-GB', options);
   }
 
   function isSameDay(date: Date, other: Date) {
@@ -125,7 +155,27 @@
 
   function openNote() {
     if (onOpen) onOpen(event);
-    else if (browser && !embedded) void goto(appPath(`/thread/${event.id}`));
+    else if (browser && !embedded) {
+      const threadPath = appPath(`/thread/${event.id}`);
+      if ($page.url.pathname === threadPath) return;
+      saveCurrentRoutePosition(noteElement);
+      saveThreadSeed(event);
+      saveThreadReturnTarget(event.id, currentThreadReturnTarget($page.url.pathname, $page.url.search, $page.url.hash));
+      void goto(threadPath);
+    }
+  }
+
+  function saveCurrentRoutePosition(anchor: HTMLElement | undefined) {
+    if (!browser || !anchor?.dataset.noteId) return;
+    saveRouteScrollState(
+      currentThreadReturnTarget($page.url.pathname, $page.url.search, $page.url.hash),
+      {
+        scrollY: window.scrollY,
+        anchorId: anchor.dataset.noteId,
+        anchorOffset: anchor.getBoundingClientRect().top
+      },
+      { exact: true }
+    );
   }
 
   function openFromNoteBody(pointerEvent: MouseEvent) {
@@ -232,6 +282,18 @@
     if (visible === statsVisible) return;
     statsVisible = visible;
     watchVisibleNoteStats(event.id, visible);
+    scheduleThreadPrefetch(visible);
+  }
+
+  function scheduleThreadPrefetch(visible: boolean) {
+    clearTimeout(prefetchTimer);
+    prefetchTimer = undefined;
+    if (!visible || !prefetchThread || embedded) return;
+    prefetchTimer = setTimeout(() => {
+      prefetchTimer = undefined;
+      if (!statsVisible || embedded || !prefetchThread) return;
+      prefetchThreadPreview(event);
+    }, 650);
   }
 
   async function confirmReport() {
@@ -373,7 +435,7 @@
 
 <svelte:window on:pointerdown={closeMenuFromOutside} />
 
-<article class="note-card" class:featured class:embedded class:menu-open={menuOpen} bind:this={noteElement}>
+<article class="note-card" class:featured class:embedded class:menu-open={menuOpen} data-note-id={event.id} bind:this={noteElement}>
   <a class="avatar" href={appPath(`/profile/${displayEvent.pubkey}`)} aria-label={`${name} profile`}>
     {#if avatar}
       <img src={avatar} alt="" loading="lazy" />
@@ -423,13 +485,16 @@
         {:else if part.type === 'link'}
           <a href={part.href} target="_blank" rel="noreferrer">{part.value}</a>
         {:else}
-          {#if onOpen}
+          {#if onOpen && embedded}
             <button class="note-open-text" on:click={openNote}>{part.value}</button>
           {:else}
             {part.value}
           {/if}
         {/if}
       {/each}
+      {#if expanded && contentWasCapped}
+        <span class="capped-note-copy">… post content truncated</span>
+      {/if}
       {#if isLong && !expanded}
         <span class="fade-tail" aria-hidden="true"></span>
       {/if}

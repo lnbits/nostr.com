@@ -1,8 +1,7 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { tick } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { page } from '$app/stores';
-  import { goto } from '$app/navigation';
+  import { beforeNavigate, goto } from '$app/navigation';
   import { ArrowUp, Plus } from '@lucide/svelte';
   import FeedSearchBar from '$lib/components/FeedSearchBar.svelte';
   import NoteCard from '$lib/components/NoteCard.svelte';
@@ -27,6 +26,10 @@
   } from '$lib/stores/app';
   import { topLevelFeedEvents } from '$lib/nostr/client';
   import { appPath } from '$lib/paths';
+  import { readFeedScrollState, saveFeedScrollState } from '$lib/stores/feedScroll';
+  import { currentThreadReturnTarget, saveThreadReturnTarget } from '$lib/stores/threadNavigation';
+  import { saveThreadSeed } from '$lib/stores/threadSeed';
+  import type { NostrEvent } from '$lib/nostr/types';
 
   let loadMoreSentinel: HTMLDivElement;
   let observer: IntersectionObserver | undefined;
@@ -40,17 +43,24 @@
   let pullStartedAtTop = false;
   let hideNewerBubble = false;
   let hideNewerBubbleTimeout: ReturnType<typeof setTimeout> | undefined;
+  let restoredFeedPosition = false;
+  let clickedFeedNoteSaved = false;
   const pullThreshold = 78;
   const newerBubbleCooldownMs = 5000;
+  const feedScrollStateMaxAgeMs = 30 * 60 * 1000;
   $: hasReadRelays = $relays.some((relay) => relay.enabled && relay.read);
   $: feedEvents = hashtagFilteredEvents(displayEventsForFeedMode($feedMode, topLevelFeedEvents($events), $follows, $customFeedSettings), $activeHashtag);
   $: pullProgress = Math.min(1, pullDistance / pullThreshold);
   $: showNewerBubble = canLoadNewerForFeed() && $pendingNewerEvents.length && !pullingNewer && !hideNewerBubble && !pullStartedAtTop && pullDistance <= 0;
   $: emptyMessage = !hasReadRelays
     ? 'Please connect to relays'
-    : $session && ($feedMode === 'follow' || $feedMode === 'custom') && !$follows.length
+    : $session && ($feedMode === 'follow' || ($feedMode === 'custom' && !customFeedHasKeywords($customFeedSettings))) && !$follows.length
       ? 'Please follow someone'
       : 'Please connect to relays';
+
+  beforeNavigate(() => {
+    if (!clickedFeedNoteSaved) saveCurrentFeedScrollPosition();
+  });
 
   onMount(() => {
     const hashRoutes: Record<string, string> = {
@@ -65,6 +75,7 @@
     }
 
     previousScrollY = window.scrollY;
+    void restoreFeedScrollPosition();
     observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting && loadOlderArmed) {
@@ -89,6 +100,7 @@
     };
     addEventListener('scroll', onScroll, { passive: true });
     return () => {
+      if (!clickedFeedNoteSaved) saveCurrentFeedScrollPosition();
       observer?.disconnect();
       clearTimeout(hideNewerBubbleTimeout);
       clearTimeout(wheelPullTimeout);
@@ -180,6 +192,56 @@
     return window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 360;
   }
 
+  function saveCurrentFeedScrollPosition() {
+    const anchor = firstVisibleFeedNote();
+    saveFeedScrollPositionForAnchor(anchor);
+  }
+
+  function saveFeedScrollPositionForAnchor(anchor: HTMLElement | null | undefined) {
+    saveFeedScrollState({
+      scrollY: window.scrollY,
+      anchorId: anchor?.dataset.noteId,
+      anchorOffset: anchor?.getBoundingClientRect().top
+    });
+  }
+
+  async function restoreFeedScrollPosition() {
+    if (restoredFeedPosition) return;
+    const state = readFeedScrollState();
+    if (!state || Date.now() - state.savedAt > feedScrollStateMaxAgeMs) return;
+    restoredFeedPosition = true;
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      await tick();
+      await nextAnimationFrame();
+      const anchor = state.anchorId ? document.querySelector<HTMLElement>(`[data-note-id="${state.anchorId}"]`) : null;
+      if (anchor) {
+        const top = window.scrollY + anchor.getBoundingClientRect().top - (state.anchorOffset ?? 0);
+        window.scrollTo({ top: Math.max(0, top), left: 0, behavior: 'instant' });
+      } else {
+        window.scrollTo({ top: state.scrollY, left: 0, behavior: 'instant' });
+      }
+    }
+    previousScrollY = window.scrollY;
+  }
+
+  function openFeedNote(event: NostrEvent) {
+    const anchor = document.querySelector<HTMLElement>(`.feed-list [data-note-id="${event.id}"]`);
+    saveFeedScrollPositionForAnchor(anchor);
+    saveThreadSeed(event);
+    saveThreadReturnTarget(event.id, currentThreadReturnTarget($page.url.pathname, $page.url.search, $page.url.hash));
+    clickedFeedNoteSaved = true;
+    void goto(appPath(`/thread/${event.id}`));
+  }
+
+  function firstVisibleFeedNote() {
+    return [...document.querySelectorAll<HTMLElement>('.feed-list [data-note-id]')].find((element) => element.getBoundingClientRect().bottom > 0);
+  }
+
+  function nextAnimationFrame() {
+    return new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  }
+
   function hashtagFilteredEvents(items: typeof $events, tag: string) {
     const normalized = tag.trim().replace(/^#/, '').toLowerCase();
     if (!normalized) return items;
@@ -187,6 +249,10 @@
       if (event.tags.some((item) => item[0] === 't' && item[1]?.replace(/^#/, '').toLowerCase() === normalized)) return true;
       return new RegExp(`(^|\\s)#${normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(event.content);
     });
+  }
+
+  function customFeedHasKeywords(settings: typeof $customFeedSettings) {
+    return settings.keywords.some((keyword) => keyword.trim());
   }
 
 </script>
@@ -222,7 +288,7 @@
     <section class="feed-list" aria-label="Feed">
       {#if feedEvents.length}
         {#each feedEvents as event (event.id)}
-          <NoteCard {event} profile={$profiles[event.pubkey]} />
+          <NoteCard {event} profile={$profiles[event.pubkey]} prefetchThread onOpen={openFeedNote} />
         {/each}
       {:else if $loadingFeed}
         <div class="empty-state">

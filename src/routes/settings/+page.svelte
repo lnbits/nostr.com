@@ -3,6 +3,7 @@
   import { nip19 } from 'nostr-tools';
   import { customFeedSettings, feedMode, loadingFeed, refreshFeed, relays, session, signOut } from '$lib/stores/app';
   import { normalizeRelayUrl } from '$lib/nostr/client';
+  import { parseKeywordInput } from '$lib/nostr/keywords';
   import { setThemeMode, themeMode, type ThemeMode } from '$lib/stores/theme';
   import FeedTabs from '$lib/components/FeedTabs.svelte';
   import { relayStatus } from '$lib/stores/relayStatus';
@@ -43,14 +44,11 @@
   }
 
   function refreshActiveFilteredFeed() {
-    if ($feedMode === 'global' || $feedMode === 'custom') void refreshFeed($feedMode);
+    if ($feedMode === 'global' || $feedMode === 'custom') void refreshFeed($feedMode, { replaceVisible: true });
   }
 
   function parseKeywords(value: string) {
-    return value
-      .split(',')
-      .map((keyword) => keyword.trim())
-      .filter(Boolean);
+    return parseKeywordInput(value);
   }
 
   function sessionLabel(mode: string) {
