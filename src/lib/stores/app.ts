@@ -67,6 +67,7 @@ const olderFetchTarget = pageFeedLimit;
 const olderFetchMaxAttempts = 5;
 const olderFetchEmptyAttemptLimit = 2;
 const feedRecentWindowSeconds = 60 * 60 * 24 * 7;
+const olderFetchPageWindowSeconds = 60 * 60 * 24 * 7;
 const threadPrefetchReplyLimit = 10;
 const threadPrefetchCooldownMs = 5 * 60 * 1000;
 const maxThreadPrefetchConcurrent = 2;
@@ -560,7 +561,7 @@ async function fetchOlderFeedPage(fetchMode: FeedMode, target = olderFetchTarget
     const nextEvents = filterMutedEvents(
       await fetchFeed(fetchMode, currentRelays, currentFollows, effectiveFeedSettings(fetchMode), {
         limit: olderFetchBatchLimit,
-        since: recentFeedCutoff(),
+        since: olderFeedPageCutoff(cursor),
         until: olderThan,
         hashtag: currentHashtag
       })
@@ -631,6 +632,10 @@ function limitFeedBuffer(items: NostrEvent[], limit: number) {
 
 function recentFeedCutoff() {
   return nowSeconds() - feedRecentWindowSeconds;
+}
+
+function olderFeedPageCutoff(cursor?: number) {
+  return cursor ? Math.max(0, cursor - olderFetchPageWindowSeconds) : recentFeedCutoff();
 }
 
 function recentFeedEvents(items: NostrEvent[]) {

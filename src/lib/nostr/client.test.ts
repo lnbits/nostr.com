@@ -18,6 +18,7 @@ import {
   limitConsecutiveAuthors,
   loginWithBunker,
   loginWithPrivateKey,
+  normalizeNip05Identifier,
   normalizePomegranateCentralUrl,
   parseProfileEvents,
   pomegranateBunkerUrl,
@@ -425,6 +426,12 @@ describe('nostr client helpers', () => {
     expect(normalizePomegranateCentralUrl('https://central.example/profile')).toBe('https://central.example');
     expect(() => normalizePomegranateCentralUrl('')).toThrow('Enter a Pomegranate central URL.');
     expect(() => normalizePomegranateCentralUrl('https://')).toThrow('Enter a valid Pomegranate central URL.');
+  });
+
+  it('normalizes exact NIP-05 search identifiers', () => {
+    expect(normalizeNip05Identifier('@BenArc@Nostr.com')).toBe('benarc@nostr.com');
+    expect(normalizeNip05Identifier('benarc')).toBe('');
+    expect(normalizeNip05Identifier('bad@localhost')).toBe('');
   });
 
   it('builds Pomegranate bunker URLs from profile handlers', () => {

@@ -48,7 +48,7 @@
   const newerBubbleCooldownMs = 5000;
   const feedScrollStateMaxAgeMs = 30 * 60 * 1000;
   $: hasReadRelays = $relays.some((relay) => relay.enabled && relay.read);
-  $: feedEvents = hashtagFilteredEvents(displayEventsForFeedMode($feedMode, topLevelFeedEvents($events), $follows, $customFeedSettings, undefined, true), $activeHashtag);
+  $: feedEvents = hashtagFilteredEvents(displayEventsForFeedMode($feedMode, topLevelFeedEvents($events), $follows, $customFeedSettings), $activeHashtag);
   $: pullProgress = Math.min(1, pullDistance / pullThreshold);
   $: showNewerBubble = canLoadNewerForFeed() && $pendingNewerEvents.length && !pullingNewer && !hideNewerBubble && !pullStartedAtTop && pullDistance <= 0;
   $: emptyMessage = !hasReadRelays

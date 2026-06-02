@@ -80,7 +80,11 @@
 
   function mergeProfiles(first: Profile[], second: Profile[]) {
     const byPubkey = new Map<string, Profile>();
-    [...first, ...second].forEach((profile) => byPubkey.set(profile.pubkey, profile));
+    const exactNip05 = cleanQuery.includes('@') ? cleanQuery.replace(/^@/, '').toLowerCase() : '';
+    const verifiedExactPubkey = second.find((profile) => profile.nip05?.toLowerCase() === exactNip05)?.pubkey;
+    [...first, ...second]
+      .filter((profile) => !verifiedExactPubkey || profile.pubkey === verifiedExactPubkey || profile.nip05?.toLowerCase() !== exactNip05)
+      .forEach((profile) => byPubkey.set(profile.pubkey, profile));
     return [...byPubkey.values()];
   }
 

@@ -690,11 +690,27 @@ export async function fetchProfiles(pubkeys: string[], relays = defaultRelays) {
 export async function searchProfiles(query: string, relays = defaultRelays) {
   const search = query.trim().replace(/^@/, '');
   if (search.length < 2) return [];
+  const exactNip05 = normalizeNip05Identifier(search);
+  if (exactNip05) {
+    const resolved = await resolveNip05Profile(exactNip05).catch(() => null);
+    if (resolved) {
+      const [profile] = await fetchProfiles([resolved.pubkey], relays).catch(() => []);
+      return [{ ...(profile ?? {}), pubkey: resolved.pubkey, nip05: exactNip05 }];
+    }
+    return [];
+  }
+
   const relayUrls = activeRelayUrls(relays, 'read');
   const events = verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [0], search, limit: 12 }, 4000));
   const profiles = parseProfileEvents(events);
   await Promise.all(profiles.map(cacheProfile));
   return profiles;
+}
+
+export function normalizeNip05Identifier(value: string) {
+  const clean = value.trim().replace(/^@/, '').toLowerCase();
+  if (!/^[a-z0-9_.-]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(clean)) return '';
+  return clean;
 }
 
 export async function resolvePubkeyIdentifier(value: string, relays = defaultRelays) {
