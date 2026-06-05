@@ -106,7 +106,7 @@
     {#if showInstallButton}
       <section class="panel install-panel">
         <button class="primary" on:click={() => (installDialogOpen = true)}>
-          <Download size={18} /> Install as desktop
+          <Download size={18} /> Install
         </button>
       </section>
     {/if}

@@ -156,13 +156,23 @@
   function openNote() {
     if (onOpen) onOpen(event);
     else if (browser && !embedded) {
-      const threadPath = appPath(`/thread/${event.id}`);
+      const rootId = threadRootId(displayEvent);
+      const focus = rootId && rootId !== event.id ? `?focus=${event.id}` : '';
+      const threadPath = appPath(`/thread/${rootId || event.id}${focus}`);
       if ($page.url.pathname === threadPath) return;
       saveCurrentRoutePosition(noteElement);
       saveThreadSeed(event);
-      saveThreadReturnTarget(event.id, currentThreadReturnTarget($page.url.pathname, $page.url.search, $page.url.hash));
+      saveThreadReturnTarget(rootId || event.id, currentThreadReturnTarget($page.url.pathname, $page.url.search, $page.url.hash));
       void goto(threadPath);
     }
+  }
+
+  function threadRootId(note: NostrEvent) {
+    if (note.kind !== 1) return note.id;
+    const rootTag = note.tags.find((tag) => tag[0] === 'e' && tag[1] && tag[3] === 'root');
+    if (rootTag?.[1]) return rootTag[1];
+    const eTags = note.tags.filter((tag) => tag[0] === 'e' && tag[1]);
+    return eTags[0]?.[1] ?? note.id;
   }
 
   function saveCurrentRoutePosition(anchor: HTMLElement | undefined) {

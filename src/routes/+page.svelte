@@ -40,6 +40,7 @@
   let wheelPullRaw = 0;
   let wheelPullTimeout: ReturnType<typeof setTimeout> | undefined;
   let pullingNewer = false;
+  let requestingOlder = false;
   let pullStartedAtTop = false;
   let hideNewerBubble = false;
   let hideNewerBubbleTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -80,7 +81,7 @@
       ([entry]) => {
         if (entry.isIntersecting && loadOlderArmed) {
           loadOlderArmed = false;
-          void loadMoreFeed();
+          void requestOlderFeed();
         }
       },
       { rootMargin: '320px 0px' }
@@ -93,7 +94,7 @@
         loadOlderArmed = true;
         if (isNearPageBottom()) {
           loadOlderArmed = false;
-          void loadMoreFeed();
+          void requestOlderFeed();
         }
       }
       previousScrollY = nextScrollY;
@@ -190,6 +191,16 @@
 
   function isNearPageBottom() {
     return window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 360;
+  }
+
+  async function requestOlderFeed() {
+    if (requestingOlder || $loadingFeed || $loadingMoreFeed || !$hasMoreFeed || !feedEvents.length) return;
+    requestingOlder = true;
+    try {
+      await loadMoreFeed();
+    } finally {
+      requestingOlder = false;
+    }
   }
 
   function saveCurrentFeedScrollPosition() {

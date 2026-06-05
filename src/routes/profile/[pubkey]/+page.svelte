@@ -3,12 +3,12 @@
   import { browser } from '$app/environment';
   import { beforeNavigate, goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import { ArrowLeft, Check, Copy, Globe2, MessageCircle, Pencil, Save, UserMinus, UserX, Upload, UserPlus, X } from '@lucide/svelte';
+  import { ArrowLeft, Check, Copy, Globe2, MessageCircle, Pencil, QrCode, Save, UserMinus, UserX, Upload, UserPlus, X } from '@lucide/svelte';
   import { nip19 } from 'nostr-tools';
   import NoteCard from '$lib/components/NoteCard.svelte';
   import { deletedEventIds, events, follows, mergeEvents, mergeProfileRecords, mutedPubkeys, muteAccount, profiles, refreshEventStats, relays, saveFollowList, saveProfile, selectMessagePeer, session, unmuteAccount } from '$lib/stores/app';
   import { getCachedProfileEvents } from '$lib/nostr/cache';
-  import { dedupeEvents, fetchProfileEvents, fetchProfiles, isReplyEvent, topLevelFeedEvents } from '$lib/nostr/client';
+  import { activeRelayUrls, dedupeEvents, fetchProfileEvents, fetchProfiles, isReplyEvent, topLevelFeedEvents } from '$lib/nostr/client';
   import { extractMediaAttachments } from '$lib/nostr/media';
   import { uploadToNostrBuild } from '$lib/nostr/upload';
   import { appPath } from '$lib/paths';
@@ -36,6 +36,8 @@
   const profileWindowScanLimit = 6;
   const profilePreloadDistancePx = 1800;
   const profilePreloadRootMargin = `0px 0px ${profilePreloadDistancePx}px 0px`;
+  type ProfileTab = 'notes' | 'replies' | 'reads' | 'media';
+  type ProfileHydrateOptions = { reset?: boolean; useCache?: boolean };
   type ProfileTimelineItem = { id: string; event: NostrEvent };
 
   $: pubkey = normalizePubkey($page.params.pubkey ?? '');
@@ -43,8 +45,10 @@
   $: isOwnProfile = Boolean($session?.pubkey === pubkey);
   $: isFollowing = $follows.includes(pubkey);
   $: isMuted = $mutedPubkeys.includes(pubkey);
-  $: userItems = profileEvents.flatMap(profileTimelineItem);
+  $: profileNoteItems = profileEvents.flatMap(profileTimelineItem);
+  $: userItems = profileItemsForTab(activeProfileTab, profileNoteItems, profileSummaryEvents);
   $: userEvents = userItems.map((item) => item.event);
+  $: profileNoteEvents = profileNoteItems.map((item) => item.event);
   $: profileSummary = profileSummaryForEvents(profileSummaryEvents);
   $: npub = /^[0-9a-f]{64}$/i.test(pubkey) ? nip19.npubEncode(pubkey) : '';
   $: shortNpub = npub ? `${npub.slice(0, 12)}...${npub.slice(-8)}` : '';
@@ -61,10 +65,16 @@
   let uploading: 'picture' | 'banner' | '' = '';
   let updatingFollow = false;
   let updatingMute = false;
+  let qrDialogOpen = false;
+  let qrGenerating = false;
+  let qrCopied = false;
+  let profileQr = '';
+  let profileShareUri = '';
   let editorOpen = false;
   let draft: Profile = emptyProfile();
   let profileEvents: NostrEvent[] = [];
   let profileSummaryEvents: NostrEvent[] = [];
+  let activeProfileTab: ProfileTab = 'notes';
   let hydratedPubkey = '';
   let profileLoadMoreSentinel: HTMLDivElement;
   let profileObserver: IntersectionObserver | undefined;
@@ -83,7 +93,7 @@
 
   $: if (pubkey && pubkey !== hydratedPubkey) {
     hydratedPubkey = pubkey;
-    void hydrateProfile(pubkey);
+    void hydrateProfile(pubkey, { reset: true, useCache: true });
   }
   $: if ($deletedEventIds.size && profileEvents.some((event) => $deletedEventIds.has(event.id))) {
     profileEvents = profileEvents.filter((event) => !$deletedEventIds.has(event.id));
@@ -96,6 +106,13 @@
   });
 
   onMount(() => {
+    const profileFeedAction = (event: Event) => {
+      const action = (event as CustomEvent<{ action?: 'pull' | 'refresh' }>).detail?.action;
+      if (action === 'pull') void pullProfileFeed();
+      if (action === 'refresh') void refreshProfileFeed();
+    };
+
+    window.addEventListener('nostr-profile-feed-action', profileFeedAction);
     profileObserver = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) scheduleProfilePreload();
@@ -105,6 +122,7 @@
     if (profileLoadMoreSentinel) profileObserver.observe(profileLoadMoreSentinel);
     void restoreProfileScrollPosition(routeKey);
     return () => {
+      window.removeEventListener('nostr-profile-feed-action', profileFeedAction);
       saveCurrentProfileScrollPosition();
       clearTimeout(profilePreloadTimer);
       profileObserver?.disconnect();
@@ -115,6 +133,34 @@
     await navigator.clipboard.writeText(npub);
     copied = true;
     setTimeout(() => (copied = false), 1400);
+  }
+
+  async function openProfileQr() {
+    if (!/^[0-9a-f]{64}$/i.test(pubkey)) return;
+    qrDialogOpen = true;
+    qrGenerating = true;
+    qrCopied = false;
+    profileQr = '';
+    profileShareUri = profileNostrUri();
+    try {
+      const { default: QRCode } = await import('qrcode');
+      profileQr = await QRCode.toDataURL(profileShareUri, { margin: 1, width: 280, errorCorrectionLevel: 'M' });
+    } finally {
+      qrGenerating = false;
+    }
+  }
+
+  async function copyProfileShareUri() {
+    if (!profileShareUri) return;
+    await navigator.clipboard.writeText(profileShareUri);
+    qrCopied = true;
+    setTimeout(() => (qrCopied = false), 1400);
+  }
+
+  function profileNostrUri() {
+    const relayHints = activeRelayUrls($relays, 'read').slice(0, 4);
+    const nprofile = nip19.nprofileEncode({ pubkey, relays: relayHints });
+    return `nostr:${nprofile}`;
   }
 
   async function submitProfile() {
@@ -159,22 +205,35 @@
     }
   }
 
-  async function hydrateProfile(nextPubkey: string) {
+  async function pullProfileFeed() {
+    if (!pubkey || loadingProfile) return;
+    await hydrateProfile(pubkey, { reset: false, useCache: false });
+  }
+
+  async function refreshProfileFeed() {
+    if (!pubkey) return;
+    await hydrateProfile(pubkey, { reset: true, useCache: false });
+  }
+
+  async function hydrateProfile(nextPubkey: string, options: ProfileHydrateOptions = {}) {
+    const reset = options.reset ?? true;
+    const useCache = options.useCache ?? true;
     hasMoreProfile = true;
     loadingProfile = true;
     triedProfileRelays = false;
     loadingMoreProfile = false;
-    profilePaginationCursor = profileRecentWindowUpperBound();
-    profileEvents = [];
-    profileSummaryEvents = [];
-    const cachedProfileEvents = await getCachedProfileEvents(nextPubkey, initialProfileEventLimit);
-    if (nextPubkey !== pubkey) return;
-    const cachedAndVisibleEvents = [...cachedProfileEvents, ...$events.filter((event) => event.pubkey === nextPubkey)].filter((event) =>
-      eventInProfileWindow(event, profileRecentWindowLowerBound(), profileRecentWindowUpperBound())
-    );
-    profileSummaryEvents = cleanProfileSummaryEvents(cachedAndVisibleEvents);
-    profileEvents = cleanProfileEvents(cachedAndVisibleEvents);
-    void refreshProfileStats();
+    if (reset) clearProfileFeedState();
+    if (reset || !profilePaginationCursor) profilePaginationCursor = profileRecentWindowUpperBound();
+
+    if (useCache) {
+      const cachedProfileEvents = await getCachedProfileEvents(nextPubkey, initialProfileEventLimit);
+      if (nextPubkey !== pubkey) return;
+      const cachedAndVisibleEvents = [...cachedProfileEvents, ...$events.filter((event) => event.pubkey === nextPubkey)].filter((event) =>
+        eventInProfileWindow(event, profileRecentWindowLowerBound(), profileRecentWindowUpperBound())
+      );
+      addProfileEvents(cachedAndVisibleEvents);
+    }
+
     const [found, fetchedProfileEvents] = await Promise.all([
       $profiles[nextPubkey] ? Promise.resolve([]) : fetchProfiles([nextPubkey], $relays).catch(() => []),
       fetchProfileEvents(nextPubkey, $relays, initialProfileEventLimit, {
@@ -193,6 +252,14 @@
     profilePaginationCursor = nextProfilePaginationCursor(fetchedProfileEvents, profileRecentWindowLowerBound(), initialProfileEventLimit);
     loadingProfile = false;
     void autoFillProfileEvents(nextPubkey);
+  }
+
+  function clearProfileFeedState() {
+    clearTimeout(profilePreloadTimer);
+    profilePreloadTimer = undefined;
+    profileEvents = [];
+    profileSummaryEvents = [];
+    profilePaginationCursor = profileRecentWindowUpperBound();
   }
 
   async function loadMoreProfileEvents(targetPubkey = pubkey) {
@@ -226,11 +293,11 @@
       profilePaginationCursor = cursor;
       hasMoreProfile = cursor > 0;
       const cleanNextEvents = cleanProfileEvents(nextEvents);
-      if (cleanNextEvents.length) {
-        events.update((existing) => mergeEvents(cleanNextEvents, existing));
-        addProfileEvents(cleanNextEvents);
+      if (nextEvents.length) {
+        if (cleanNextEvents.length) events.update((existing) => mergeEvents(cleanNextEvents, existing));
+        addProfileEvents(nextEvents);
       }
-      return cleanNextEvents.length > 0;
+      return nextEvents.length > 0;
     } finally {
       loadingMoreProfile = false;
       scheduleProfilePreloadIfNeeded();
@@ -239,6 +306,8 @@
 
   function scheduleProfilePreload() {
     if (profilePreloadTimer || loadingProfile || loadingMoreProfile || !hasMoreProfile) return;
+    if (!profileNoteItems.length && triedProfileRelays) return;
+    if (!userItems.length && triedProfileRelays) return;
     profilePreloadTimer = setTimeout(() => {
       profilePreloadTimer = undefined;
       if (!loadingProfile && !loadingMoreProfile && hasMoreProfile) void loadMoreProfileEvents();
@@ -257,25 +326,30 @@
 
   async function autoFillProfileEvents(targetPubkey: string) {
     for (let page = 0; page < maxAutomaticProfilePages; page += 1) {
-      if (targetPubkey !== pubkey || userItems.length >= targetProfileEventCount || !hasMoreProfile) return;
+      if (targetPubkey !== pubkey || profileNoteItems.length >= targetProfileEventCount || !hasMoreProfile) return;
       const loaded = await loadMoreProfileEvents(targetPubkey);
       if (!loaded) return;
     }
   }
 
   function oldestProfileTimestamp() {
-    if (!userEvents.length) return undefined;
-    return Math.min(...userEvents.map((event) => event.created_at));
+    if (!profileNoteEvents.length) return undefined;
+    return Math.min(...profileNoteEvents.map((event) => event.created_at));
   }
 
   function addProfileEvents(nextEvents: NostrEvent[]) {
+    const existingSummaryIds = new Set(profileSummaryEvents.map((event) => event.id));
+    const existingVisibleIds = new Set(profileEvents.map((event) => event.id));
     profileSummaryEvents = cleanProfileSummaryEvents([...profileSummaryEvents, ...nextEvents]);
     profileEvents = cleanProfileEvents([...profileEvents, ...nextEvents]);
+    const hasNewSummaryEvents = profileSummaryEvents.some((event) => !existingSummaryIds.has(event.id));
+    const hasNewVisibleEvents = profileEvents.some((event) => !existingVisibleIds.has(event.id));
+    if (!hasNewSummaryEvents && !hasNewVisibleEvents) return;
     void refreshProfileStats();
   }
 
   function refreshProfileStats() {
-    const statIds = [...new Set(userItems.map((item) => item.event.id))];
+    const statIds = [...new Set(profileNoteItems.map((item) => item.event.id))];
     if (statIds.length) void refreshEventStats(statIds, true);
   }
 
@@ -302,6 +376,33 @@
     return summary;
   }
 
+  function profileItemsForTab(tab: ProfileTab, noteItems: ProfileTimelineItem[], summaryEvents: NostrEvent[]): ProfileTimelineItem[] {
+    if (tab === 'notes') return noteItems;
+    const eventsForTab = summaryEvents.filter((event) => profileEventMatchesTab(event, tab));
+    return eventsForTab.map((event) => ({ id: event.id, event }));
+  }
+
+  function profileEventMatchesTab(event: NostrEvent, tab: ProfileTab) {
+    if (tab === 'replies') return event.kind === 1 && isReplyEvent(event);
+    if (tab === 'reads') return event.kind === 30023;
+    if (tab === 'media') return event.kind === 1 && extractMediaAttachments(event).length > 0;
+    return event.kind === 1 && !isReplyEvent(event);
+  }
+
+  function selectProfileTab(tab: ProfileTab) {
+    activeProfileTab = tab;
+    if (!browser) return;
+    const list = document.querySelector<HTMLElement>('.profile-page .feed-list');
+    if (list && list.getBoundingClientRect().top < 0) list.scrollIntoView({ block: 'start' });
+  }
+
+  function activeProfileTabLabel() {
+    if (activeProfileTab === 'notes') return 'notes';
+    if (activeProfileTab === 'replies') return 'replies';
+    if (activeProfileTab === 'reads') return 'reads';
+    return 'media posts';
+  }
+
   function profileRecentWindowUpperBound() {
     return Math.floor(Date.now() / 1000);
   }
@@ -315,7 +416,7 @@
   }
 
   function nextProfilePaginationCursor(nextEvents: NostrEvent[], windowLower: number, limit: number) {
-    const cleanEvents = cleanProfileEvents(nextEvents);
+    const cleanEvents = dedupeEvents(nextEvents).filter((event) => event.kind === 1 || event.kind === 6 || event.kind === 30023);
     if (cleanEvents.length >= limit) return Math.max(windowLower, Math.min(...cleanEvents.map((event) => event.created_at)));
     return windowLower;
   }
@@ -448,18 +549,21 @@
       </div>
 
       <div class="profile-banner-actions">
+        <button class="profile-action-icon" disabled={!npub} on:click={openProfileQr} aria-label="Show profile QR code">
+          <QrCode size={14} />
+        </button>
         {#if isOwnProfile}
-          <button class="profile-edit-inline" on:click={openEditor} aria-label="Edit profile">
+          <button class="profile-action-pill profile-edit-inline" on:click={openEditor} aria-label="Edit profile">
             <Pencil size={14} /> Edit profile
           </button>
         {:else}
-          <button disabled={!$session || updatingFollow} on:click={toggleFollow}>
-            {#if isFollowing}<UserMinus size={17} /> Unfollow{:else}<UserPlus size={17} /> Follow{/if}
+          <button class="profile-action-icon" disabled={!$session || updatingMute} on:click={toggleMute} aria-label={isMuted ? 'Unmute' : 'Mute'} title={isMuted ? 'Unmute' : 'Mute'}>
+            {#if isMuted}<UserMinus size={14} />{:else}<UserX size={14} />{/if}
           </button>
-          <button disabled={!$session || updatingMute} on:click={toggleMute}>
-            {#if isMuted}<UserMinus size={17} /> Unmute{:else}<UserX size={17} /> Mute{/if}
+          <button class="profile-action-icon" disabled={!$session} aria-label="Message" on:click={() => { selectMessagePeer(pubkey); void goto(appPath('/messages')); }}><MessageCircle size={15} /></button>
+          <button class="profile-action-pill primary-profile-action" disabled={!$session || updatingFollow} on:click={toggleFollow}>
+            {#if isFollowing}Unfollow{:else}Follow{/if}
           </button>
-          <button class="icon-button" disabled={!$session} aria-label="Message" on:click={() => { selectMessagePeer(pubkey); void goto(appPath('/messages')); }}><MessageCircle size={19} /></button>
         {/if}
       </div>
 
@@ -492,23 +596,23 @@
       </div>
     </div>
 
-    <div class="profile-summary-tabs" aria-label="Profile activity summary">
-      <div class="active">
+    <div class="profile-summary-tabs" role="tablist" aria-label="Profile activity summary">
+      <button class:active={activeProfileTab === 'notes'} role="tab" aria-selected={activeProfileTab === 'notes'} on:click={() => selectProfileTab('notes')}>
         <strong>{profileSummary.notes}</strong>
         <span>notes</span>
-      </div>
-      <div>
+      </button>
+      <button class:active={activeProfileTab === 'replies'} role="tab" aria-selected={activeProfileTab === 'replies'} on:click={() => selectProfileTab('replies')}>
         <strong>{profileSummary.replies}</strong>
         <span>replies</span>
-      </div>
-      <div>
+      </button>
+      <button class:active={activeProfileTab === 'reads'} role="tab" aria-selected={activeProfileTab === 'reads'} on:click={() => selectProfileTab('reads')}>
         <strong>{profileSummary.reads}</strong>
         <span>reads</span>
-      </div>
-      <div>
+      </button>
+      <button class:active={activeProfileTab === 'media'} role="tab" aria-selected={activeProfileTab === 'media'} on:click={() => selectProfileTab('media')}>
         <strong>{profileSummary.media}</strong>
         <span>media</span>
-      </div>
+      </button>
     </div>
 
     {#if isOwnProfile && editorOpen && editingProfilePubkey === pubkey}
@@ -583,6 +687,37 @@
       </form>
       </div>
     {/if}
+
+    {#if qrDialogOpen}
+      <div
+        class="dialog-backdrop"
+        role="presentation"
+        on:click={(event) => {
+          if (event.target === event.currentTarget) qrDialogOpen = false;
+        }}
+      >
+        <div class="dialog-panel compact profile-qr-dialog" role="dialog" aria-modal="true" aria-labelledby="profile-qr-title">
+          <div class="dialog-head">
+            <div>
+              <h2 id="profile-qr-title">Profile QR</h2>
+              <p>Share this Nostr profile with another client.</p>
+            </div>
+            <button class="icon-button" on:click={() => (qrDialogOpen = false)} aria-label="Close profile QR"><X size={20} /></button>
+          </div>
+
+          {#if qrGenerating}
+            <div class="empty-state compact"><strong>Generating QR</strong></div>
+          {:else if profileQr}
+            <div class="profile-qr-code">
+              <img src={profileQr} alt="Nostr profile QR code" />
+            </div>
+            <button class="npub-pill profile-share-copy" on:click={copyProfileShareUri} aria-label="Copy Nostr profile URI">
+              {#if qrCopied}<Check size={15} /> Copied{:else}<span>{profileShareUri}</span><Copy size={15} />{/if}
+            </button>
+          {/if}
+        </div>
+      </div>
+    {/if}
   </section>
 
   <section class="feed-list narrow">
@@ -591,17 +726,17 @@
         <NoteCard event={item.event} profile={$profiles[item.event.pubkey] ?? (item.event.pubkey === pubkey ? profile : undefined)} prefetchThread />
       {/each}
     {:else if loadingProfile}
-      <div class="empty-state"><strong>Loading profile notes</strong><span>Checking relays for this profile’s posts.</span></div>
+      <div class="empty-state"><strong>Loading profile {activeProfileTabLabel()}</strong><span>Checking relays for this profile’s posts.</span></div>
     {:else if triedProfileRelays}
-      <div class="empty-state"><strong>No notes for this profile yet</strong><span>No posts were returned by the connected relays.</span></div>
+      <div class="empty-state"><strong>No {activeProfileTabLabel()} for this profile yet</strong><span>No matching posts were returned by the connected relays.</span></div>
     {:else}
-      <div class="empty-state"><strong>No notes for this profile yet</strong><span>Connect to relays to check this profile’s posts.</span></div>
+      <div class="empty-state"><strong>No {activeProfileTabLabel()} for this profile yet</strong><span>Connect to relays to check this profile’s posts.</span></div>
     {/if}
     <div class="load-more-sentinel profile-load-more-sentinel" bind:this={profileLoadMoreSentinel}>
       {#if loadingMoreProfile}
-        <span>Loading older profile notes</span>
+        <span>Loading older profile posts</span>
       {:else if userEvents.length}
-        <span>Scroll down for older profile notes</span>
+        <span>Scroll down for older profile posts</span>
       {/if}
     </div>
   </section>

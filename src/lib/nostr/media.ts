@@ -18,6 +18,17 @@ export function isVideoUrl(url: string) {
   return /\.(mp4|webm|mov)(?:\?|$)/i.test(url);
 }
 
+function isImageUrl(url: string) {
+  return /\.(png|jpe?g|gif|webp|avif)(?:\?|$)/i.test(url);
+}
+
+function mediaTypeForUrl(url: string, mime = ''): MediaAttachment['type'] | undefined {
+  const cleanMime = mime.toLowerCase();
+  if (cleanMime.startsWith('video/') || isVideoUrl(url)) return 'video';
+  if (cleanMime.startsWith('image/') || isImageUrl(url)) return 'image';
+  return undefined;
+}
+
 export function extractMediaAttachments(event: NostrEvent): MediaAttachment[] {
   const byUrl = new Map<string, MediaAttachment>();
   for (const url of extractMediaUrls(event.content)) byUrl.set(url, { url, type: isVideoUrl(url) ? 'video' : 'image', fallbackUrls: [] });
@@ -25,8 +36,8 @@ export function extractMediaAttachments(event: NostrEvent): MediaAttachment[] {
   for (const tag of event.tags) {
     if (tag[0] !== 'imeta') continue;
     const metadata = parseImeta(tag);
-    if (!metadata.url) continue;
-    const attachment = byUrl.get(metadata.url) ?? { url: metadata.url, type: isVideoUrl(metadata.url) ? 'video' : 'image', fallbackUrls: [] };
+    if (!metadata.url || !metadata.type) continue;
+    const attachment = byUrl.get(metadata.url) ?? { url: metadata.url, type: metadata.type, fallbackUrls: [] };
     byUrl.set(metadata.url, { ...attachment, ...metadata, fallbackUrls: metadata.fallbackUrls ?? attachment.fallbackUrls });
   }
 
@@ -245,11 +256,13 @@ function looksLikeDomainUrl(value: string) {
 
 function parseImeta(tag: string[]) {
   const metadata: Partial<MediaAttachment> = { fallbackUrls: [] };
+  let mime = '';
   for (const field of tag.slice(1)) {
     const [key, ...rest] = field.split(' ');
     const value = rest.join(' ').trim();
     if (!value) continue;
     if (key === 'url') metadata.url = safeHttpUrl(value);
+    if (key === 'm') mime = value;
     if (key === 'alt') metadata.alt = value;
     if (key === 'blurhash') metadata.blurhash = value;
     if (key === 'dim') metadata.dim = value;
@@ -258,7 +271,7 @@ function parseImeta(tag: string[]) {
       if (fallbackUrl) metadata.fallbackUrls = [...(metadata.fallbackUrls ?? []), fallbackUrl];
     }
   }
-  if (metadata.url) metadata.type = isVideoUrl(metadata.url) ? 'video' : 'image';
+  if (metadata.url) metadata.type = mediaTypeForUrl(metadata.url, mime);
   return metadata;
 }
 

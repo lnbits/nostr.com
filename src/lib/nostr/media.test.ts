@@ -1,5 +1,18 @@
 import { nip19 } from 'nostr-tools';
-import { extractMediaUrls, extractQuotedNoteReferences, extractSocialEmbeds, isVideoUrl, parseHashtags, parseNoteText } from './media';
+import { extractMediaAttachments, extractMediaUrls, extractQuotedNoteReferences, extractSocialEmbeds, isVideoUrl, parseHashtags, parseNoteText } from './media';
+import type { NostrEvent } from './types';
+
+function event(overrides: Partial<NostrEvent> = {}): NostrEvent {
+  return {
+    id: overrides.id ?? 'a'.repeat(64),
+    pubkey: overrides.pubkey ?? 'b'.repeat(64),
+    created_at: overrides.created_at ?? 1,
+    kind: overrides.kind ?? 1,
+    tags: overrides.tags ?? [],
+    content: overrides.content ?? '',
+    sig: overrides.sig ?? 'c'.repeat(128)
+  };
+}
 
 describe('media helpers', () => {
   it('extracts unique image and video urls from note content', () => {
@@ -9,6 +22,27 @@ describe('media helpers', () => {
     expect(extractMediaUrls(`look ${image} again ${image} and ${video}`)).toEqual([image, video]);
     expect(isVideoUrl(image)).toBe(false);
     expect(isVideoUrl(video)).toBe(true);
+  });
+
+  it('ignores article page urls in imeta tags', () => {
+    expect(
+      extractMediaAttachments(
+        event({
+          content: 'Read: https://theboard.world/articles/russia-support-iran-middle-east-conflict',
+          tags: [['imeta', 'url https://theboard.world/articles/russia-support-iran-middle-east-conflict', 'm text/html']]
+        })
+      )
+    ).toEqual([]);
+  });
+
+  it('accepts extensionless imeta urls when they include image or video mime types', () => {
+    expect(
+      extractMediaAttachments(
+        event({
+          tags: [['imeta', 'url https://cdn.example.com/media/abc123', 'm image/jpeg', 'alt profile photo']]
+        })
+      )
+    ).toEqual([{ url: 'https://cdn.example.com/media/abc123', type: 'image', alt: 'profile photo', fallbackUrls: [] }]);
   });
 
   it('parses hashtags into clickable text parts', () => {

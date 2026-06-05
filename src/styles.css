@@ -2213,6 +2213,105 @@ label span, label strong { color: var(--text); }
 .profile-banner-actions .icon-button:not(:disabled):hover {
   color: var(--accent);
 }
+.profile-banner-actions .profile-action-icon,
+.profile-banner-actions .profile-action-pill {
+  min-height: 36px;
+  border: 1px solid color-mix(in srgb, var(--line) 74%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 800;
+  box-shadow: none;
+}
+.profile-banner-actions .profile-action-icon {
+  width: 42px;
+  flex: 0 0 42px;
+  justify-content: center;
+  padding: 0;
+}
+.profile-banner-actions .profile-action-pill {
+  gap: 6px;
+  padding: 0 12px 0 10px;
+  font-size: 14px;
+}
+.profile-banner-actions .primary-profile-action {
+  min-width: 92px;
+  justify-content: center;
+  background: transparent;
+  color: var(--muted);
+}
+.profile-banner-actions .profile-action-icon:not(:disabled):hover,
+.profile-banner-actions .profile-action-pill:not(:disabled):hover {
+  border-color: var(--text);
+  background: transparent;
+  color: var(--text);
+}
+.profile-banner-actions .primary-profile-action:not(:disabled):hover {
+  background: transparent;
+  color: var(--text);
+}
+.profile-banner-actions > button.profile-action-icon,
+.profile-banner-actions > button.profile-action-pill,
+.profile-banner-actions > button.profile-edit-inline {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid color-mix(in srgb, var(--line) 74%, transparent);
+  border-radius: 999px;
+  padding: 0 12px 0 10px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 800;
+}
+.profile-banner-actions > button.profile-action-icon {
+  width: 42px;
+  flex: 0 0 42px;
+  justify-content: center;
+  padding: 0;
+}
+.profile-banner-actions > button.profile-action-pill:not(:disabled):hover,
+.profile-banner-actions > button.profile-action-icon:not(:disabled):hover,
+.profile-banner-actions > button.profile-edit-inline:not(:disabled):hover {
+  color: var(--text);
+  border-color: var(--text);
+  background: transparent;
+}
+.profile-banner-actions > button.profile-action-icon {
+  min-height: 24px;
+  width: 24px;
+  flex: 0 0 24px;
+  border: 0;
+  border-radius: 50%;
+  padding: 0;
+  justify-content: center;
+  background: #eef0f3;
+  color: #111318;
+}
+.profile-banner-actions > button.profile-action-pill {
+  min-height: 24px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 12px;
+  background: #0b0b0f;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+}
+.profile-banner-actions > button.profile-edit-inline {
+  background: #0b0b0f;
+  color: #fff;
+}
+.profile-banner-actions > button.profile-action-icon:not(:disabled):hover {
+  background: #e1e4e8;
+  color: #111318;
+}
+.profile-banner-actions > button.profile-action-pill:not(:disabled):hover,
+.profile-banner-actions > button.profile-edit-inline:not(:disabled):hover {
+  background: #000;
+  color: #fff;
+}
 .profile-copy {
   grid-column: 1 / -1;
   min-width: 0;
@@ -2314,16 +2413,26 @@ label span, label strong { color: var(--text); }
   align-items: end;
   border-bottom: 1px solid var(--line);
 }
-.profile-summary-tabs > div {
+.profile-summary-tabs > button {
   position: relative;
   display: grid;
   gap: 2px;
   min-width: 0;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
   padding: 10px 8px 12px;
+  background: transparent;
   text-align: center;
   color: var(--muted);
+  cursor: pointer;
 }
-.profile-summary-tabs > div.active::after {
+.profile-summary-tabs > button:hover,
+.profile-summary-tabs > button:focus-visible,
+.profile-summary-tabs > button.active {
+  color: var(--text);
+}
+.profile-summary-tabs > button.active::after {
   content: '';
   position: absolute;
   right: 12px;
@@ -2345,6 +2454,26 @@ label span, label strong { color: var(--text); }
   font-size: 13px;
   line-height: 1.1;
   overflow-wrap: anywhere;
+}
+.profile-qr-dialog {
+  justify-items: stretch;
+}
+.profile-qr-code {
+  width: min(300px, 100%);
+  justify-self: center;
+  padding: 10px;
+  border-radius: 8px;
+  background: #fff;
+}
+.profile-qr-code img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+.profile-share-copy {
+  width: 100%;
+  justify-self: stretch;
 }
 .profile-editor {
   display: grid;

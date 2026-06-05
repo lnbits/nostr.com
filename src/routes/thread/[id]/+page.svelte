@@ -36,6 +36,7 @@
   let bottomSentinel: HTMLDivElement;
   let bottomObserver: IntersectionObserver | undefined;
   let restoredThreadRouteKey = '';
+  let focusedThreadRouteKey = '';
   let activeRouteId = '';
   let hydrationRunId = 0;
 
@@ -56,6 +57,9 @@
   $: sortedReplies = [...replies].sort((a, b) => a.created_at - b.created_at);
   $: hiddenThreadQuoteIds = id ? sameThreadQuotedNoteIds(id, threadEvents) : [];
   $: if (browser && routeKey && root && routeKey !== restoredThreadRouteKey) void restoreThreadScrollPosition(routeKey);
+  $: if (browser && routeKey && focusedReplyId && sortedReplies.some((reply) => reply.id === focusedReplyId) && `${routeKey}:${focusedReplyId}` !== focusedThreadRouteKey) {
+    void scrollFocusedReplyIntoView(routeKey, focusedReplyId);
+  }
 
   beforeNavigate(() => {
     saveCurrentThreadState();
@@ -140,6 +144,7 @@
       }
       if (rootEvent) refreshThreadStats([rootEvent]);
       if (!restored) void hydrateCachedThreadReplies(rootId, runId);
+      await hydrateFocusedReplyContext(rootId, runId);
 
       const replyBatch =
         restored && rootEvent
@@ -273,9 +278,15 @@
 
   function cachedThreadSeed(rootId: string, focusId: string) {
     const directSeed = readThreadSeed(rootId);
+    const focusSeed = focusId && focusId !== rootId ? readThreadSeed(focusId) : null;
     const prefetchedReplies = readPrefetchedThreadReplies(rootId);
     return mergeThreadEvents(
-      [...(directSeed ? [directSeed] : []), ...prefetchedReplies, ...$events.filter((event) => event.id === rootId || (focusId && event.id === focusId))],
+      [
+        ...(directSeed ? [directSeed] : []),
+        ...(focusSeed ? [focusSeed] : []),
+        ...prefetchedReplies,
+        ...$events.filter((event) => event.id === rootId || (focusId && event.id === focusId))
+      ],
       []
     );
   }
@@ -292,6 +303,7 @@
     hydratedId = '';
     seededId = '';
     restoredThreadRouteKey = '';
+    focusedThreadRouteKey = '';
     rootEvent = undefined;
     localThreadEvents = [];
     loading = true;
@@ -321,6 +333,37 @@
     olderThreadReplyCursor = 0;
     hydrateThreadProfiles(cached.events);
     return true;
+  }
+
+  async function hydrateFocusedReplyContext(rootId: string, runId: number) {
+    if (!focusedReplyId || focusedReplyId === rootId) return;
+    const byId = new Map(threadEventsForCache().map((event) => [event.id, event]));
+    let focus = byId.get(focusedReplyId) ?? readThreadSeed(focusedReplyId) ?? null;
+
+    if (!focus) {
+      [focus] = await fetchMissingEvents([focusedReplyId], $relays).catch(() => []);
+      if (!isCurrentHydration(rootId, runId)) return;
+    }
+    if (!focus) return;
+
+    const context = [focus];
+    byId.set(focus.id, focus);
+    let current = focus;
+    for (let depth = 0; depth < 8; depth += 1) {
+      const parentId = replyParentId(current, rootId);
+      if (!parentId || parentId === rootId || byId.has(parentId)) break;
+      const [parent] = await fetchMissingEvents([parentId], $relays).catch(() => []);
+      if (!isCurrentHydration(rootId, runId)) return;
+      if (!parent) break;
+      context.push(parent);
+      byId.set(parent.id, parent);
+      current = parent;
+    }
+
+    localThreadEvents = mergeThreadEvents(context.filter((event) => event.id !== rootId), localThreadEvents);
+    hydrateThreadProfiles(context);
+    refreshThreadStats(context);
+    saveCurrentThreadState();
   }
 
   function saveCurrentThreadState() {
@@ -462,6 +505,19 @@
       } else {
         window.scrollTo({ top: state.scrollY, left: 0, behavior: 'instant' });
       }
+    }
+  }
+
+  async function scrollFocusedReplyIntoView(nextRouteKey: string, replyId: string) {
+    focusedThreadRouteKey = `${nextRouteKey}:${replyId}`;
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      await tick();
+      await nextAnimationFrame();
+      if (`${routeKey}:${focusedReplyId}` !== focusedThreadRouteKey) return;
+      const anchor = document.querySelector<HTMLElement>(`.thread-page [data-note-id="${replyId}"]`);
+      if (!anchor) continue;
+      anchor.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+      return;
     }
   }
 
