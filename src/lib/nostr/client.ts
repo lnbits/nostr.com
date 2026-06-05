@@ -3,7 +3,7 @@ import type { Event as NostrToolsEvent, Filter } from 'nostr-tools';
 import * as nip46 from 'nostr-tools/nip46';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { cacheEvents, cacheProfile, cacheProfileEvents } from './cache';
-import { adultDomains, adultHashtags, defaultGuestNip05, defaultRelays, mutedWords } from './config';
+import { adultDomains, adultHashtags, defaultGuestNip05, defaultRelays, globalFeedHashtags, mutedWords } from './config';
 import type { ContactListDetails, ContactListItem, CustomFeedSettings, DirectMessage, EventStats, FeedMode, FeedQueryOptions, Nip05Profile, NostrEvent, NotificationItem, Profile, RelayState, Session } from './types';
 
 const pool = new SimplePool();
@@ -524,7 +524,8 @@ export function feedFiltersForMode(
   const taggedBase = tag ? { ...base, '#t': [tag] } : base;
   if (mode === 'follow' && follows.length) return [withOptionalSince({ ...taggedBase, authors: follows }, since)];
   if (mode === 'custom') return customFeedFilters(taggedBase, follows, settings, since, relayUrls);
-  if (mode === 'global' && hashtagKeywords(settings).length) return globalFeedFilters(taggedBase, settings, since);
+  if (mode === 'global' && tag) return [withOptionalSince(taggedBase, since)];
+  if (mode === 'global') return globalFeedFilters(taggedBase, since);
   return [withOptionalSince(taggedBase, since)];
 }
 
@@ -646,7 +647,7 @@ export async function fetchThreadReplies(rootId: string | string[], relays = def
 export async function fetchProfileEvents(pubkey: string, relays = defaultRelays, limit = 36, options: Pick<FeedQueryOptions, 'until' | 'since'> = {}) {
   if (!/^[0-9a-f]{64}$/i.test(pubkey)) return [];
   const relayUrls = activeRelayUrls(relays, 'read');
-  const filter: Filter = { kinds: [1, 6], authors: [pubkey], limit };
+  const filter: Filter = { kinds: [1, 6, 30023], authors: [pubkey], limit };
   if (options.until) filter.until = options.until;
   if (options.since) filter.since = options.since;
   const events = verifiedRelayEvents(await queryShortLived(relayUrls, filter, 5000));
@@ -1358,11 +1359,9 @@ function splitOptionalLimit(total: number, parts: number) {
   return Array.from({ length: parts }, (_, index) => base + (index < remainder ? 1 : 0));
 }
 
-function globalFeedFilters(base: Filter, settings: CustomFeedSettings, since?: number) {
-  const total = base.limit ?? 24;
-  const keywordLimit = Math.max(1, Math.round(total * 0.3));
-  const generalLimit = Math.max(1, total - keywordLimit);
-  return [withOptionalSince({ ...base, limit: generalLimit }, since), ...keywordFeedFilters(base, keywordFilters(settings), keywordLimit, since)];
+function globalFeedFilters(base: Filter, since?: number) {
+  const globalBase = { ...base, '#t': globalFeedHashtags };
+  return [withOptionalSince(globalBase, since)];
 }
 
 function withOptionalSince(filter: Filter, since?: number) {

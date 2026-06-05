@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
-  import { ArrowLeft, Image as ImageIcon, Loader2, MessageSquareText, RefreshCw, Send, UserPlus } from '@lucide/svelte';
+  import { ArrowLeft, ExternalLink, Image as ImageIcon, Loader2, MessageSquareText, RefreshCw, Send, UserPlus } from '@lucide/svelte';
   import { nip19 } from 'nostr-tools';
   import {
     activeMessagePeer,
@@ -227,9 +227,15 @@
     <div>
       <h1>Messages</h1>
       <p>NIP-17 private chats, with legacy NIP-04 messages shown when they can be decrypted.</p>
+      <p class="messages-chat-link">
+        For a dedicated DM client checkout
+        <a href="https://chat.nostr.com" target="_blank" rel="noreferrer">
+          chat.nostr.com <ExternalLink size={14} />
+        </a>
+      </p>
     </div>
     <button disabled={!$session || $loadingMessages} on:click={() => refreshMessages()}>
-      <RefreshCw size={18} class={$loadingMessages ? 'spin' : ''} /> Refresh
+      <RefreshCw size={18} class={$loadingMessages ? 'spin' : ''} /> Pull
     </button>
   </header>
 

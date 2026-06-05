@@ -173,18 +173,25 @@ describe('nostr client helpers', () => {
   });
 
 
-  it('reserves part of global and custom feeds for hashtag keywords', async () => {
+  it('constrains the global feed to default hashtags while preserving custom feed keyword slices', async () => {
     const follows = ['c'.repeat(64)];
     const base = { kinds: [1], limit: 10 };
     const settings = { friendsOfFriends: false, keywords: ['#art', '#artstr', '#music', '#musicstr'], interests: [] };
 
     expect(await feedFiltersForMode('global', base, follows, settings, 123, [])).toEqual([
-      { kinds: [1], limit: 7, since: 123 },
-      { kinds: [1], limit: 3, '#t': ['art', 'artstr', 'music', 'musicstr'], since: 123 }
+      { kinds: [1], limit: 10, '#t': ['technology', 'food', 'foodstr', 'music', 'musicstr', 'introductions'], since: 123 }
     ]);
     expect(await feedFiltersForMode('custom', base, follows, settings, 123, [])).toEqual([
       { kinds: [1], limit: 8, authors: follows, since: 123 },
       { kinds: [1], limit: 2, '#t': ['art', 'artstr', 'music', 'musicstr'], since: 123 }
+    ]);
+  });
+
+  it('uses the default hashtag set for broad global feed queries', async () => {
+    const base = { kinds: [1], limit: 10 };
+
+    expect(await feedFiltersForMode('global', base, [], { friendsOfFriends: false, keywords: [], interests: [] }, 123, [])).toEqual([
+      { kinds: [1], limit: 10, '#t': ['technology', 'food', 'foodstr', 'music', 'musicstr', 'introductions'], since: 123 }
     ]);
   });
 

@@ -2,7 +2,7 @@ import { browser } from '$app/environment';
 import { goto } from '$app/navigation';
 import { writable } from 'svelte/store';
 import { getCachedEvents, getCachedHashtagEvents, getCachedProfiles } from '$lib/nostr/cache';
-import { defaultCustomFeedSettings, defaultGuestNip05, defaultRelays, keywordsForInterests } from '$lib/nostr/config';
+import { defaultCustomFeedSettings, defaultGuestNip05, defaultRelays, globalFeedHashtags, keywordsForInterests } from '$lib/nostr/config';
 import { appPath } from '$lib/paths';
 import { markRelaysOnline, syncRelayStatus } from '$lib/stores/relayStatus';
 import { insertTimelineItems, timelineCursor, uniqueFreshItems } from '$lib/timeline/window';
@@ -219,10 +219,11 @@ export async function bootstrap() {
     });
 }
 
-export async function refreshFeed(mode = currentMode, options: { replaceVisible?: boolean } = {}) {
+export async function refreshFeed(mode = currentMode, options: { replaceVisible?: boolean; reset?: boolean } = {}) {
   const fetchMode = currentHashtag ? 'global' : mode;
+  if (options.reset) clearFeedState();
   const visibleEvents = feedEventsForActiveHashtag(getStoreSnapshot(events));
-  const shouldReplaceVisible = options.replaceVisible || !visibleEvents.length;
+  const shouldReplaceVisible = options.reset || options.replaceVisible || !visibleEvents.length;
   loadingFeed.set(true);
   hasMoreFeed.set(true);
   olderFeedEmptyAttempts = 0;
@@ -241,7 +242,7 @@ export async function refreshFeed(mode = currentMode, options: { replaceVisible?
 
   try {
     if (fetchMode === 'custom') await refreshFriendsOfFriendsAuthors();
-    const newestTimestamp = timelineCursor([...visibleEvents, ...getStoreSnapshot(pendingNewerEvents)], 'newest');
+    const newestTimestamp = options.reset ? undefined : timelineCursor([...visibleEvents, ...getStoreSnapshot(pendingNewerEvents)], 'newest');
     const nextEvents = filterMutedEvents(
       await fetchFeed(fetchMode, currentRelays, currentFollows, effectiveFeedSettings(fetchMode), {
         limit: initialFeedLimit,
@@ -266,6 +267,16 @@ export async function refreshFeed(mode = currentMode, options: { replaceVisible?
   } finally {
     loadingFeed.set(false);
   }
+}
+
+export function clearFeedState() {
+  events.set([]);
+  pendingNewerEvents.set([]);
+  cachedOlderEvents = [];
+  oldestFeedTimestamp = undefined;
+  olderFeedEmptyAttempts = 0;
+  requestedStats.clear();
+  stopLiveFeed();
 }
 
 async function hydrateCachedFeed(mode = currentMode) {
@@ -314,7 +325,8 @@ function eventsForFeedMode(mode: FeedMode, items: NostrEvent[], follows = curren
         feedKeywords.some((keyword) => eventMatchesKeyword(event, keyword))
     );
   }
-  return items;
+  if (currentHashtag) return items;
+  return items.filter((event) => globalFeedHashtags.some((tag) => eventHasHashtag(event, tag)));
 }
 
 async function getCachedFeedCandidates(mode: FeedMode, limit = cachedFeedBufferLimit) {

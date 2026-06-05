@@ -8,7 +8,8 @@
   import NoteCard from '$lib/components/NoteCard.svelte';
   import { deletedEventIds, events, follows, mergeEvents, mergeProfileRecords, mutedPubkeys, muteAccount, profiles, refreshEventStats, relays, saveFollowList, saveProfile, selectMessagePeer, session, unmuteAccount } from '$lib/stores/app';
   import { getCachedProfileEvents } from '$lib/nostr/cache';
-  import { dedupeEvents, fetchProfileEvents, fetchProfiles, topLevelFeedEvents } from '$lib/nostr/client';
+  import { dedupeEvents, fetchProfileEvents, fetchProfiles, isReplyEvent, topLevelFeedEvents } from '$lib/nostr/client';
+  import { extractMediaAttachments } from '$lib/nostr/media';
   import { uploadToNostrBuild } from '$lib/nostr/upload';
   import { appPath } from '$lib/paths';
   import { readRouteScrollState, saveRouteScrollState } from '$lib/stores/routeScroll';
@@ -44,6 +45,7 @@
   $: isMuted = $mutedPubkeys.includes(pubkey);
   $: userItems = profileEvents.flatMap(profileTimelineItem);
   $: userEvents = userItems.map((item) => item.event);
+  $: profileSummary = profileSummaryForEvents(profileSummaryEvents);
   $: npub = /^[0-9a-f]{64}$/i.test(pubkey) ? nip19.npubEncode(pubkey) : '';
   $: shortNpub = npub ? `${npub.slice(0, 12)}...${npub.slice(-8)}` : '';
   $: displayName = profile?.display_name || profile?.name || (isOwnProfile ? '' : 'Nostr profile');
@@ -62,6 +64,7 @@
   let editorOpen = false;
   let draft: Profile = emptyProfile();
   let profileEvents: NostrEvent[] = [];
+  let profileSummaryEvents: NostrEvent[] = [];
   let hydratedPubkey = '';
   let profileLoadMoreSentinel: HTMLDivElement;
   let profileObserver: IntersectionObserver | undefined;
@@ -84,6 +87,7 @@
   }
   $: if ($deletedEventIds.size && profileEvents.some((event) => $deletedEventIds.has(event.id))) {
     profileEvents = profileEvents.filter((event) => !$deletedEventIds.has(event.id));
+    profileSummaryEvents = profileSummaryEvents.filter((event) => !$deletedEventIds.has(event.id));
   }
   $: if (browser && routeKey && userItems.length && routeKey !== restoredProfileRouteKey) void restoreProfileScrollPosition(routeKey);
 
@@ -162,11 +166,14 @@
     loadingMoreProfile = false;
     profilePaginationCursor = profileRecentWindowUpperBound();
     profileEvents = [];
+    profileSummaryEvents = [];
     const cachedProfileEvents = await getCachedProfileEvents(nextPubkey, initialProfileEventLimit);
     if (nextPubkey !== pubkey) return;
-    profileEvents = cleanProfileEvents([...cachedProfileEvents, ...$events.filter((event) => event.pubkey === nextPubkey)]).filter((event) =>
+    const cachedAndVisibleEvents = [...cachedProfileEvents, ...$events.filter((event) => event.pubkey === nextPubkey)].filter((event) =>
       eventInProfileWindow(event, profileRecentWindowLowerBound(), profileRecentWindowUpperBound())
     );
+    profileSummaryEvents = cleanProfileSummaryEvents(cachedAndVisibleEvents);
+    profileEvents = cleanProfileEvents(cachedAndVisibleEvents);
     void refreshProfileStats();
     const [found, fetchedProfileEvents] = await Promise.all([
       $profiles[nextPubkey] ? Promise.resolve([]) : fetchProfiles([nextPubkey], $relays).catch(() => []),
@@ -262,6 +269,7 @@
   }
 
   function addProfileEvents(nextEvents: NostrEvent[]) {
+    profileSummaryEvents = cleanProfileSummaryEvents([...profileSummaryEvents, ...nextEvents]);
     profileEvents = cleanProfileEvents([...profileEvents, ...nextEvents]);
     void refreshProfileStats();
   }
@@ -273,6 +281,25 @@
 
   function cleanProfileEvents(nextEvents: NostrEvent[]) {
     return dedupeEvents(nextEvents).filter((event) => event.kind === 6 || (event.kind === 1 && topLevelFeedEvents([event]).length));
+  }
+
+  function cleanProfileSummaryEvents(nextEvents: NostrEvent[]) {
+    return dedupeEvents(nextEvents).filter((event) => event.kind === 1 || event.kind === 30023);
+  }
+
+  function profileSummaryForEvents(nextEvents: NostrEvent[]) {
+    const summary = { notes: 0, replies: 0, reads: 0, media: 0 };
+    for (const event of nextEvents) {
+      if (event.kind === 30023) {
+        summary.reads += 1;
+        continue;
+      }
+      if (event.kind !== 1) continue;
+      if (isReplyEvent(event)) summary.replies += 1;
+      else summary.notes += 1;
+      if (extractMediaAttachments(event).length) summary.media += 1;
+    }
+    return summary;
   }
 
   function profileRecentWindowUpperBound() {
@@ -462,6 +489,25 @@
           {#if websiteHref}<a href={websiteHref} target="_blank" rel="noreferrer"><Globe2 size={16} /> {websiteLabel}</a>{/if}
           {#if profile?.lud16}<span>{profile.lud16}</span>{/if}
         </div>
+      </div>
+    </div>
+
+    <div class="profile-summary-tabs" aria-label="Profile activity summary">
+      <div class="active">
+        <strong>{profileSummary.notes}</strong>
+        <span>notes</span>
+      </div>
+      <div>
+        <strong>{profileSummary.replies}</strong>
+        <span>replies</span>
+      </div>
+      <div>
+        <strong>{profileSummary.reads}</strong>
+        <span>reads</span>
+      </div>
+      <div>
+        <strong>{profileSummary.media}</strong>
+        <span>media</span>
       </div>
     </div>
 

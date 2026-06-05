@@ -19,6 +19,8 @@ export const defaultCustomFeedSettings: CustomFeedSettings = {
   interests: []
 };
 
+export const globalFeedHashtags = ['technology', 'food', 'foodstr', 'music', 'musicstr', 'introductions'];
+
 export const socialInterests = [
   'art',
   'photography',

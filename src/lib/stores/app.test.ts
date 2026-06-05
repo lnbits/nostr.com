@@ -50,6 +50,16 @@ describe('app store helpers', () => {
     expect(merged.at(-1)?.id).toBe('event-5');
   });
 
+  it('limits global display to the default feed hashtags', () => {
+    const items = [
+      { ...authorEvent('technology', 30, 'a'.repeat(64)), tags: [['t', 'technology']] },
+      { ...authorEvent('food-content', 20, 'b'.repeat(64)), content: 'made lunch #foodstr' },
+      { ...authorEvent('other', 10, 'c'.repeat(64)), tags: [['t', 'nostr']] }
+    ];
+
+    expect(displayEventsForFeedMode('global', items).map((item) => item.id)).toEqual(['technology', 'food-content']);
+  });
+
   it('allows direct follows, friends of friends, hashtags, and keyword matches in custom display', () => {
     const follow = 'a'.repeat(64);
     const friend = 'b'.repeat(64);

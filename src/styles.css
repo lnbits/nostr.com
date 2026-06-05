@@ -331,8 +331,14 @@ label span, label strong { color: var(--text); }
 .algorithm-panel-content > h2 {
   margin: 0 0 4px;
 }
-.algorithm-panel-content > button {
+.algorithm-refresh-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.algorithm-refresh-row > button {
   width: 100%;
+  min-width: 0;
   justify-content: flex-start;
 }
 .algorithm-slider {
@@ -1614,14 +1620,32 @@ label span, label strong { color: var(--text); }
   color: var(--muted);
   line-height: 1.45;
 }
-.messages-chat-link a {
-  color: var(--accent);
-  font-weight: 700;
-}
 .messages-chat-link {
-  display: block;
-  padding-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 8px 8px 0;
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.messages-chat-link a {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
+  border-radius: 8px;
+  padding: 4px 9px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--surface) 86%, var(--accent));
+  font-weight: 700;
+  text-decoration: none;
   white-space: nowrap;
+}
+.messages-chat-link a:hover {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 .info-view {
   padding: 18px;
@@ -1740,6 +1764,7 @@ label span, label strong { color: var(--text); }
 }
 .dm-recipient-form {
   display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(96px, 2fr);
   gap: 8px;
 }
 .dm-recipient-search {
@@ -1801,6 +1826,7 @@ label span, label strong { color: var(--text); }
 .dm-recipient-form button,
 .dm-compose button {
   width: 100%;
+  min-width: 0;
 }
 .dm-follow-picker {
   gap: 6px;
@@ -2280,6 +2306,44 @@ label span, label strong { color: var(--text); }
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  overflow-wrap: anywhere;
+}
+.profile-summary-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: end;
+  border-bottom: 1px solid var(--line);
+}
+.profile-summary-tabs > div {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 8px 12px;
+  text-align: center;
+  color: var(--muted);
+}
+.profile-summary-tabs > div.active::after {
+  content: '';
+  position: absolute;
+  right: 12px;
+  bottom: -1px;
+  left: 12px;
+  height: 3px;
+  border-radius: 999px 999px 0 0;
+  background: var(--accent);
+}
+.profile-summary-tabs strong {
+  color: var(--text);
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.profile-summary-tabs span {
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.1;
   overflow-wrap: anywhere;
 }
 .profile-editor {
