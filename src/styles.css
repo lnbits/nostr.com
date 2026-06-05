@@ -2144,30 +2144,35 @@ label span, label strong { color: var(--text); }
 .add-row { grid-template-columns: 1fr auto; }
 .setting-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
   margin-bottom: 16px;
   color: var(--muted);
 }
-.setting-grid strong {
+.account-field {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+.account-field strong {
   min-width: 0;
   color: var(--text);
-  text-align: right;
   overflow-wrap: anywhere;
 }
 .public-key-copy {
   max-width: 100%;
   min-height: 0;
   min-width: 0;
-  justify-self: end;
-  justify-content: flex-end;
+  width: fit-content;
+  justify-content: flex-start;
   gap: 6px;
   border: 0;
   padding: 0;
   color: var(--text);
   background: transparent;
   font-weight: 800;
-  text-align: right;
+  text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -2595,14 +2600,6 @@ label span, label strong { color: var(--text); }
   .dm-messages {
     min-height: 0;
   }
-  .settings-feed-card {
-    display: grid;
-    gap: 10px;
-  }
-  .settings-feed-card > button {
-    width: 100%;
-    justify-content: flex-start;
-  }
   .info-panel { max-width: none; }
 }
 
@@ -2692,16 +2689,7 @@ label span, label strong { color: var(--text); }
     max-height: 280px;
   }
   .login-actions, .login-input-action, .profile-title-row, .profile-edit-grid { grid-template-columns: 1fr; }
-  .setting-grid {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 6px;
-  }
-  .setting-grid strong,
-  .public-key-copy {
-    justify-self: start;
-    justify-content: flex-start;
-    text-align: left;
-  }
+  .public-key-copy { min-width: 0; }
   .relay-editor {
     position: relative;
     grid-template-columns: repeat(3, minmax(0, 1fr)) 44px;

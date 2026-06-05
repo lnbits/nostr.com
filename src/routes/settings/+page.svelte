@@ -1,9 +1,8 @@
 <script lang="ts">
-  import { Check, Copy, LogOut, Moon, Plus, Save, SlidersHorizontal, Sun, Trash2 } from '@lucide/svelte';
+  import { Check, Copy, LogOut, Moon, Plus, Save, Sun, Trash2 } from '@lucide/svelte';
   import { nip19 } from 'nostr-tools';
-  import { customFeedSettings, feedMode, refreshFeed, relays, session, signOut } from '$lib/stores/app';
+  import { relays, session, signOut } from '$lib/stores/app';
   import { normalizeRelayUrl } from '$lib/nostr/client';
-  import { parseKeywordInput } from '$lib/nostr/keywords';
   import { setThemeMode, themeMode, type ThemeMode } from '$lib/stores/theme';
   import AlgorithmPanel from '$lib/components/AlgorithmPanel.svelte';
   import { relayStatus } from '$lib/stores/relayStatus';
@@ -16,6 +15,7 @@
   let newRelay = 'wss://';
   let copiedPublicKey = false;
   $: sessionNpub = $session ? encodeNpub($session.pubkey) : '';
+  $: sessionNpubPreview = compactNpub(sessionNpub);
 
   function addRelay() {
     const url = normalizeRelayUrl(newRelay);
@@ -25,30 +25,6 @@
       return existing.has(url) ? items : [...items, { url, enabled: true, read: true, write: true, score: 50 }];
     });
     newRelay = 'wss://';
-  }
-
-  function updateKeywords(value: string) {
-    customFeedSettings.update((settings) => ({
-      ...settings,
-      keywords: parseKeywords(value)
-    }));
-    refreshActiveFilteredFeed();
-  }
-
-  function updateFriendsOfFriends(value: boolean) {
-    customFeedSettings.update((settings) => ({
-      ...settings,
-      friendsOfFriends: value
-    }));
-    refreshActiveFilteredFeed();
-  }
-
-  function refreshActiveFilteredFeed() {
-    if ($feedMode === 'global' || $feedMode === 'custom') void refreshFeed($feedMode, { replaceVisible: true });
-  }
-
-  function parseKeywords(value: string) {
-    return parseKeywordInput(value);
   }
 
   function sessionLabel(mode: string) {
@@ -67,6 +43,11 @@
     }
   }
 
+  function compactNpub(value: string) {
+    if (value.length <= 18) return value;
+    return `${value.slice(0, 10)}...${value.slice(-6)}`;
+  }
+
   async function copyPublicKey() {
     if (!sessionNpub) return;
     await navigator.clipboard.writeText(sessionNpub);
@@ -77,10 +58,23 @@
 </script>
 
 <div class="settings-page">
-  <section class="page-head">
-    <h1>Settings</h1>
-    <p>Relay, cache, feed distance, mute, and report controls live here so the native apps inherit the same behavior.</p>
-  </section>
+  {#if $session}
+    <section class="panel account-settings">
+      <div class="setting-grid">
+        <div class="account-field">
+          <span>Signed in with</span>
+          <strong>{sessionLabel($session.mode)}</strong>
+        </div>
+        <div class="account-field">
+          <span>Public key</span>
+          <button class="public-key-copy" on:click={copyPublicKey} aria-label="Copy public key">
+            {#if copiedPublicKey}<Check size={16} /> Copied{:else}<Copy size={16} /> {sessionNpubPreview}{/if}
+          </button>
+        </div>
+      </div>
+      <button class="danger-button" on:click={() => void signOut()}><LogOut size={18} /> Log out</button>
+    </section>
+  {/if}
 
   <section class="panel settings-feed-card">
     <AlgorithmPanel />
@@ -96,35 +90,6 @@
         </button>
       {/each}
     </div>
-  </section>
-
-  {#if $session}
-    <section class="panel account-settings">
-      <h2>Account</h2>
-      <div class="setting-grid">
-        <span>Signed in with</span><strong>{sessionLabel($session.mode)}</strong>
-        <span>Public key</span>
-        <button class="public-key-copy" on:click={copyPublicKey} aria-label="Copy public key">
-          {#if copiedPublicKey}<Check size={16} /> Copied{:else}<Copy size={16} /> {sessionNpub.slice(0, 18)}...{sessionNpub.slice(-8)}{/if}
-        </button>
-      </div>
-      <button class="danger-button" on:click={() => void signOut()}><LogOut size={18} /> Log out</button>
-    </section>
-  {/if}
-
-  <section class="panel">
-    <h2><SlidersHorizontal size={20} /> Filters</h2>
-    <div class="filter-card-form">
-      <label>
-        <span>Feed keywords</span>
-        <input value={$customFeedSettings.keywords.join(', ')} on:change={(event) => updateKeywords(event.currentTarget.value)} placeholder="bitcoin, svelte, lightning" />
-      </label>
-    </div>
-
-    <label class="switch-row">
-      <span>Friends of friends for custom feed</span>
-      <input type="checkbox" checked={$customFeedSettings.friendsOfFriends} on:change={(event) => updateFriendsOfFriends(event.currentTarget.checked)} />
-    </label>
   </section>
 
   <section class="panel">
