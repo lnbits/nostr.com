@@ -167,30 +167,35 @@ ${generatedKeys.nsec}
       </button>
     {/if}
   {:else}
-    <p>NIP-07, local private key, NIP-46 bunker, and Pomegranate signing are active.</p>
+    <button disabled={loggingIn} on:click={() => login('nip07')}><PlugZap size={18} /> {loggingIn ? 'Connecting' : 'Sign in via extension'}</button>
 
-    <div class="login-actions">
-      <button class="primary" disabled={loggingIn} on:click={() => login('nip07')}><PlugZap size={18} /> {loggingIn ? 'Connecting' : 'NIP-07'}</button>
-      <button disabled={loggingIn} on:click={showCreateKeys}><ShieldCheck size={18} /> Create</button>
+    <button class="primary" disabled={loggingIn} on:click={showCreateKeys}><ShieldCheck size={18} /> Create Account</button>
+
+    <h3 class="login-methods-title">Other sign in methods</h3>
+
+    <div class="login-input-action">
+      <label>
+        <span class="visually-hidden">Bunker URI</span>
+        <input bind:value={bunker} autocomplete="off" spellcheck="false" placeholder="Bunker URI" />
+      </label>
+      <button disabled={loggingIn} on:click={() => login('bunker')}><PlugZap size={18} /> Sign in</button>
     </div>
 
-    <label>
-      <span>Private key hex</span>
-      <input type="password" bind:value={privateKey} autocomplete="off" spellcheck="false" placeholder="nsec or hex private key" />
-    </label>
-    <button disabled={loggingIn} on:click={() => login('private-key')}><KeyRound size={18} /> Use private key</button>
+    <div class="login-input-action">
+      <label>
+        <span class="visually-hidden">Pomegranate central URL</span>
+        <input bind:value={pomegranateCentral} autocomplete="off" spellcheck="false" placeholder="Pomegranate central URL" />
+      </label>
+      <button disabled={loggingIn} on:click={() => login('pomegranate')}><PlugZap size={18} /> Sign in</button>
+    </div>
 
-    <label>
-      <span>Bunker URI</span>
-      <input bind:value={bunker} autocomplete="off" spellcheck="false" placeholder="bunker://..." />
-    </label>
-    <button disabled={loggingIn} on:click={() => login('bunker')}><PlugZap size={18} /> Connect bunker</button>
-
-    <label>
-      <span>Pomegranate central URL</span>
-      <input bind:value={pomegranateCentral} autocomplete="off" spellcheck="false" placeholder="https://pomegranate.example" />
-    </label>
-    <button disabled={loggingIn} on:click={() => login('pomegranate')}><PlugZap size={18} /> Connect Pomegranate</button>
+    <div class="login-input-action">
+      <label>
+        <span class="visually-hidden">Private key hex</span>
+        <input type="password" bind:value={privateKey} autocomplete="off" spellcheck="false" placeholder="Private key hex" />
+      </label>
+      <button disabled={loggingIn} on:click={() => login('private-key')}><KeyRound size={18} /> Sign in</button>
+    </div>
   {/if}
 
   {#if error}
