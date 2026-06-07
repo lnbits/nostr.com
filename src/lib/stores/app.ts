@@ -125,6 +125,7 @@ let currentSettings = defaultCustomFeedSettings;
 let currentMode: FeedMode = 'global';
 let currentHashtag = '';
 let currentSessionValue: Session | null = initialSession;
+let currentGlobalFeedAuthors: string[] = [];
 let currentNotifications: NotificationItem[] = [];
 let currentDirectMessages: DirectMessage[] = [];
 let currentNotificationSeenAt = initialSession && browser ? readLastSeen(notificationSeenStorageKey, initialSession.pubkey) : 0;
@@ -158,6 +159,7 @@ const queuedThreadPrefetches: NostrEvent[] = [];
 const queuedThreadPrefetchIds = new Set<string>();
 const recentThreadPrefetches = new Map<string, number>();
 let activeThreadPrefetches = 0;
+let defaultGlobalFeedContextPromise: Promise<void> | undefined;
 
 relays.subscribe((value) => {
   currentRelays = value;
@@ -247,7 +249,8 @@ export async function refreshFeed(mode = currentMode, options: { replaceVisible?
       await fetchFeed(fetchMode, currentRelays, currentFollows, effectiveFeedSettings(fetchMode), {
         limit: initialFeedLimit,
         since: newestTimestamp ? newestTimestamp + 1 : undefined,
-        hashtag: currentHashtag
+        hashtag: currentHashtag,
+        globalAuthors: currentGlobalFeedAuthors
       })
     );
     markConnectedRelaysOnline();
@@ -379,7 +382,8 @@ export async function loadNewerFeed() {
     const nextEvents = filterMutedEvents(await fetchFeed(fetchMode, currentRelays, currentFollows, effectiveFeedSettings(fetchMode), {
       limit: initialFeedLimit,
       since: newestTimestamp + 1,
-      hashtag: currentHashtag
+      hashtag: currentHashtag,
+      globalAuthors: currentGlobalFeedAuthors
     }));
     markConnectedRelaysOnline();
     if (!nextEvents.length) return [];
@@ -483,7 +487,8 @@ async function restartLiveFeed(mode = currentMode, newestTimestamp?: number) {
   stopLiveFeed();
   liveFeedToken = token;
 
-  if ((mode === 'follow' || mode === 'custom') && !currentFollows.length) return;
+  if (mode === 'follow' && !currentFollows.length) return;
+  if (mode === 'custom' && !currentFollows.length && !hasCustomFeedKeywords()) return;
   if (mode === 'custom') await refreshFriendsOfFriendsAuthors();
 
   const sub = await subscribeFeed(
@@ -491,7 +496,7 @@ async function restartLiveFeed(mode = currentMode, newestTimestamp?: number) {
     currentRelays,
     currentFollows,
     effectiveFeedSettings(mode),
-    { since: newestTimestamp ? newestTimestamp + 1 : Math.floor(Date.now() / 1000), hashtag: currentHashtag },
+    { since: newestTimestamp ? newestTimestamp + 1 : Math.floor(Date.now() / 1000), hashtag: currentHashtag, globalAuthors: currentGlobalFeedAuthors },
     (event) => {
       if (token !== liveFeedToken || isKnownFeedEvent(event.id) || currentMutedPubkeys.has(event.pubkey)) return;
       queuePendingNewer([event]);
@@ -575,7 +580,8 @@ async function fetchOlderFeedPage(fetchMode: FeedMode, target = olderFetchTarget
         limit: olderFetchBatchLimit,
         since: olderFeedPageCutoff(cursor),
         until: olderThan,
-        hashtag: currentHashtag
+        hashtag: currentHashtag,
+        globalAuthors: currentGlobalFeedAuthors
       })
     );
     markConnectedRelaysOnline();
@@ -1418,12 +1424,15 @@ function readStoredCustomFeedSettings() {
 }
 
 async function hydrateDefaultFeedContext() {
+  const globalContextReady = hydrateDefaultGlobalFeedContext();
   let currentSession: Session | null = null;
   session.subscribe((value) => (currentSession = value))();
   if (currentSession) {
+    await globalContextReady;
     await hydrateSignedInFeedContext(currentSession);
     selectPreferredSignedInFeed(false);
   } else {
+    await globalContextReady;
     await hydrateGuestFeedContext();
   }
 }
@@ -1506,6 +1515,18 @@ function mergeNotifications(next: NotificationItem[], existing: NotificationItem
 }
 
 async function hydrateGuestFeedContext() {
+  await hydrateDefaultGlobalFeedContext();
+  currentContactItems = [];
+  follows.set([]);
+  mutedPubkeys.set([]);
+}
+
+function hydrateDefaultGlobalFeedContext() {
+  defaultGlobalFeedContextPromise ??= resolveDefaultGlobalFeedContext();
+  return defaultGlobalFeedContextPromise;
+}
+
+async function resolveDefaultGlobalFeedContext() {
   const profile = await resolveNip05Profile(defaultGuestNip05).catch(() => null);
   if (profile) {
     mergeRelayHints(profile.relayHints, 96);
@@ -1513,10 +1534,8 @@ async function hydrateGuestFeedContext() {
     mergeRelayHints(relayList.map((relay) => relay.url), 90);
     const contacts = await fetchContactListDetails(profile.pubkey, currentRelays).catch(() => ({ pubkeys: [], relayHints: [], items: [] }));
     mergeRelayHints(contacts.relayHints, 74);
+    currentGlobalFeedAuthors = contacts.pubkeys;
   }
-  currentContactItems = [];
-  follows.set([]);
-  mutedPubkeys.set([]);
 }
 
 function dropMutedEvents() {

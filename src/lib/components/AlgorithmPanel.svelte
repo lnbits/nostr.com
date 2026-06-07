@@ -2,7 +2,7 @@
   import { tick } from 'svelte';
   import { page } from '$app/stores';
   import { Download, RefreshCw } from '@lucide/svelte';
-  import { clearFeedState, feedMode, loadingFeed, refreshFeed, session } from '$lib/stores/app';
+  import { clearFeedState, feedMode, loadNewerFeed, loadingFeed, pendingNewerEvents, refreshFeed, revealNewerFeed, session } from '$lib/stores/app';
   import FeedTabs from './FeedTabs.svelte';
 
   export let title = 'Your algorithm';
@@ -17,7 +17,16 @@
   async function refreshActiveFeed() {
     if (!$session) return;
     if (dispatchPageFeedAction('pull')) return;
-    await refreshFeed($feedMode, { replaceVisible: true });
+    if ($pendingNewerEvents.length) {
+      await revealBufferedNewer();
+      return;
+    }
+    const loaded = await loadNewerFeed();
+    if (loaded?.length) {
+      await revealBufferedNewer();
+      return;
+    }
+    await refreshFeed($feedMode);
   }
 
   async function resetActiveFeed() {
@@ -27,6 +36,14 @@
     clearFeedState();
     await tick();
     await refreshFeed($feedMode, { reset: true });
+  }
+
+  async function revealBufferedNewer() {
+    const beforeHeight = document.documentElement.scrollHeight;
+    revealNewerFeed();
+    await tick();
+    const heightDelta = document.documentElement.scrollHeight - beforeHeight;
+    if (heightDelta > 0) window.scrollBy({ top: heightDelta, left: 0, behavior: 'instant' });
   }
 </script>
 

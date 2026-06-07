@@ -64,6 +64,7 @@ export interface FeedQueryOptions {
   since?: number;
   until?: number;
   hashtag?: string;
+  globalAuthors?: string[];
 }
 
 export interface Session {

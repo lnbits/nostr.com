@@ -97,6 +97,5 @@ export const adultHashtags = [
   'teen',
   'cp',
   'pedo',
-  'pedophile',
-  'pedo'
+  'pedophile'
 ];

@@ -65,3 +65,7 @@ export function keywordsForInterests(interests: string[]) {
 }
 
 export const defaultGuestNip05 = 'benarc@nostr.com';
+
+export const defaultPomegranateCentral = 'auth.njump.me';
+
+export const defaultPomegranateOperators = ['po.njump.me', 'po.f7z.io', 'po.nostrver.se'];

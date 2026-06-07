@@ -195,6 +195,16 @@ describe('nostr client helpers', () => {
     ]);
   });
 
+  it('mixes default global authors into broad global feed queries', async () => {
+    const base = { kinds: [1], limit: 20 };
+    const authors = ['a'.repeat(64), 'b'.repeat(64)];
+
+    expect(await feedFiltersForMode('global', base, [], { friendsOfFriends: false, keywords: [], interests: [] }, 123, [], { globalAuthors: authors })).toEqual([
+      { kinds: [1], limit: 13, '#t': ['technology', 'food', 'foodstr', 'music', 'musicstr', 'introductions'], since: 123 },
+      { kinds: [1], limit: 7, authors, since: 123 }
+    ]);
+  });
+
   it('uses follows and keywords when custom feed has follows, keywords, and no available friends-of-friends', async () => {
     const follows = ['c'.repeat(64)];
     const base = { kinds: [1], limit: 10 };

@@ -3,12 +3,11 @@
   import { nip19 } from 'nostr-tools';
   import { hexToBytes } from '@noble/hashes/utils.js';
   import { createGuestSession } from '$lib/nostr/client';
-  import { keywordsForInterests, socialInterests } from '$lib/nostr/config';
+  import { defaultPomegranateCentral, keywordsForInterests, socialInterests } from '$lib/nostr/config';
   import { customFeedSettings, loginDialogOpen, refreshFeed, saveProfile, selectFeedMode, signIn } from '$lib/stores/app';
 
   let privateKey = '';
   let bunker = '';
-  let pomegranateCentral = '';
   let error = '';
   let mode: 'sign-in' | 'create' = 'sign-in';
   let generatedKeys: { npub: string; nsec: string; secret: string; pubkey: string } | null = null;
@@ -27,7 +26,6 @@
       await signIn(mode, loginValue(mode));
       privateKey = '';
       bunker = '';
-      pomegranateCentral = '';
       loginDialogOpen.set(false);
     } catch (err) {
       error = err instanceof Error ? err.message : typeof err === 'string' ? err : 'Could not sign in.';
@@ -39,7 +37,7 @@
   function loginValue(mode: 'nip07' | 'private-key' | 'bunker' | 'pomegranate') {
     if (mode === 'private-key') return privateKey;
     if (mode === 'bunker') return bunker;
-    if (mode === 'pomegranate') return pomegranateCentral;
+    if (mode === 'pomegranate') return defaultPomegranateCentral;
     return '';
   }
 
@@ -177,13 +175,7 @@ ${generatedKeys.nsec}
       <button disabled={loggingIn} on:click={() => login('bunker')}><PlugZap size={18} /> Sign in</button>
     </div>
 
-    <div class="login-input-action">
-      <label>
-        <span class="visually-hidden">Pomegranate central URL</span>
-        <input bind:value={pomegranateCentral} autocomplete="off" spellcheck="false" placeholder="Pomegranate central URL" />
-      </label>
-      <button disabled={loggingIn} on:click={() => login('pomegranate')}><PlugZap size={18} /> Sign in</button>
-    </div>
+    <button disabled={loggingIn} on:click={() => login('pomegranate')}><PlugZap size={18} /> {loggingIn ? 'Connecting' : 'Sign in with Google'}</button>
 
     <div class="login-input-action">
       <label>

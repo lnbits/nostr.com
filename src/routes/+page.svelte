@@ -100,12 +100,22 @@
       previousScrollY = nextScrollY;
     };
     addEventListener('scroll', onScroll, { passive: true });
+    addEventListener('touchstart', startPullForNewer, { passive: true });
+    addEventListener('touchmove', updatePullForNewer, { passive: false });
+    addEventListener('touchend', finishPullForNewer);
+    addEventListener('touchcancel', finishPullForNewer);
+    addEventListener('wheel', wheelPullForNewer, { passive: false });
     return () => {
       if (!clickedFeedNoteSaved) saveCurrentFeedScrollPosition();
       observer?.disconnect();
       clearTimeout(hideNewerBubbleTimeout);
       clearTimeout(wheelPullTimeout);
       removeEventListener('scroll', onScroll);
+      removeEventListener('touchstart', startPullForNewer);
+      removeEventListener('touchmove', updatePullForNewer);
+      removeEventListener('touchend', finishPullForNewer);
+      removeEventListener('touchcancel', finishPullForNewer);
+      removeEventListener('wheel', wheelPullForNewer);
     };
   });
 
@@ -277,11 +287,6 @@
     class:pull-ready={pullDistance >= pullThreshold}
     aria-label="Timeline"
     style={`--pull-progress: ${pullProgress}; --pull-distance: ${pullDistance}px;`}
-    on:touchstart={startPullForNewer}
-    on:touchmove={updatePullForNewer}
-    on:touchend={finishPullForNewer}
-    on:touchcancel={finishPullForNewer}
-    on:wheel={wheelPullForNewer}
   >
     {#if $session}
       <FeedSearchBar />

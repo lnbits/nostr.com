@@ -4,7 +4,7 @@ import * as nip46 from 'nostr-tools/nip46';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { cacheEvents, cacheProfile, cacheProfileEvents } from './cache';
 import { adultDomains, adultHashtags, mutedWords } from './contentFilters';
-import { defaultGuestNip05, defaultRelays, globalFeedHashtags } from './config';
+import { defaultGuestNip05, defaultPomegranateCentral, defaultRelays, globalFeedHashtags } from './config';
 import type { ContactListDetails, ContactListItem, CustomFeedSettings, DirectMessage, EventStats, FeedMode, FeedQueryOptions, Nip05Profile, NostrEvent, NotificationItem, Profile, RelayState, Session } from './types';
 
 const pool = new SimplePool();
@@ -174,7 +174,7 @@ export async function loginWithBunker(uri: string): Promise<Session> {
   }
 }
 
-export async function loginWithPomegranate(centralInput: string): Promise<Session> {
+export async function loginWithPomegranate(centralInput = defaultPomegranateCentral): Promise<Session> {
   const centralUrl = normalizePomegranateCentralUrl(centralInput);
   const token = await authenticatePomegranateCentral(centralUrl);
   const account = await fetchPomegranateAccount(centralUrl, token);
@@ -528,7 +528,7 @@ export function feedFiltersForMode(
   if (mode === 'follow' && follows.length) return [withOptionalSince({ ...taggedBase, authors: follows }, since)];
   if (mode === 'custom') return customFeedFilters(taggedBase, follows, settings, since, relayUrls);
   if (mode === 'global' && tag) return [withOptionalSince(taggedBase, since)];
-  if (mode === 'global') return globalFeedFilters(taggedBase, since);
+  if (mode === 'global') return globalFeedFilters(taggedBase, since, options.globalAuthors);
   return [withOptionalSince(taggedBase, since)];
 }
 
@@ -571,7 +571,8 @@ export async function subscribeFeed(
   options: FeedQueryOptions = {},
   onEvent: (event: NostrEvent) => void
 ) {
-  if ((mode === 'follow' || mode === 'custom') && !follows.length) return undefined;
+  if (mode === 'follow' && !follows.length) return undefined;
+  if (mode === 'custom' && !follows.length && !keywordFilters(settings).length) return undefined;
 
   const relayUrls = activeRelayUrls(relays, 'read');
   if (!relayUrls.length) return undefined;
@@ -1362,9 +1363,21 @@ function splitOptionalLimit(total: number, parts: number) {
   return Array.from({ length: parts }, (_, index) => base + (index < remainder ? 1 : 0));
 }
 
-function globalFeedFilters(base: Filter, since?: number) {
-  const globalBase = { ...base, '#t': globalFeedHashtags };
-  return [withOptionalSince(globalBase, since)];
+function globalFeedFilters(base: Filter, since?: number, authors: string[] = []) {
+  const cleanAuthors = [...new Set(authors.filter((pubkey) => /^[0-9a-f]{64}$/i.test(pubkey)))];
+  if (!cleanAuthors.length) return [withOptionalSince({ ...base, '#t': globalFeedHashtags }, since)];
+
+  const total = base.limit ?? 0;
+  if (!total) {
+    return [withOptionalSince({ ...base, '#t': globalFeedHashtags }, since), withOptionalSince({ ...base, authors: cleanAuthors }, since)];
+  }
+
+  const authorLimit = Math.max(1, Math.round(total * 0.35));
+  const tagLimit = Math.max(1, total - authorLimit);
+  return [
+    withOptionalSince({ ...base, limit: tagLimit, '#t': globalFeedHashtags }, since),
+    withOptionalSince({ ...base, limit: authorLimit, authors: cleanAuthors }, since)
+  ];
 }
 
 function withOptionalSince(filter: Filter, since?: number) {
