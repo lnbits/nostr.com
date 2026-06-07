@@ -577,55 +577,35 @@ label span, label strong { color: var(--text); }
   margin-bottom: 14px;
 }
 .interest-picker {
-  position: relative;
-}
-.interest-trigger {
-  width: 100%;
-  justify-content: space-between;
-  text-align: left;
-}
-.interest-trigger span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.interest-menu {
-  position: absolute;
-  bottom: calc(42px + 6px);
-  left: 0;
-  right: 0;
-  z-index: 80;
-  max-height: min(260px, 42svh);
-  overflow: auto;
   display: grid;
-  gap: 2px;
-  padding: 6px;
-  border: 1px solid color-mix(in srgb, var(--line) 38%, transparent);
-  border-radius: 8px;
-  background: var(--panel);
-  box-shadow: var(--shadow);
+  gap: 8px;
 }
-.interest-picker.open-down .interest-menu {
-  top: calc(100% + 6px);
-  bottom: auto;
+.interest-picker .field-label {
+  margin-bottom: 0;
 }
-.interest-option {
-  min-height: 38px;
-  display: grid;
-  grid-template-columns: 20px minmax(0, 1fr);
-  gap: 9px;
-  align-items: center;
-  padding: 6px 8px;
-  border-radius: 6px;
+.interest-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.interest-badges button {
+  min-height: 34px;
+  border-color: color-mix(in srgb, var(--line) 35%, transparent);
+  border-radius: 999px;
+  padding: 0 12px;
+  background: color-mix(in srgb, var(--surface) 82%, var(--text) 4%);
   color: var(--text);
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1;
 }
-.interest-option:hover {
+.interest-badges button:hover {
   background: color-mix(in srgb, var(--text) 8%, transparent);
 }
-.interest-option input {
-  width: auto;
-  accent-color: var(--accent);
+.interest-badges button.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 24%, var(--surface));
+  color: var(--text);
 }
 .primary {
   background: var(--text);

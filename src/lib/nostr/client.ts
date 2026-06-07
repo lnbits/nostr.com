@@ -3,10 +3,12 @@ import type { Event as NostrToolsEvent, Filter } from 'nostr-tools';
 import * as nip46 from 'nostr-tools/nip46';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { cacheEvents, cacheProfile, cacheProfileEvents } from './cache';
-import { adultDomains, adultHashtags, defaultGuestNip05, defaultRelays, globalFeedHashtags, mutedWords } from './config';
+import { adultDomains, adultHashtags, mutedWords } from './contentFilters';
+import { defaultGuestNip05, defaultRelays, globalFeedHashtags } from './config';
 import type { ContactListDetails, ContactListItem, CustomFeedSettings, DirectMessage, EventStats, FeedMode, FeedQueryOptions, Nip05Profile, NostrEvent, NotificationItem, Profile, RelayState, Session } from './types';
 
 const pool = new SimplePool();
+const maxFeedPostContentLength = 900;
 type SearchFilter = Filter & { search?: string };
 const bunkerSigners = new Map<string, nip46.BunkerSigner>();
 const connectedBunkerSignerKeys = new Set<string>();
@@ -305,6 +307,7 @@ export function filterSpam(events: NostrEvent[], mutedPubkeys = new Set<string>(
   return events.filter((event) => {
     if (mutedPubkeys.has(event.pubkey)) return false;
     if (event.kind === 6) return Boolean(parseRepostContent(event));
+    if (event.kind === 1 && event.content.length > maxFeedPostContentLength) return false;
     if (isMachineGeneratedContent(event.content)) return false;
     if (!isFamilySafeEvent(event)) return false;
     const lower = event.content.toLowerCase();

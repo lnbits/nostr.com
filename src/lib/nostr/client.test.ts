@@ -266,6 +266,13 @@ describe('nostr client helpers', () => {
     expect(filterSpam([muted, spam, good], new Set([muted.pubkey]))).toEqual([good]);
   });
 
+  it('filters article-length feed posts', () => {
+    const longPost = event({ content: 'a'.repeat(901) });
+    const normalPost = event({ content: 'a'.repeat(900) });
+
+    expect(filterSpam([longPost, normalPost])).toEqual([normalPost]);
+  });
+
   it('keeps replies out of top-level feed results', () => {
     const root = event({ content: 'top-level note' });
     const markedReply = event({ content: 'reply', tags: [['e', root.id, 'wss://relay.example', 'reply', root.pubkey]] });

@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { ChevronDown, Download, KeyRound, PlugZap, ShieldCheck, Sparkles } from '@lucide/svelte';
+  import { Download, KeyRound, PlugZap, ShieldCheck, Sparkles } from '@lucide/svelte';
   import { nip19 } from 'nostr-tools';
   import { hexToBytes } from '@noble/hashes/utils.js';
   import { createGuestSession } from '$lib/nostr/client';
   import { keywordsForInterests, socialInterests } from '$lib/nostr/config';
-  import { customFeedSettings, loginDialogOpen, refreshFeed, saveProfile, signIn } from '$lib/stores/app';
+  import { customFeedSettings, loginDialogOpen, refreshFeed, saveProfile, selectFeedMode, signIn } from '$lib/stores/app';
 
   let privateKey = '';
   let bunker = '';
@@ -16,7 +16,6 @@
   let profileName = '';
   let profileBio = '';
   let selectedInterests: string[] = [];
-  let interestsOpen = false;
   let savingProfile = false;
   let loggingIn = false;
 
@@ -51,7 +50,6 @@
     profileName = '';
     profileBio = '';
     selectedInterests = [];
-    interestsOpen = false;
     mode = 'create';
   }
 
@@ -114,7 +112,11 @@ ${generatedKeys.nsec}
         about: profileBio.trim() || undefined,
         interests: selectedInterests
       };
-      void refreshFeed('global');
+      if (selectedInterests.length) {
+        selectFeedMode('custom');
+      } else {
+        void refreshFeed('global');
+      }
       loginDialogOpen.set(false);
       generatedKeys = null;
       void saveProfile(profileDraft).catch(() => undefined);
@@ -143,24 +145,18 @@ ${generatedKeys.nsec}
       </label>
       <label>
         <span>Bio</span>
-        <textarea bind:value={profileBio} placeholder="A little about you"></textarea>
+        <input bind:value={profileBio} autocomplete="off" placeholder="A little about you" />
       </label>
-      <div class="interest-picker" role="group" aria-label="Interests" on:mouseleave={() => (interestsOpen = false)}>
+      <div class="interest-picker" role="group" aria-label="Interests">
         <span class="field-label">Interests</span>
-        <button type="button" class="interest-trigger" aria-expanded={interestsOpen} on:click={() => (interestsOpen = !interestsOpen)}>
-          <span>{selectedInterests.length ? selectedInterests.join(', ') : 'Choose interests'}</span>
-          <ChevronDown size={18} />
-        </button>
-        {#if interestsOpen}
-          <div class="interest-menu">
-            {#each socialInterests as interest}
-              <label class="interest-option">
-                <input type="checkbox" checked={selectedInterests.includes(interest)} on:change={() => toggleInterest(interest)} />
-                <span>{interest}</span>
-              </label>
-            {/each}
-          </div>
-        {/if}
+        <div class="interest-badges">
+          {#each socialInterests as interest}
+            {@const selected = selectedInterests.includes(interest)}
+            <button type="button" class:active={selected} aria-pressed={selected} on:click={() => toggleInterest(interest)}>
+              {interest}
+            </button>
+          {/each}
+        </div>
       </div>
       <button class="primary" disabled={savingProfile} on:click={() => void saveCreatedProfile()}>
         <KeyRound size={18} /> {savingProfile ? 'Saving profile' : 'Save profile and log in with key'}
