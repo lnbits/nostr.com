@@ -54,6 +54,7 @@ import type { ContactListItem, CustomFeedSettings, DirectMessage, EventStats, Fe
 
 const sessionStorageKey = 'nostr-session';
 const customFeedStorageKey = 'nostr-custom-feed-settings';
+const feedModeStorageKey = 'nostr-feed-mode';
 const notificationSeenStorageKey = 'nostr-notifications-seen-at';
 const messageSeenStorageKey = 'nostr-messages-seen-at';
 const initialFeedLimit = 24;
@@ -74,8 +75,9 @@ const maxThreadPrefetchConcurrent = 2;
 
 const initialSession = browser ? readStoredSession() : null;
 const initialCustomFeedSettings = browser ? readStoredCustomFeedSettings() : defaultCustomFeedSettings;
+const initialFeedMode = browser ? readStoredFeedMode() : 'global';
 
-export const feedMode = writable<FeedMode>('global');
+export const feedMode = writable<FeedMode>(initialFeedMode);
 export const events = writable<NostrEvent[]>([]);
 export const pendingNewerEvents = writable<NostrEvent[]>([]);
 export const profiles = writable<Record<string, Profile>>({});
@@ -122,7 +124,7 @@ let currentRelays = defaultRelays;
 let currentFollows: string[] = [];
 let currentMutedPubkeys = new Set<string>();
 let currentSettings = defaultCustomFeedSettings;
-let currentMode: FeedMode = 'global';
+let currentMode: FeedMode = initialFeedMode;
 let currentHashtag = '';
 let currentSessionValue: Session | null = initialSession;
 let currentGlobalFeedAuthors: string[] = [];
@@ -174,7 +176,10 @@ customFeedSettings.subscribe((value) => {
   currentSettings = value;
   if (browser) localStorage.setItem(customFeedStorageKey, JSON.stringify(value));
 });
-feedMode.subscribe((value) => (currentMode = value));
+feedMode.subscribe((value) => {
+  currentMode = value;
+  if (browser) persistFeedMode(value);
+});
 activeHashtag.subscribe((value) => (currentHashtag = value));
 session.subscribe((value) => {
   currentSessionValue = value;
@@ -896,7 +901,7 @@ export async function signIn(mode: LoginMode | 'guest', value = '') {
   directMessages.set([]);
   notifications.set([]);
   loadingFeed.set(true);
-  if (!hasExplicitFeedModeSelection && previousFeedMode === 'global') feedMode.set('global');
+  if (!hasExplicitFeedModeSelection) applyStoredFeedMode(previousFeedMode);
   void finishSignedInBootstrap(next);
 }
 
@@ -912,7 +917,7 @@ export async function signInWithImportedNsec(value: string, provider: Pomegranat
   directMessages.set([]);
   notifications.set([]);
   loadingFeed.set(true);
-  if (!hasExplicitFeedModeSelection && previousFeedMode === 'global') feedMode.set('global');
+  if (!hasExplicitFeedModeSelection) applyStoredFeedMode(previousFeedMode);
   void finishSignedInBootstrap(next);
 }
 
@@ -1448,6 +1453,22 @@ function readStoredCustomFeedSettings() {
   }
 }
 
+function readStoredFeedMode() {
+  const raw = localStorage.getItem(feedModeStorageKey);
+  return isFeedMode(raw) ? raw : 'global';
+}
+
+function persistFeedMode(mode: FeedMode) {
+  localStorage.setItem(feedModeStorageKey, mode);
+}
+
+function applyStoredFeedMode(previousFeedMode: FeedMode) {
+  const stored = readStoredFeedMode();
+  if (stored !== 'global' || previousFeedMode === 'global') {
+    feedMode.set(stored);
+  }
+}
+
 async function hydrateDefaultFeedContext() {
   const globalContextReady = hydrateDefaultGlobalFeedContext();
   let currentSession: Session | null = null;
@@ -1494,7 +1515,12 @@ function selectPreferredSignedInFeed(allowInitialDefault = false) {
   activeHashtag.set('');
   cachedOlderEvents = [];
   if (hasExplicitFeedModeSelection) return;
+  if (currentMode !== 'global') return;
   if (allowInitialDefault && !getStoreSnapshot(events).length) feedMode.set(currentFollows.length ? 'follow' : 'global');
+}
+
+function isFeedMode(value: unknown): value is FeedMode {
+  return value === 'global' || value === 'follow' || value === 'custom';
 }
 
 function isCurrentSession(next: Session) {
