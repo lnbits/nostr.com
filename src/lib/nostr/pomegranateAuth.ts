@@ -11,7 +11,7 @@ const authStorageKey = 'nostr-pomegranate-auth';
 const tokenMaxAgeMs = 24 * 60 * 60 * 1000;
 const utf8 = new TextEncoder();
 
-export type PomegranateLoginProvider = 'email' | 'google' | 'github';
+export type PomegranateLoginProvider = 'email' | 'google';
 
 export interface PomegranateProfile {
   handler_pubkey: string;
@@ -186,8 +186,7 @@ async function authenticatePomegranateCentral(centralUrl: string, provider: Pome
     };
     const fail = () => {
       cleanup();
-      const label = provider === 'github' ? 'GitHub' : provider;
-      reject(new Error(`Could not sign in with ${label}. Please try again.`));
+      reject(new Error(`Could not sign in with ${provider}. Please try again.`));
     };
     const timeout = setTimeout(fail, 120_000);
     const closedCheck = setInterval(() => {

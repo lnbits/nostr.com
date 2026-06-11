@@ -245,7 +245,7 @@
       <div class="setting-grid">
         <span>Coordinator</span><strong>{pomegranateAuth?.centralUrl ?? $session.pomegranateCentral ?? 'auth.njump.me'}</strong>
         <span>Email</span><strong>{$session.pomegranateEmail ?? 'Connected through Pomegranate'}</strong>
-        <span>Methods</span><strong>Email, Google, GitHub</strong>
+        <span>Methods</span><strong>Email, Google</strong>
       </div>
     </section>
 

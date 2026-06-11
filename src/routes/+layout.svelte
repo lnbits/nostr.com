@@ -84,7 +84,7 @@
     <header class="topbar">
       <div class="brand-row">
         <a class="brand" href={appPath('/')} aria-label="Nostr home" on:click={goHome}>
-          <strong>Nostr</strong>
+          <strong>nostr</strong>
           <span>controlled by users, not platforms</span>
         </a>
         <a class="icon-button info-link" href={appPath('/info')} aria-label="Learn about Nostr">

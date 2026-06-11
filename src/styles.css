@@ -550,8 +550,6 @@ label span, label strong { color: var(--text); }
 .login-advanced {
   display: grid;
   gap: 10px;
-  border-top: 1px solid var(--line);
-  padding-top: 12px;
 }
 .login-advanced[open] {
   display: grid;
@@ -637,6 +635,11 @@ label span, label strong { color: var(--text); }
   color: var(--bg);
   border-color: var(--text);
   font-weight: 850;
+}
+.primary.google-login-button {
+  background: #fff;
+  border-color: color-mix(in srgb, #111827 28%, #fff);
+  color: #111827;
 }
 .danger-button {
   border-color: color-mix(in srgb, var(--danger) 70%, var(--line));
