@@ -235,8 +235,8 @@ function parseMentions(content: string): NoteTextPart[] {
 
 function indexedReferencePart(raw: string, tag: string[] | undefined): NoteTextPart {
   if (!tag || !tag[1]) return { type: 'text', value: raw };
-  if (tag[0] === 'p') return { type: 'nostr', value: raw, href: appPath(`/profile/${tag[1]}`), label: '@nostr' };
-  if (tag[0] === 'e') return { type: 'nostr', value: raw, href: appPath(`/thread/${tag[1]}`), label: 'note' };
+  if (tag[0] === 'p' && /^[0-9a-f]{64}$/i.test(tag[1])) return { type: 'nostr', value: raw, href: appPath(`/profile/${tag[1].toLowerCase()}`), label: '@nostr' };
+  if (tag[0] === 'e' && /^[0-9a-f]{64}$/i.test(tag[1])) return { type: 'nostr', value: raw, href: appPath(`/thread/${tag[1].toLowerCase()}`), label: 'note' };
   return { type: 'text', value: raw };
 }
 

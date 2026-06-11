@@ -153,6 +153,20 @@ describe('media helpers', () => {
     ]);
   });
 
+  it('leaves malformed NIP-27 indexed references as text', () => {
+    expect(
+      parseNoteText('hello #[0] see #[1]', [], [
+        ['p', '../settings'],
+        ['e', 'not-a-note-id']
+      ])
+    ).toEqual([
+      { type: 'text', value: 'hello ' },
+      { type: 'text', value: '#[0]' },
+      { type: 'text', value: ' see ' },
+      { type: 'text', value: '#[1]' }
+    ]);
+  });
+
   it('extracts quoted note references from NIP-19 and indexed references', () => {
     const first = 'd'.repeat(64);
     const second = 'e'.repeat(64);

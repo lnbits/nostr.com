@@ -151,7 +151,7 @@ export async function loginWithBunker(uri: string): Promise<Session> {
   const signer = nip46.BunkerSigner.fromBunker(clientSecret, pointer, {
     pool,
     onauth: (url: string) => {
-      if (typeof window !== 'undefined') window.open(url, '_blank', 'noopener,noreferrer');
+      openExternalAuthUrl(url);
     }
   });
   try {
@@ -1283,7 +1283,7 @@ function getBunkerSigner(session: Session) {
   const signer = nip46.BunkerSigner.fromBunker(hexToBytes(session.bunkerClientSecret), pointer, {
     pool,
     onauth: (url: string) => {
-      if (typeof window !== 'undefined') window.open(url, '_blank', 'noopener,noreferrer');
+      openExternalAuthUrl(url);
     }
   });
   bunkerSigners.set(key, signer);
@@ -1314,6 +1314,17 @@ async function getConnectedBunkerSigner(session: Session) {
 
 function bunkerSignerKey(session: Session) {
   return `${session.bunker ?? ''}:${session.bunkerClientSecret ?? ''}`;
+}
+
+function openExternalAuthUrl(value: string) {
+  if (typeof window === 'undefined') return;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return;
+    window.open(url.toString(), '_blank', 'noopener,noreferrer');
+  } catch {
+    // Ignore malformed auth URLs from remote signers.
+  }
 }
 
 function decodeNsec(value: string) {

@@ -525,6 +525,7 @@
               loading="lazy"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowfullscreen
+              sandbox="allow-scripts allow-same-origin allow-popups allow-presentation"
               referrerpolicy="strict-origin-when-cross-origin"
             ></iframe>
             <a href={embed.url} target="_blank" rel="noreferrer">{embed.title}</a>

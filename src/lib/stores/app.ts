@@ -53,6 +53,8 @@ import { savePrefetchedThreadReplies } from '$lib/stores/threadSeed';
 import type { ContactListItem, CustomFeedSettings, DirectMessage, EventStats, FeedMode, LoginMode, NostrEvent, NotificationItem, Profile, RelayState, Session } from '$lib/nostr/types';
 
 const sessionStorageKey = 'nostr-session';
+const feedModeStorageKey = 'nostr-feed-mode';
+const onboardingStorageKey = 'nostr-onboarding-complete';
 const customFeedStorageKey = 'nostr-custom-feed-settings';
 const notificationSeenStorageKey = 'nostr-notifications-seen-at';
 const messageSeenStorageKey = 'nostr-messages-seen-at';
@@ -73,9 +75,11 @@ const threadPrefetchCooldownMs = 5 * 60 * 1000;
 const maxThreadPrefetchConcurrent = 2;
 
 const initialSession = browser ? readStoredSession() : null;
+const initialStoredFeedMode = browser && initialSession ? readStoredFeedMode(initialSession.pubkey) : undefined;
+const initialFeedMode = initialStoredFeedMode ?? 'global';
 const initialCustomFeedSettings = browser ? readStoredCustomFeedSettings() : defaultCustomFeedSettings;
 
-export const feedMode = writable<FeedMode>('global');
+export const feedMode = writable<FeedMode>(initialFeedMode);
 export const events = writable<NostrEvent[]>([]);
 export const pendingNewerEvents = writable<NostrEvent[]>([]);
 export const profiles = writable<Record<string, Profile>>({});
@@ -104,6 +108,7 @@ export const loadingMoreFeed = writable(false);
 export const hasMoreFeed = writable(true);
 export const composerOpen = writable(false);
 export const loginDialogOpen = writable(false);
+export const onboardingDialogOpen = writable(false);
 export const replyTarget = writable<NostrEvent | null>(null);
 export const editTarget = writable<NostrEvent | null>(null);
 
@@ -122,7 +127,7 @@ let currentRelays = defaultRelays;
 let currentFollows: string[] = [];
 let currentMutedPubkeys = new Set<string>();
 let currentSettings = defaultCustomFeedSettings;
-let currentMode: FeedMode = 'global';
+let currentMode: FeedMode = initialFeedMode;
 let currentHashtag = '';
 let currentSessionValue: Session | null = initialSession;
 let currentGlobalFeedAuthors: string[] = [];
@@ -135,7 +140,7 @@ let currentFriendsOfFriends: string[] = [];
 let friendsOfFriendsKey = '';
 let friendsOfFriendsToken = 0;
 let currentDeletedEventIds = new Set<string>();
-let hasExplicitFeedModeSelection = false;
+let hasExplicitFeedModeSelection = Boolean(initialStoredFeedMode);
 let oldestFeedTimestamp: number | undefined;
 let olderFeedEmptyAttempts = 0;
 let liveFeedSub: { close: (reason?: string) => void } | undefined;
@@ -160,6 +165,7 @@ const queuedThreadPrefetchIds = new Set<string>();
 const recentThreadPrefetches = new Map<string, number>();
 let activeThreadPrefetches = 0;
 let defaultGlobalFeedContextPromise: Promise<void> | undefined;
+let pendingGoogleOnboardingPubkey = '';
 
 relays.subscribe((value) => {
   currentRelays = value;
@@ -764,6 +770,7 @@ async function hydrateCachedHashtagFeed(tag: string) {
 
 export function selectFeedMode(mode: FeedMode) {
   hasExplicitFeedModeSelection = true;
+  if (currentSessionValue) persistStoredFeedMode(currentSessionValue.pubkey, mode);
   activeHashtag.set('');
   cachedOlderEvents = [];
   olderFeedEmptyAttempts = 0;
@@ -772,6 +779,34 @@ export function selectFeedMode(mode: FeedMode) {
   feedMode.set(mode);
   void hydrateCachedFeed(mode);
   void refreshFeed(mode, { replaceVisible: true });
+}
+
+export function completeOnboardingInterests(interests: string[]) {
+  const currentSession = currentSessionValue;
+  if (!currentSession) {
+    onboardingDialogOpen.set(false);
+    return;
+  }
+
+  const keywords = keywordsForInterests(interests);
+  if (keywords.length) {
+    customFeedSettings.update((settings) => ({
+      ...settings,
+      keywords: [...new Set([...settings.keywords, ...keywords])],
+      interests: [...new Set([...settings.interests, ...interests.map((interest) => interest.trim().toLowerCase()).filter(Boolean)])]
+    }));
+    selectFeedMode('custom');
+  }
+
+  markOnboardingComplete(currentSession.pubkey);
+  pendingGoogleOnboardingPubkey = '';
+  onboardingDialogOpen.set(false);
+}
+
+export function dismissOnboarding() {
+  if (currentSessionValue) markOnboardingComplete(currentSessionValue.pubkey);
+  pendingGoogleOnboardingPubkey = '';
+  onboardingDialogOpen.set(false);
 }
 
 export function goHome() {
@@ -876,6 +911,7 @@ export async function sendDirectMessage(peer: string, content: string) {
 }
 
 export async function signIn(mode: LoginMode | 'guest', value = '') {
+  const pomegranateProvider = mode === 'pomegranate' ? ((value || 'google') as PomegranateLoginProvider) : undefined;
   const next =
     mode === 'nip07'
       ? await loginWithNip07()
@@ -884,12 +920,14 @@ export async function signIn(mode: LoginMode | 'guest', value = '') {
         : mode === 'bunker'
           ? await loginWithBunker(value)
           : mode === 'pomegranate'
-            ? await loginWithPomegranateProvider((value || 'google') as PomegranateLoginProvider)
+            ? await loginWithPomegranateProvider(pomegranateProvider)
             : createGuestSession();
   if (isCurrentSession(next)) return;
   session.set(next);
+  pendingGoogleOnboardingPubkey = shouldOfferGoogleOnboarding(next, pomegranateProvider) ? next.pubkey : '';
   const previousFeedMode = currentMode;
   persistSession(next);
+  restoreStoredFeedModeForSession(next);
   activeHashtag.set('');
   currentNotificationSeenAt = browser ? readLastSeen(notificationSeenStorageKey, next.pubkey) : 0;
   currentMessageSeenAt = browser ? readLastSeen(messageSeenStorageKey, next.pubkey) : 0;
@@ -904,8 +942,10 @@ export async function signInWithImportedNsec(value: string, provider: Pomegranat
   const next = await importNsecIntoPomegranate(value, provider, options);
   if (isCurrentSession(next)) return;
   session.set(next);
+  pendingGoogleOnboardingPubkey = '';
   const previousFeedMode = currentMode;
   persistSession(next);
+  restoreStoredFeedModeForSession(next);
   activeHashtag.set('');
   currentNotificationSeenAt = browser ? readLastSeen(notificationSeenStorageKey, next.pubkey) : 0;
   currentMessageSeenAt = browser ? readLastSeen(messageSeenStorageKey, next.pubkey) : 0;
@@ -1376,6 +1416,67 @@ function clearStoredSession() {
   return null;
 }
 
+function readStoredFeedMode(pubkey: string): FeedMode | undefined {
+  if (!browser || !pubkey) return undefined;
+  try {
+    const stored = JSON.parse(localStorage.getItem(feedModeStorageKey) ?? '{}') as Record<string, unknown>;
+    return isFeedMode(stored[pubkey]) ? stored[pubkey] : undefined;
+  } catch {
+    localStorage.removeItem(feedModeStorageKey);
+    return undefined;
+  }
+}
+
+function persistStoredFeedMode(pubkey: string, mode: FeedMode) {
+  if (!browser || !pubkey) return;
+  let stored: Record<string, FeedMode> = {};
+  try {
+    stored = JSON.parse(localStorage.getItem(feedModeStorageKey) ?? '{}') as Record<string, FeedMode>;
+  } catch {
+    stored = {};
+  }
+  stored[pubkey] = mode;
+  localStorage.setItem(feedModeStorageKey, JSON.stringify(stored));
+}
+
+function restoreStoredFeedModeForSession(next: Session) {
+  const stored = readStoredFeedMode(next.pubkey);
+  if (!stored) return;
+  hasExplicitFeedModeSelection = true;
+  if (stored !== currentMode) feedMode.set(stored);
+}
+
+function shouldOfferGoogleOnboarding(next: Session, provider?: PomegranateLoginProvider) {
+  return browser && next.mode === 'pomegranate' && provider === 'google' && !readOnboardingComplete(next.pubkey);
+}
+
+function readOnboardingComplete(pubkey: string) {
+  if (!browser || !pubkey) return false;
+  try {
+    const stored = JSON.parse(localStorage.getItem(onboardingStorageKey) ?? '{}') as Record<string, unknown>;
+    return stored[pubkey] === true;
+  } catch {
+    localStorage.removeItem(onboardingStorageKey);
+    return false;
+  }
+}
+
+function markOnboardingComplete(pubkey: string) {
+  if (!browser || !pubkey) return;
+  let stored: Record<string, boolean> = {};
+  try {
+    stored = JSON.parse(localStorage.getItem(onboardingStorageKey) ?? '{}') as Record<string, boolean>;
+  } catch {
+    stored = {};
+  }
+  stored[pubkey] = true;
+  localStorage.setItem(onboardingStorageKey, JSON.stringify(stored));
+}
+
+function isFeedMode(value: unknown): value is FeedMode {
+  return value === 'follow' || value === 'global' || value === 'custom';
+}
+
 function readLastSeen(storageKey: string, pubkey: string) {
   if (!browser || !pubkey) return 0;
   try {
@@ -1471,6 +1572,7 @@ async function finishSignedInBootstrap(next: Session) {
     void refreshNotifications();
     if (next.mode !== 'nip07') void refreshMessages();
     restartInboxSubscriptions();
+    if (pendingGoogleOnboardingPubkey === next.pubkey && shouldOfferGoogleOnboarding(next, 'google')) onboardingDialogOpen.set(true);
   } finally {
     if (isCurrentSession(next)) loadingFeed.set(false);
   }

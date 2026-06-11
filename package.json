@@ -7,7 +7,7 @@
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
-    "dev": "vite --host 0.0.0.0",
+    "dev": "svelte-kit sync && vite --host 0.0.0.0",
     "icons": "node scripts/generate-icons.cjs",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",

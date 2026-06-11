@@ -7,4 +7,9 @@ describe('nostr.build upload parsing', () => {
     expect(uploadResponseUrl({ data: [{ url: 'https://cdn.example.com/b.jpg' }] })).toBe('https://cdn.example.com/b.jpg');
     expect(uploadResponseUrl({ data: { files: [{ downloadUrl: 'https://cdn.example.com/c.jpg' }] } })).toBe('https://cdn.example.com/c.jpg');
   });
+
+  it('rejects non-http urls from upload responses', () => {
+    expect(uploadResponseUrl({ tags: [['url', 'javascript:alert(1)']] })).toBe('');
+    expect(uploadResponseUrl({ data: { url: 'data:text/html,<script>alert(1)</script>' } })).toBe('');
+  });
 });

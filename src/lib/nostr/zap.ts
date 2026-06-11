@@ -35,11 +35,12 @@ export async function loadZapInfo(event: NostrEvent, profile: Profile | undefine
 
   const data = (await response.json()) as Partial<LnurlPayResponse>;
   const callback = typeof data.callback === 'string' ? data.callback : '';
+  const safeCallback = safeHttpUrl(callback);
   const nostrPubkey = typeof data.nostrPubkey === 'string' ? data.nostrPubkey : undefined;
   const minSendable = Number(data.minSendable);
   const maxSendable = Number(data.maxSendable);
   const supportsNostr = Boolean(data.allowsNostr) && Boolean(nostrPubkey && /^[0-9a-f]{64}$/i.test(nostrPubkey));
-  const canPay = callback && Number.isFinite(minSendable) && Number.isFinite(maxSendable);
+  const canPay = safeCallback && Number.isFinite(minSendable) && Number.isFinite(maxSendable);
   if (!canPay) {
     zapInfoCache.set(cacheKey, null);
     return null;
@@ -48,7 +49,7 @@ export async function loadZapInfo(event: NostrEvent, profile: Profile | undefine
   const info: ZapInfo = {
     recipientPubkey: target.recipientPubkey,
     lnurl: target.lnurl,
-    callback,
+    callback: safeCallback,
     minSendable,
     maxSendable,
     supportsNostr,
@@ -100,7 +101,8 @@ export function lnurlPayUrlFromProfile(profile: Profile | undefined) {
   const lud06 = profile?.lud06?.trim();
   if (lud06) {
     const decoded = decodeLnurl(lud06);
-    if (decoded) return decoded;
+    const safeDecoded = decoded ? safeHttpUrl(decoded) : '';
+    if (safeDecoded) return safeDecoded;
   }
 
   const lud16 = profile?.lud16?.trim();
@@ -133,6 +135,15 @@ function zapTargetFromEvent(event: NostrEvent, profile: Profile | undefined) {
     payUrl,
     lnurl: encodeLnurl(payUrl)
   };
+}
+
+function safeHttpUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : '';
+  } catch {
+    return '';
+  }
 }
 
 function formatMsatsAsSats(msats: number) {

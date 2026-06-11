@@ -31,7 +31,7 @@ export async function uploadToNostrBuild(session: Session, file: File, mediaType
 export function uploadResponseUrl(data: unknown): string {
   const tags = uploadResponseTags(data);
   const urlTag = tags.find((tag) => tag[0] === 'url' && tag[1]);
-  if (urlTag?.[1]) return urlTag[1];
+  if (urlTag?.[1] && isHttpUrl(urlTag[1])) return urlTag[1];
   if (typeof data === 'string') return extractUrl(data);
   if (Array.isArray(data)) {
     for (const item of data) {

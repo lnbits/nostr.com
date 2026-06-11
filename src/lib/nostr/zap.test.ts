@@ -13,4 +13,8 @@ describe('NIP-57 zap helpers', () => {
     expect(decodeLnurl(encoded)).toBe(payUrl);
     expect(lnurlPayUrlFromProfile({ pubkey: 'pubkey', lud06: encoded.toUpperCase() })).toBe(payUrl);
   });
+
+  it('rejects non-http LNURL profile values', () => {
+    expect(lnurlPayUrlFromProfile({ pubkey: 'pubkey', lud06: encodeLnurl('javascript:alert(1)') })).toBeNull();
+  });
 });

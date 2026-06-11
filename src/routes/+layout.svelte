@@ -7,6 +7,7 @@
   import Composer from '$lib/components/Composer.svelte';
   import LeftNav from '$lib/components/LeftNav.svelte';
   import LoginDialog from '$lib/components/LoginDialog.svelte';
+  import OnboardingDialog from '$lib/components/OnboardingDialog.svelte';
   import RightRail from '$lib/components/RightRail.svelte';
   import ThemeToggle from '$lib/components/ThemeToggle.svelte';
   import { appPath } from '$lib/paths';
@@ -130,6 +131,7 @@
   </nav>
 
   <LoginDialog />
+  <OnboardingDialog />
   <Composer />
   </div>
 {/if}
