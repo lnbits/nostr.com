@@ -50,9 +50,10 @@ import {
 } from '$lib/nostr/client';
 import { clearPomegranateAuth, importNsecIntoPomegranate, loginWithPomegranateProvider, type PomegranateLoginProvider } from '$lib/nostr/pomegranateAuth';
 import { savePrefetchedThreadReplies } from '$lib/stores/threadSeed';
-import type { ContactListItem, CustomFeedSettings, DirectMessage, EventStats, FeedMode, LoginMode, NostrEvent, NotificationItem, Profile, RelayState, Session } from '$lib/nostr/types';
+import type { ContactListDetails, ContactListItem, CustomFeedSettings, DirectMessage, EventStats, FeedMode, LoginMode, NostrEvent, NotificationItem, Profile, RelayState, Session } from '$lib/nostr/types';
 
 const sessionStorageKey = 'nostr-session';
+const contactListStorageKey = 'nostr-contact-list';
 const feedModeStorageKey = 'nostr-feed-mode';
 const onboardingStorageKey = 'nostr-onboarding-complete';
 const customFeedStorageKey = 'nostr-custom-feed-settings';
@@ -75,6 +76,7 @@ const threadPrefetchCooldownMs = 5 * 60 * 1000;
 const maxThreadPrefetchConcurrent = 2;
 
 const initialSession = browser ? readStoredSession() : null;
+const initialStoredContacts = browser && initialSession ? readStoredContactList(initialSession.pubkey) : undefined;
 const initialStoredFeedMode = browser && initialSession ? readStoredFeedMode(initialSession.pubkey) : undefined;
 const initialFeedMode = initialStoredFeedMode ?? 'global';
 const initialCustomFeedSettings = browser ? readStoredCustomFeedSettings() : defaultCustomFeedSettings;
@@ -85,7 +87,7 @@ export const pendingNewerEvents = writable<NostrEvent[]>([]);
 export const profiles = writable<Record<string, Profile>>({});
 export const relays = writable<RelayState[]>(defaultRelays);
 export const session = writable<Session | null>(initialSession);
-export const follows = writable<string[]>([]);
+export const follows = writable<string[]>(initialStoredContacts?.pubkeys ?? []);
 export const mutedPubkeys = writable<string[]>([]);
 export const customFeedSettings = writable<CustomFeedSettings>(initialCustomFeedSettings);
 export const activeHashtag = writable<string>('');
@@ -124,7 +126,7 @@ export function mergeProfileRecords(existing: Record<string, Profile>, nextProfi
 }
 
 let currentRelays = defaultRelays;
-let currentFollows: string[] = [];
+let currentFollows: string[] = initialStoredContacts?.pubkeys ?? [];
 let currentMutedPubkeys = new Set<string>();
 let currentSettings = defaultCustomFeedSettings;
 let currentMode: FeedMode = initialFeedMode;
@@ -135,7 +137,7 @@ let currentNotifications: NotificationItem[] = [];
 let currentDirectMessages: DirectMessage[] = [];
 let currentNotificationSeenAt = initialSession && browser ? readLastSeen(notificationSeenStorageKey, initialSession.pubkey) : 0;
 let currentMessageSeenAt = initialSession && browser ? readLastSeen(messageSeenStorageKey, initialSession.pubkey) : 0;
-let currentContactItems: ContactListItem[] = [];
+let currentContactItems: ContactListItem[] = initialStoredContacts?.items ?? [];
 let currentFriendsOfFriends: string[] = [];
 let friendsOfFriendsKey = '';
 let friendsOfFriendsToken = 0;
@@ -927,6 +929,7 @@ export async function signIn(mode: LoginMode | 'guest', value = '') {
   pendingGoogleOnboardingPubkey = shouldOfferGoogleOnboarding(next, pomegranateProvider) ? next.pubkey : '';
   const previousFeedMode = currentMode;
   persistSession(next);
+  restoreStoredContactListForSession(next);
   restoreStoredFeedModeForSession(next);
   activeHashtag.set('');
   currentNotificationSeenAt = browser ? readLastSeen(notificationSeenStorageKey, next.pubkey) : 0;
@@ -945,6 +948,7 @@ export async function signInWithImportedNsec(value: string, provider: Pomegranat
   pendingGoogleOnboardingPubkey = '';
   const previousFeedMode = currentMode;
   persistSession(next);
+  restoreStoredContactListForSession(next);
   restoreStoredFeedModeForSession(next);
   activeHashtag.set('');
   currentNotificationSeenAt = browser ? readLastSeen(notificationSeenStorageKey, next.pubkey) : 0;
@@ -966,6 +970,10 @@ export async function signOut() {
   feedMode.set('global');
   customFeedSettings.set(defaultCustomFeedSettings);
   if (browser) localStorage.removeItem(customFeedStorageKey);
+  currentContactItems = [];
+  currentFriendsOfFriends = [];
+  friendsOfFriendsKey = '';
+  follows.set([]);
   cachedOlderEvents = [];
   if (browser) await goto(appPath('/'));
   await hydrateGuestFeedContext();
@@ -1208,13 +1216,13 @@ export async function saveProfile(nextProfile: Profile) {
 }
 
 export async function saveFollowList(pubkeys: string[]) {
-  let currentSession: Session | null = null;
-  session.subscribe((value) => (currentSession = value))();
+  const currentSession = getStoreSnapshot(session);
   if (!currentSession) throw new Error('Sign in before updating your follow list.');
   const clean = [...new Set(pubkeys.filter((pubkey) => /^[0-9a-f]{64}$/i.test(pubkey)))];
   const previousContacts = new Map(currentContactItems.map((contact) => [contact.pubkey, contact]));
   currentContactItems = clean.map((pubkey) => previousContacts.get(pubkey) ?? { pubkey });
   follows.set(clean);
+  persistStoredContactList(currentSession.pubkey, { pubkeys: clean, items: currentContactItems, updatedAt: nowSeconds() });
   void publishContactList(currentSession, clean, currentRelays, currentContactItems, getStoreSnapshot(profiles)).catch((err) => {
     console.warn('Could not publish follow list.', err);
   });
@@ -1406,7 +1414,7 @@ function isStoredRemoteSignerSession(value: Session) {
   );
 }
 
-function isHexKey(value: unknown) {
+function isHexKey(value: unknown): value is string {
   return typeof value === 'string' && /^[0-9a-f]{64}$/i.test(value);
 }
 
@@ -1414,6 +1422,63 @@ function clearStoredSession() {
   localStorage.removeItem(sessionStorageKey);
   sessionStorage.removeItem(sessionStorageKey);
   return null;
+}
+
+function readStoredContactList(pubkey: string) {
+  if (!browser || !pubkey) return undefined;
+  try {
+    const stored = JSON.parse(localStorage.getItem(contactListStorageKey) ?? '{}') as Record<string, unknown>;
+    const saved = stored[pubkey] as Partial<{ pubkeys: unknown; items: unknown; updatedAt: unknown }> | undefined;
+    if (!saved) return undefined;
+    const pubkeys = Array.isArray(saved.pubkeys) ? [...new Set(saved.pubkeys.filter(isHexKey))] : [];
+    const contactItems = (Array.isArray(saved.items) ? saved.items : []).map(readStoredContactItem).filter((item): item is ContactListItem => Boolean(item));
+    const itemByPubkey = new Map(contactItems.filter((item) => pubkeys.includes(item.pubkey)).map((item) => [item.pubkey, item]));
+    const items = pubkeys.map((key) => itemByPubkey.get(key) ?? { pubkey: key });
+    const updatedAt = typeof saved.updatedAt === 'number' && Number.isFinite(saved.updatedAt) ? saved.updatedAt : 0;
+    return { pubkeys, items, updatedAt };
+  } catch {
+    localStorage.removeItem(contactListStorageKey);
+    return undefined;
+  }
+}
+
+function persistStoredContactList(pubkey: string, contacts: { pubkeys: string[]; items: ContactListItem[]; updatedAt?: number }) {
+  if (!browser || !pubkey) return;
+  let stored: Record<string, unknown> = {};
+  try {
+    stored = JSON.parse(localStorage.getItem(contactListStorageKey) ?? '{}') as Record<string, unknown>;
+  } catch {
+    stored = {};
+  }
+  const pubkeys = [...new Set(contacts.pubkeys.filter(isHexKey))];
+  const itemByPubkey = new Map(
+    contacts.items
+      .filter((item) => pubkeys.includes(item.pubkey))
+      .map((item) => [item.pubkey, { pubkey: item.pubkey, relay: item.relay, petname: item.petname } satisfies ContactListItem])
+  );
+  stored[pubkey] = {
+    pubkeys,
+    items: pubkeys.map((key) => itemByPubkey.get(key) ?? { pubkey: key }),
+    updatedAt: contacts.updatedAt ?? nowSeconds()
+  };
+  localStorage.setItem(contactListStorageKey, JSON.stringify(stored));
+}
+
+function readStoredContactItem(value: unknown): ContactListItem | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const item = value as Partial<ContactListItem>;
+  if (!isHexKey(item.pubkey)) return undefined;
+  return {
+    pubkey: item.pubkey,
+    relay: typeof item.relay === 'string' && /^wss?:\/\//i.test(item.relay) ? item.relay : undefined,
+    petname: typeof item.petname === 'string' ? item.petname : undefined
+  } satisfies ContactListItem;
+}
+
+function restoreStoredContactListForSession(next: Session) {
+  const saved = readStoredContactList(next.pubkey);
+  currentContactItems = saved?.items ?? [];
+  follows.set(saved?.pubkeys ?? []);
 }
 
 function readStoredFeedMode(pubkey: string): FeedMode | undefined {
@@ -1579,17 +1644,26 @@ async function finishSignedInBootstrap(next: Session) {
 }
 
 async function hydrateSignedInFeedContext(currentSession: Session) {
+  restoreStoredContactListForSession(currentSession);
   const relayList = await fetchRelayListMetadata(currentSession.pubkey, currentRelays).catch(() => []);
   mergeRelayHints(relayList.map((relay) => relay.url), 90);
   const [contacts, muted] = await Promise.all([
-    fetchContactListDetails(currentSession.pubkey, currentRelays).catch(() => ({ pubkeys: [], relayHints: [], items: [] })),
+    fetchContactListDetails(currentSession.pubkey, currentRelays).catch(emptyContactListDetails),
     fetchMuteList(currentSession.pubkey, currentRelays).catch(() => [])
   ]);
-  currentContactItems = contacts.items;
+  const hasRelayContactList = contacts.updatedAt !== undefined;
+  if (hasRelayContactList) {
+    currentContactItems = contacts.items;
+    follows.set(contacts.pubkeys);
+    persistStoredContactList(currentSession.pubkey, contacts);
+  }
   mergeRelayHints(contacts.relayHints, 74);
-  follows.set(contacts.pubkeys);
   mutedPubkeys.set(muted);
   dropMutedEvents();
+}
+
+function emptyContactListDetails(): ContactListDetails {
+  return { pubkeys: [], relayHints: [], items: [] };
 }
 
 function selectPreferredSignedInFeed(allowInitialDefault = false) {

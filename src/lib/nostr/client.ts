@@ -1469,7 +1469,7 @@ export function extractContactListDetails(event?: NostrEvent): ContactListDetail
     items.push({ pubkey: tag[1], relay, petname: tag[3] });
   }
 
-  return { pubkeys: [...pubkeys], relayHints: [...relayHints], items };
+  return { pubkeys: [...pubkeys], relayHints: [...relayHints], items, updatedAt: event.created_at };
 }
 
 export function extractMutePubkeys(event?: NostrEvent) {

@@ -40,6 +40,7 @@ export interface ContactListDetails {
   pubkeys: string[];
   relayHints: string[];
   items: ContactListItem[];
+  updatedAt?: number;
 }
 
 export interface ContactListItem {
