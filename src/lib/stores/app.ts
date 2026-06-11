@@ -56,7 +56,6 @@ const sessionStorageKey = 'nostr-session';
 const feedModeStorageKey = 'nostr-feed-mode';
 const onboardingStorageKey = 'nostr-onboarding-complete';
 const customFeedStorageKey = 'nostr-custom-feed-settings';
-const feedModeStorageKey = 'nostr-feed-mode';
 const notificationSeenStorageKey = 'nostr-notifications-seen-at';
 const messageSeenStorageKey = 'nostr-messages-seen-at';
 const initialFeedLimit = 24;
@@ -79,7 +78,6 @@ const initialSession = browser ? readStoredSession() : null;
 const initialStoredFeedMode = browser && initialSession ? readStoredFeedMode(initialSession.pubkey) : undefined;
 const initialFeedMode = initialStoredFeedMode ?? 'global';
 const initialCustomFeedSettings = browser ? readStoredCustomFeedSettings() : defaultCustomFeedSettings;
-const initialFeedMode = browser ? readStoredFeedMode() : 'global';
 
 export const feedMode = writable<FeedMode>(initialFeedMode);
 export const events = writable<NostrEvent[]>([]);
@@ -182,10 +180,7 @@ customFeedSettings.subscribe((value) => {
   currentSettings = value;
   if (browser) localStorage.setItem(customFeedStorageKey, JSON.stringify(value));
 });
-feedMode.subscribe((value) => {
-  currentMode = value;
-  if (browser) persistFeedMode(value);
-});
+feedMode.subscribe((value) => (currentMode = value));
 activeHashtag.subscribe((value) => (currentHashtag = value));
 session.subscribe((value) => {
   currentSessionValue = value;
@@ -939,7 +934,7 @@ export async function signIn(mode: LoginMode | 'guest', value = '') {
   directMessages.set([]);
   notifications.set([]);
   loadingFeed.set(true);
-  if (!hasExplicitFeedModeSelection) applyStoredFeedMode(previousFeedMode);
+  if (!hasExplicitFeedModeSelection && previousFeedMode === 'global') feedMode.set('global');
   void finishSignedInBootstrap(next);
 }
 
@@ -957,7 +952,7 @@ export async function signInWithImportedNsec(value: string, provider: Pomegranat
   directMessages.set([]);
   notifications.set([]);
   loadingFeed.set(true);
-  if (!hasExplicitFeedModeSelection) applyStoredFeedMode(previousFeedMode);
+  if (!hasExplicitFeedModeSelection && previousFeedMode === 'global') feedMode.set('global');
   void finishSignedInBootstrap(next);
 }
 
@@ -1554,22 +1549,6 @@ function readStoredCustomFeedSettings() {
   }
 }
 
-function readStoredFeedMode() {
-  const raw = localStorage.getItem(feedModeStorageKey);
-  return isFeedMode(raw) ? raw : 'global';
-}
-
-function persistFeedMode(mode: FeedMode) {
-  localStorage.setItem(feedModeStorageKey, mode);
-}
-
-function applyStoredFeedMode(previousFeedMode: FeedMode) {
-  const stored = readStoredFeedMode();
-  if (stored !== 'global' || previousFeedMode === 'global') {
-    feedMode.set(stored);
-  }
-}
-
 async function hydrateDefaultFeedContext() {
   const globalContextReady = hydrateDefaultGlobalFeedContext();
   let currentSession: Session | null = null;
@@ -1617,12 +1596,7 @@ function selectPreferredSignedInFeed(allowInitialDefault = false) {
   activeHashtag.set('');
   cachedOlderEvents = [];
   if (hasExplicitFeedModeSelection) return;
-  if (currentMode !== 'global') return;
   if (allowInitialDefault && !getStoreSnapshot(events).length) feedMode.set(currentFollows.length ? 'follow' : 'global');
-}
-
-function isFeedMode(value: unknown): value is FeedMode {
-  return value === 'global' || value === 'follow' || value === 'custom';
 }
 
 function isCurrentSession(next: Session) {
