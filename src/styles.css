@@ -545,9 +545,18 @@ label span, label strong { color: var(--text); }
   box-shadow: none;
 }
 .panel h2 { margin: 0 0 14px; display: flex; align-items: center; gap: 8px; }
-.login-panel { display: grid; gap: 14px; }
-.login-panel p { color: var(--muted); margin: 0; }
+.login-panel {
+  min-width: 0;
+  display: grid;
+  gap: 14px;
+}
+.login-panel p {
+  min-width: 0;
+  color: var(--muted);
+  margin: 0;
+}
 .login-advanced {
+  min-width: 0;
   display: grid;
   gap: 10px;
   border-top: 1px solid var(--line);
@@ -562,8 +571,21 @@ label span, label strong { color: var(--text); }
   font-weight: 800;
 }
 .login-advanced label {
+  min-width: 0;
   display: grid;
   gap: 6px;
+  margin-bottom: 8px;
+}
+.login-advanced input,
+.login-advanced button,
+.login-advanced p,
+.login-advanced summary,
+.login-replace-option span {
+  min-width: 0;
+}
+.login-advanced p,
+.login-replace-option span {
+  overflow-wrap: anywhere;
 }
 .login-replace-option {
   display: flex !important;
@@ -571,6 +593,7 @@ label span, label strong { color: var(--text); }
   gap: 8px;
   color: var(--muted);
   font-size: 13px;
+  margin: 8px 0;
 }
 .login-methods-title {
   margin: 6px 0 -2px;
@@ -1353,6 +1376,7 @@ label span, label strong { color: var(--text); }
   background: rgba(0, 0, 0, 0.45);
 }
 .dialog-panel {
+  min-width: 0;
   width: min(480px, 100%);
   max-height: calc(100svh - 36px);
   overflow: auto;

@@ -67,7 +67,7 @@
       <input type="password" bind:value={nsec} autocomplete="off" spellcheck="false" placeholder="nsec1..." />
     </label>
     {#if importPreview}
-      <p>Matches {importPreview}</p>
+      <p>Logging in as {importPreview}</p>
     {:else if nsec.trim()}
       <p class="error">Enter a valid nsec private key.</p>
     {/if}
