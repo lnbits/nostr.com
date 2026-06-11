@@ -30,7 +30,7 @@
       content = '';
       composerOpen.set(false);
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Could not publish note.';
+      error = friendlyPublishError(err);
     } finally {
       busy = false;
     }
@@ -64,6 +64,12 @@
     if (!shouldSubmitTextareaOnEnter(event)) return;
     event.preventDefault();
     void submit();
+  }
+
+  function friendlyPublishError(err: unknown) {
+    const message = err instanceof Error ? err.message : typeof err === 'string' ? err : '';
+    if (/sign|signer|bunker|nip-?46|acknowledge|connect/i.test(message)) return 'Could not sign this event, please try again.';
+    return message || 'Could not publish note.';
   }
 </script>
 

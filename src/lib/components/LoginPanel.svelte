@@ -1,31 +1,22 @@
 <script lang="ts">
-  import { Download, KeyRound, PlugZap, ShieldCheck, Sparkles } from '@lucide/svelte';
-  import { nip19 } from 'nostr-tools';
-  import { hexToBytes } from '@noble/hashes/utils.js';
-  import { createGuestSession } from '$lib/nostr/client';
-  import { defaultPomegranateCentral, keywordsForInterests, socialInterests } from '$lib/nostr/config';
-  import { customFeedSettings, loginDialogOpen, refreshFeed, saveProfile, selectFeedMode, signIn } from '$lib/stores/app';
+  import { KeyRound, ShieldCheck } from '@lucide/svelte';
+  import { loginDialogOpen, signIn, signInWithImportedNsec } from '$lib/stores/app';
+  import { validateImportedNsec, type PomegranateLoginProvider } from '$lib/nostr/pomegranateAuth';
 
-  let privateKey = '';
-  let bunker = '';
+  let nsec = '';
   let error = '';
-  let mode: 'sign-in' | 'create' = 'sign-in';
-  let generatedKeys: { npub: string; nsec: string; secret: string; pubkey: string } | null = null;
-  let keysDownloaded = false;
-  let profileName = '';
-  let profileBio = '';
-  let selectedInterests: string[] = [];
-  let savingProfile = false;
   let loggingIn = false;
+  let importing = false;
+  let showImport = false;
+  let replaceExisting = false;
+  $: importPreview = previewNsec(nsec);
 
-  async function login(mode: 'nip07' | 'private-key' | 'bunker' | 'pomegranate') {
+  async function login(provider: PomegranateLoginProvider) {
     if (loggingIn) return;
     error = '';
     loggingIn = true;
     try {
-      await signIn(mode, loginValue(mode));
-      privateKey = '';
-      bunker = '';
+      await signIn('pomegranate', provider);
       loginDialogOpen.set(false);
     } catch (err) {
       error = err instanceof Error ? err.message : typeof err === 'string' ? err : 'Could not sign in.';
@@ -34,157 +25,63 @@
     }
   }
 
-  function loginValue(mode: 'nip07' | 'private-key' | 'bunker' | 'pomegranate') {
-    if (mode === 'private-key') return privateKey;
-    if (mode === 'bunker') return bunker;
-    if (mode === 'pomegranate') return defaultPomegranateCentral;
-    return '';
-  }
-
-  function showCreateKeys() {
+  async function importKey() {
+    if (importing) return;
     error = '';
-    generatedKeys = null;
-    keysDownloaded = false;
-    profileName = '';
-    profileBio = '';
-    selectedInterests = [];
-    mode = 'create';
-  }
-
-  function generateKeys() {
-    const next = createGuestSession();
-    if (!next.secret) {
-      error = 'Could not generate keys.';
-      return;
-    }
-    generatedKeys = {
-      pubkey: next.pubkey,
-      secret: next.secret,
-      npub: nip19.npubEncode(next.pubkey),
-      nsec: nip19.nsecEncode(hexToBytes(next.secret))
-    };
-    keysDownloaded = false;
-  }
-
-  function downloadKeys() {
-    if (!generatedKeys) return;
-    const content = `These are your nostr keys keep them very safe.
-
-Public key/npub (the one you can share)
-${generatedKeys.npub}
-
-Private key/nsec (the one you must never share and keep secure)
-${generatedKeys.nsec}
-`;
-    const url = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' }));
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = 'nostr-keys.txt';
-    anchor.click();
-    URL.revokeObjectURL(url);
-    keysDownloaded = true;
-  }
-
-  function toggleInterest(interest: string) {
-    selectedInterests = selectedInterests.includes(interest)
-      ? selectedInterests.filter((item) => item !== interest)
-      : [...selectedInterests, interest];
-  }
-
-  async function saveCreatedProfile() {
-    if (!generatedKeys) return;
-    error = '';
-    savingProfile = true;
+    importing = true;
     try {
-      await signIn('private-key', generatedKeys.nsec);
-      const interestKeywords = keywordsForInterests(selectedInterests);
-      customFeedSettings.update((settings) => ({
-        ...settings,
-        keywords: [...new Set([...settings.keywords, ...interestKeywords])],
-        interests: []
-      }));
-      const profileDraft = {
-        pubkey: generatedKeys.pubkey,
-        name: profileName.trim() || undefined,
-        display_name: profileName.trim() || undefined,
-        about: profileBio.trim() || undefined,
-        interests: selectedInterests
-      };
-      if (selectedInterests.length) {
-        selectFeedMode('custom');
-      } else {
-        void refreshFeed('global');
+      if (replaceExisting && !confirm('Replace the Pomegranate identity for this login? This revokes the current Pomegranate account connections for this login, but it does not change the imported npub.')) {
+        importing = false;
+        return;
       }
+      await signInWithImportedNsec(nsec, 'google', { replaceExisting });
+      nsec = '';
+      replaceExisting = false;
       loginDialogOpen.set(false);
-      generatedKeys = null;
-      void saveProfile(profileDraft).catch(() => undefined);
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Could not save profile.';
+      nsec = '';
+      error = err instanceof Error ? err.message : 'Could not import that key.';
     } finally {
-      savingProfile = false;
+      importing = false;
+    }
+  }
+
+  function previewNsec(value: string) {
+    if (!value.trim()) return '';
+    try {
+      return validateImportedNsec(value).npub;
+    } catch {
+      return '';
     }
   }
 </script>
 
 <section class="login-panel" id="login">
-  {#if mode === 'create'}
-    <p>Generate a new Nostr key pair and download it before signing in.</p>
+  <button class="primary" disabled={loggingIn} on:click={() => login('google')}><ShieldCheck size={18} /> {loggingIn ? 'Connecting' : 'Continue with Google'}</button>
+  <button class="primary" disabled={loggingIn} on:click={() => login('github')}><KeyRound size={18} /> Continue with GitHub</button>
 
-    <button class="primary" on:click={generateKeys}><Sparkles size={18} /> Generate keys</button>
-
-    {#if generatedKeys}
-      <button on:click={downloadKeys}><Download size={18} /> Download keys</button>
+  <details class="login-advanced" bind:open={showImport}>
+    <summary>Import existing Nostr key</summary>
+    <label>
+      <span>Private key</span>
+      <input type="password" bind:value={nsec} autocomplete="off" spellcheck="false" placeholder="nsec1..." />
+    </label>
+    {#if importPreview}
+      <p>Matches {importPreview}</p>
+    {:else if nsec.trim()}
+      <p class="error">Enter a valid nsec private key.</p>
     {/if}
-
-    {#if keysDownloaded}
-      <label>
-        <span>Name</span>
-        <input bind:value={profileName} autocomplete="name" spellcheck="false" placeholder="Satoshi" />
-      </label>
-      <label>
-        <span>Bio</span>
-        <input bind:value={profileBio} autocomplete="off" placeholder="A little about you" />
-      </label>
-      <div class="interest-picker" role="group" aria-label="Interests">
-        <span class="field-label">Interests</span>
-        <div class="interest-badges">
-          {#each socialInterests as interest}
-            {@const selected = selectedInterests.includes(interest)}
-            <button type="button" class:active={selected} aria-pressed={selected} on:click={() => toggleInterest(interest)}>
-              {interest}
-            </button>
-          {/each}
-        </div>
-      </div>
-      <button class="primary" disabled={savingProfile} on:click={() => void saveCreatedProfile()}>
-        <KeyRound size={18} /> {savingProfile ? 'Saving profile' : 'Save profile and log in with key'}
-      </button>
+    <label class="login-replace-option">
+      <input type="checkbox" bind:checked={replaceExisting} />
+      <span>Replace the Pomegranate identity for this login</span>
+    </label>
+    {#if replaceExisting}
+      <p>This resets the Pomegranate account for the login you approve, then imports this key. Your npub will be the imported npub.</p>
     {/if}
-  {:else}
-    <button disabled={loggingIn} on:click={() => login('nip07')}><PlugZap size={18} /> {loggingIn ? 'Connecting' : 'Sign in via extension'}</button>
+    <button disabled={importing || !importPreview} on:click={() => void importKey()}><KeyRound size={18} /> {importing ? 'Importing' : replaceExisting ? 'Replace and import' : 'Import with Pomegranate'}</button>
+  </details>
 
-    <button class="primary" disabled={loggingIn} on:click={showCreateKeys}><ShieldCheck size={18} /> Create Account</button>
-
-    <h3 class="login-methods-title">Other sign in methods</h3>
-
-    <div class="login-input-action">
-      <label>
-        <span class="visually-hidden">Bunker URI</span>
-        <input bind:value={bunker} autocomplete="off" spellcheck="false" placeholder="Bunker URI" />
-      </label>
-      <button disabled={loggingIn} on:click={() => login('bunker')}><PlugZap size={18} /> Sign in</button>
-    </div>
-
-    <button disabled={loggingIn} on:click={() => login('pomegranate')}><PlugZap size={18} /> {loggingIn ? 'Connecting' : 'Sign in with Google'}</button>
-
-    <div class="login-input-action">
-      <label>
-        <span class="visually-hidden">Private key hex</span>
-        <input type="password" bind:value={privateKey} autocomplete="off" spellcheck="false" placeholder="Private key hex" />
-      </label>
-      <button disabled={loggingIn} on:click={() => login('private-key')}><KeyRound size={18} /> Sign in</button>
-    </div>
-  {/if}
+  <p>Pomegranate handles identity and signing through NIP-46. This app never stores your raw nsec.</p>
 
   {#if error}
     <p class="error">{error}</p>

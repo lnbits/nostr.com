@@ -30,6 +30,7 @@
     "@capacitor/ios": "^7.4.4",
     "@capacitor/preferences": "^7.0.2",
     "@capacitor/status-bar": "^7.0.3",
+    "@fiatjaf/promenade-trusted-dealer": "npm:@jsr/fiatjaf__promenade-trusted-dealer@^0.4.3",
     "@lucide/svelte": "^1.16.0",
     "@sveltejs/adapter-static": "^3.0.9",
     "@sveltejs/kit": "^2.31.1",

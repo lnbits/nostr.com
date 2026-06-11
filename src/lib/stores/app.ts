@@ -28,7 +28,6 @@ import {
   limitConsecutiveAuthors,
   loginWithBunker,
   loginWithNip07,
-  loginWithPomegranate,
   loginWithPrivateKey,
   normalizeRelayUrl,
   publishContactList,
@@ -49,6 +48,7 @@ import {
   subscribeNotifications,
   topLevelFeedEvents
 } from '$lib/nostr/client';
+import { clearPomegranateAuth, importNsecIntoPomegranate, loginWithPomegranateProvider, type PomegranateLoginProvider } from '$lib/nostr/pomegranateAuth';
 import { savePrefetchedThreadReplies } from '$lib/stores/threadSeed';
 import type { ContactListItem, CustomFeedSettings, DirectMessage, EventStats, FeedMode, LoginMode, NostrEvent, NotificationItem, Profile, RelayState, Session } from '$lib/nostr/types';
 
@@ -884,8 +884,24 @@ export async function signIn(mode: LoginMode | 'guest', value = '') {
         : mode === 'bunker'
           ? await loginWithBunker(value)
           : mode === 'pomegranate'
-            ? await loginWithPomegranate(value)
+            ? await loginWithPomegranateProvider((value || 'google') as PomegranateLoginProvider)
             : createGuestSession();
+  if (isCurrentSession(next)) return;
+  session.set(next);
+  const previousFeedMode = currentMode;
+  persistSession(next);
+  activeHashtag.set('');
+  currentNotificationSeenAt = browser ? readLastSeen(notificationSeenStorageKey, next.pubkey) : 0;
+  currentMessageSeenAt = browser ? readLastSeen(messageSeenStorageKey, next.pubkey) : 0;
+  directMessages.set([]);
+  notifications.set([]);
+  loadingFeed.set(true);
+  if (!hasExplicitFeedModeSelection && previousFeedMode === 'global') feedMode.set('global');
+  void finishSignedInBootstrap(next);
+}
+
+export async function signInWithImportedNsec(value: string, provider: PomegranateLoginProvider = 'google', options: { replaceExisting?: boolean } = {}) {
+  const next = await importNsecIntoPomegranate(value, provider, options);
   if (isCurrentSession(next)) return;
   session.set(next);
   const previousFeedMode = currentMode;
@@ -903,6 +919,8 @@ export async function signIn(mode: LoginMode | 'guest', value = '') {
 export async function signOut() {
   session.set(null);
   if (browser) localStorage.removeItem(sessionStorageKey);
+  if (browser) sessionStorage.removeItem(sessionStorageKey);
+  clearPomegranateAuth();
   activeHashtag.set('');
   hasExplicitFeedModeSelection = false;
   feedMode.set('global');
@@ -1301,6 +1319,7 @@ function hydrateSession() {
 
 function persistSession(next: Session) {
   if (!browser) return;
+  sessionStorage.removeItem(sessionStorageKey);
   if (next.mode === 'nip07') {
     localStorage.setItem(
       sessionStorageKey,
@@ -1308,7 +1327,12 @@ function persistSession(next: Session) {
     );
     return;
   }
-  if (next.mode === 'private-key' || isStoredRemoteSignerSession(next)) {
+  if (next.mode === 'pomegranate' && isStoredRemoteSignerSession(next)) {
+    localStorage.removeItem(sessionStorageKey);
+    sessionStorage.setItem(sessionStorageKey, JSON.stringify(next));
+    return;
+  }
+  if (next.mode === 'bunker' && isStoredRemoteSignerSession(next)) {
     localStorage.setItem(sessionStorageKey, JSON.stringify(next));
     return;
   }
@@ -1316,13 +1340,13 @@ function persistSession(next: Session) {
 }
 
 function readStoredSession() {
-  const raw = localStorage.getItem(sessionStorageKey);
+  const raw = sessionStorage.getItem(sessionStorageKey) ?? localStorage.getItem(sessionStorageKey);
   if (!raw) return null;
   try {
     const saved = JSON.parse(raw) as Session;
     if (!saved?.pubkey || !saved?.mode || !isHexKey(saved.pubkey)) return clearStoredSession();
     if (saved.mode === 'nip07') return { pubkey: saved.pubkey, mode: saved.mode };
-    if (saved.mode === 'private-key' && isHexKey(saved.secret)) return saved;
+    if (saved.mode === 'private-key') return clearStoredSession();
     if (isStoredRemoteSignerSession(saved)) return saved;
     return clearStoredSession();
   } catch {
@@ -1348,6 +1372,7 @@ function isHexKey(value: unknown) {
 
 function clearStoredSession() {
   localStorage.removeItem(sessionStorageKey);
+  sessionStorage.removeItem(sessionStorageKey);
   return null;
 }
 
