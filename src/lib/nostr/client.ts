@@ -894,6 +894,40 @@ export async function fetchEventStats(ids: string[], relays = defaultRelays) {
   return stats;
 }
 
+export async function fetchUserEventActions(ids: string[], pubkey: string, relays = defaultRelays) {
+  const uniqueIds = [...new Set(ids)].filter((id) => /^[0-9a-f]{64}$/i.test(id)).slice(0, 80);
+  const empty = () => ({ liked: new Set<string>(), reposted: new Set<string>(), likeEvents: new Map<string, NostrEvent>(), repostEvents: new Map<string, NostrEvent>() });
+  if (!uniqueIds.length || !/^[0-9a-f]{64}$/i.test(pubkey)) return empty();
+
+  const relayUrls = activeRelayUrls(relays, 'read');
+  const actionEvents = dedupeEvents(
+    verifiedRelayEvents(
+      await queryShortLived(relayUrls, { kinds: [6, 7, 16], authors: [pubkey], '#e': uniqueIds, limit: Math.min(500, uniqueIds.length * 8) }, 4500)
+    )
+  );
+  const deleted = await fetchDeletedEventIds(actionEvents, relayUrls).catch(() => new Set<string>());
+  const liked = new Set<string>();
+  const reposted = new Set<string>();
+  const likeEvents = new Map<string, NostrEvent>();
+  const repostEvents = new Map<string, NostrEvent>();
+  for (const event of actionEvents.filter((item) => !deleted.has(item.id))) {
+    const targets = statTargetIds(event, uniqueIds);
+    if (event.kind === 7 && (!event.content.trim() || event.content.trim() === '+')) {
+      targets.forEach((id) => {
+        liked.add(id);
+        likeEvents.set(id, event);
+      });
+    }
+    if (event.kind === 6 || event.kind === 16) {
+      targets.forEach((id) => {
+        reposted.add(id);
+        repostEvents.set(id, event);
+      });
+    }
+  }
+  return { liked, reposted, likeEvents, repostEvents };
+}
+
 export function eventStatsFromEvents(ids: string[], events: NostrEvent[]) {
   const uniqueIds = [...new Set(ids)].filter(Boolean);
   const emptyStats = () => ({ replies: 0, reposts: 0, likes: 0, zaps: 0, zapSats: 0, dislikes: 0, emoji: 0 });

@@ -20,6 +20,7 @@ import {
   fetchDeletedEventIdsForEvents,
   fetchMuteList,
   fetchProfiles,
+  fetchUserEventActions,
   fetchNotifications,
   fetchRelayInfoDocuments,
   fetchRelayListMetadata,
@@ -166,6 +167,8 @@ const requestedStats = new Map<string, number>();
 const statsRetryMs = 60_000;
 const pendingLikeToggles = new Set<string>();
 const pendingRepostToggles = new Set<string>();
+const ownLikeEvents = new Map<string, NostrEvent>();
+const ownRepostEvents = new Map<string, NostrEvent>();
 const queuedThreadPrefetches: NostrEvent[] = [];
 const queuedThreadPrefetchIds = new Set<string>();
 const recentThreadPrefetches = new Map<string, number>();
@@ -471,6 +474,7 @@ function mergeLiveStatEvent(ids: string[], event: NostrEvent) {
     return;
   }
   const targetIds = statTargetIdsForLocalUse(event, ids);
+  if (currentSessionValue?.pubkey === event.pubkey) mergeOwnActionEvent(event, targetIds);
   if (event.kind === 7 && targetIds.every((id) => seenLiveReactionAuthors.has(`${id}:${event.pubkey}`))) return;
   if ((event.kind === 6 || event.kind === 16) && targetIds.every((id) => seenLiveRepostAuthors.has(`${id}:${event.pubkey}`))) return;
 
@@ -544,6 +548,25 @@ function eventAuthorForLocalUse(id: string) {
 function statTargetIdsForLocalUse(event: NostrEvent, ids: string[]) {
   const wanted = new Set(ids);
   return event.tags.filter((tag) => tag[0] === 'e' && wanted.has(tag[1])).map((tag) => tag[1]);
+}
+
+function mergeOwnActionEvent(event: NostrEvent, targetIds: string[]) {
+  if (!targetIds.length) return;
+  if (event.kind === 7 && (!event.content.trim() || event.content.trim() === '+')) {
+    targetIds.forEach((id) => ownLikeEvents.set(id, event));
+    likedEvents.update((existing) => new Set([...existing, ...targetIds]));
+  }
+  if (event.kind === 6 || event.kind === 16) {
+    targetIds.forEach((id) => ownRepostEvents.set(id, event));
+    repostedEvents.update((existing) => new Set([...existing, ...targetIds]));
+  }
+}
+
+function mergeOwnEventActions(actions: { liked: Set<string>; reposted: Set<string>; likeEvents: Map<string, NostrEvent>; repostEvents: Map<string, NostrEvent> }) {
+  actions.likeEvents.forEach((event, id) => ownLikeEvents.set(id, event));
+  actions.repostEvents.forEach((event, id) => ownRepostEvents.set(id, event));
+  if (actions.liked.size) likedEvents.update((existing) => new Set([...existing, ...actions.liked]));
+  if (actions.reposted.size) repostedEvents.update((existing) => new Set([...existing, ...actions.reposted]));
 }
 
 async function restartLiveFeed(mode = currentMode, newestTimestamp?: number) {
@@ -732,8 +755,20 @@ export async function refreshEventStats(ids: string[], force = false) {
   const nextIds = ids.filter((id) => force || checkedAt - (requestedStats.get(id) ?? 0) > statsRetryMs);
   nextIds.forEach((id) => requestedStats.set(id, checkedAt));
   if (!nextIds.length) return;
-  const stats = await fetchEventStats(nextIds, currentRelays).catch(() => ({}));
+  const currentSession = currentSessionValue;
+  const [stats, ownActions] = await Promise.all([
+    fetchEventStats(nextIds, currentRelays).catch(() => ({})),
+    currentSession
+      ? fetchUserEventActions(nextIds, currentSession.pubkey, currentRelays).catch(() => ({
+          liked: new Set<string>(),
+          reposted: new Set<string>(),
+          likeEvents: new Map<string, NostrEvent>(),
+          repostEvents: new Map<string, NostrEvent>()
+        }))
+      : undefined
+  ]);
   eventStats.update((existing) => mergeStats(existing, stats));
+  if (ownActions) mergeOwnEventActions(ownActions);
 }
 
 export function prefetchThreadPreview(event: NostrEvent) {
@@ -1173,11 +1208,13 @@ export async function reactToNote(target: NostrEvent, content = '+') {
   const alreadyLiked = getStoreSnapshot(likedEvents).has(target.id);
 
   if (alreadyLiked) {
+    const reactionEvent = ownLikeEvents.get(target.id) ?? (await fetchOwnLikeEvent(target.id, currentSession));
     likedEvents.update((existing) => {
       const next = new Set(existing);
       next.delete(target.id);
       return next;
     });
+    ownLikeEvents.delete(target.id);
     eventStats.update((existing) => {
       const previous = existing[target.id] ?? emptyStats();
       return {
@@ -1188,8 +1225,27 @@ export async function reactToNote(target: NostrEvent, content = '+') {
         }
       };
     });
-    pendingLikeToggles.delete(pendingKey);
-    return;
+    try {
+      if (reactionEvent) await publishDeletion(currentSession, reactionEvent, currentRelays, 'Unliked by author');
+      seenLiveReactionAuthors.delete(pendingKey);
+      return;
+    } catch (err) {
+      if (reactionEvent) ownLikeEvents.set(target.id, reactionEvent);
+      likedEvents.update((existing) => new Set(existing).add(target.id));
+      eventStats.update((existing) => {
+        const previous = existing[target.id] ?? emptyStats();
+        return {
+          ...existing,
+          [target.id]: {
+            ...previous,
+            likes: previous.likes + 1
+          }
+        };
+      });
+      throw err;
+    } finally {
+      pendingLikeToggles.delete(pendingKey);
+    }
   }
 
   likedEvents.update((existing) => new Set(existing).add(target.id));
@@ -1208,7 +1264,8 @@ export async function reactToNote(target: NostrEvent, content = '+') {
   });
 
   try {
-    await publishReaction(currentSession, target, currentRelays, content);
+    const event = await publishReaction(currentSession, target, currentRelays, content);
+    if (content === '+' || !content) ownLikeEvents.set(target.id, event);
   } catch (err) {
     likedEvents.update((existing) => {
       const next = new Set(existing);
@@ -1230,6 +1287,13 @@ export async function reactToNote(target: NostrEvent, content = '+') {
   } finally {
     pendingLikeToggles.delete(pendingKey);
   }
+}
+
+async function fetchOwnLikeEvent(targetId: string, currentSession: Session) {
+  const actions = await fetchUserEventActions([targetId], currentSession.pubkey, currentRelays).catch(() => undefined);
+  const event = actions?.likeEvents.get(targetId);
+  if (event) ownLikeEvents.set(targetId, event);
+  return event;
 }
 
 export async function reportNote(target: NostrEvent, reportType = 'spam') {
