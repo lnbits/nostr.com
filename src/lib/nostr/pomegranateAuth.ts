@@ -102,6 +102,13 @@ export async function createPomegranateConnection(name = 'Connect another Nostr 
   return withBunkerUrl(auth.centralUrl, profile);
 }
 
+export async function findOrCreatePomegranateConnection(name: string) {
+  const clean = name.trim();
+  if (!clean) throw new Error('Enter a connection name.');
+  const existing = (await listPomegranateConnections()).find((profile) => profile.name === clean);
+  return existing ?? createPomegranateConnection(clean);
+}
+
 export async function renamePomegranateConnection(handlerPubkey: string, name: string) {
   const auth = await requirePomegranateAuth();
   const clean = name.trim();

@@ -23,8 +23,12 @@
   import { extractMediaAttachments, extractQuotedNoteReferences, parseNoteText } from '$lib/nostr/media';
   import { appPath } from '$lib/paths';
   import { pauseWhenHidden } from '$lib/actions/pauseWhenHidden';
+  import { findOrCreatePomegranateConnection } from '$lib/nostr/pomegranateAuth';
   import type { DirectMessage, MediaAttachment, NostrEvent, Profile } from '$lib/nostr/types';
   import QuotedNotePreview from './QuotedNotePreview.svelte';
+
+  const nostrChatUrl = 'https://chat.nostr.com';
+  const nostrChatConnectionName = 'chat.nostr.com';
 
   let recipientInput = '';
   let messageText = '';
@@ -36,6 +40,9 @@
   let remoteProfiles: Profile[] = [];
   let searchingProfiles = false;
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
+  let chatLoginDialogOpen = false;
+  let openingNostrChat = false;
+  let nostrChatError = '';
 
   $: conversations = groupMessages($directMessages);
   $: activePeer = $activeMessagePeer;
@@ -220,6 +227,41 @@
       content: message.content ?? ''
     };
   }
+
+  function handleNostrChatClick(event: MouseEvent) {
+    if ($session?.mode !== 'pomegranate') return;
+    event.preventDefault();
+    nostrChatError = '';
+    chatLoginDialogOpen = true;
+  }
+
+  async function openNostrChatWithPomegranate() {
+    openingNostrChat = true;
+    nostrChatError = '';
+    try {
+      const connection = await findOrCreatePomegranateConnection(nostrChatConnectionName);
+      openNostrChatLogin(connection.bunker);
+      chatLoginDialogOpen = false;
+    } catch (exception) {
+      nostrChatError = exception instanceof Error ? exception.message : 'Could not connect to Nostr Chat.';
+    } finally {
+      openingNostrChat = false;
+    }
+  }
+
+  function openNostrChatNormally() {
+    chatLoginDialogOpen = false;
+    nostrChatError = '';
+    window.open(nostrChatUrl, '_blank', 'noopener,noreferrer');
+  }
+
+  function openNostrChatLogin(bunker: string) {
+    window.open(nostrChatLoginUrl(bunker), '_blank', 'noopener,noreferrer');
+  }
+
+  function nostrChatLoginUrl(bunker: string) {
+    return `${nostrChatUrl}/#/login?bunker=${encodeURIComponent(bunker)}`;
+  }
 </script>
 
 <section class="messages-view">
@@ -229,7 +271,7 @@
       <p>NIP-17 private chats, with legacy NIP-04 messages shown when they can be decrypted.</p>
       <p class="messages-chat-link">
         For a dedicated DM client checkout
-        <a href="https://chat.nostr.com" target="_blank" rel="noreferrer">
+        <a href={nostrChatUrl} target="_blank" rel="noreferrer" on:click={handleNostrChatClick} aria-busy={openingNostrChat}>
           chat.nostr.com <ExternalLink size={14} />
         </a>
       </p>
@@ -414,5 +456,28 @@
     <button class="image-viewer" on:click={() => (openImage = null)} aria-label="Close image">
       <img src={openImage.url} alt={openImage.alt ?? ''} />
     </button>
+  </div>
+{/if}
+
+{#if chatLoginDialogOpen}
+  <div class="dialog-backdrop" role="presentation" tabindex="-1" on:click={(event) => event.target === event.currentTarget && !openingNostrChat && (chatLoginDialogOpen = false)}>
+    <div class="dialog-panel compact" role="dialog" aria-modal="true" aria-labelledby="nostr-chat-login-title">
+      <div class="dialog-head">
+        <h2 id="nostr-chat-login-title">Nostr Chat</h2>
+      </div>
+      <p>Do you want to login to Nostr Chat with this account?</p>
+      {#if nostrChatError}
+        <p class="error">{nostrChatError}</p>
+      {/if}
+      <div class="dialog-actions">
+        <button disabled={openingNostrChat} on:click={openNostrChatNormally}>No</button>
+        <button class="primary" disabled={openingNostrChat} on:click={() => void openNostrChatWithPomegranate()}>
+          {#if openingNostrChat}
+            <Loader2 size={17} class="spin" />
+          {/if}
+          Yes
+        </button>
+      </div>
+    </div>
   </div>
 {/if}
