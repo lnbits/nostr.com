@@ -35,7 +35,7 @@
     loadingFeed.set(true);
     clearFeedState();
     await tick();
-    await refreshFeed($feedMode, { reset: true });
+    await refreshFeed($feedMode, { reset: true, clearCache: true });
   }
 
   async function revealBufferedNewer() {

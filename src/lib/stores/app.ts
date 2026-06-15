@@ -1,8 +1,8 @@
 import { browser } from '$app/environment';
 import { goto } from '$app/navigation';
 import { writable } from 'svelte/store';
-import { getCachedEvents, getCachedHashtagEvents, getCachedProfiles } from '$lib/nostr/cache';
-import { defaultCustomFeedSettings, defaultGuestNip05, defaultRelays, globalFeedHashtags, keywordsForInterests } from '$lib/nostr/config';
+import { clearEventCache, getCachedEvents, getCachedHashtagEvents, getCachedProfiles } from '$lib/nostr/cache';
+import { defaultCustomFeedSettings, defaultGuestNip05, defaultRelays, globalFeedCuratorPubkey, globalFeedHashtags, keywordsForInterests } from '$lib/nostr/config';
 import { appPath } from '$lib/paths';
 import { markRelaysOffline, markRelaysOnline, syncRelayStatus } from '$lib/stores/relayStatus';
 import { insertTimelineItems, timelineCursor, uniqueFreshItems } from '$lib/timeline/window';
@@ -74,6 +74,7 @@ const olderFetchTarget = pageFeedLimit;
 const olderFetchMaxAttempts = 5;
 const olderFetchEmptyAttemptLimit = 2;
 const feedRecentWindowSeconds = 60 * 60 * 24 * 30;
+const globalFeedCachedWindowSeconds = 60 * 60 * 24 * 3;
 const olderFetchPageWindowSeconds = 60 * 60 * 24 * 30;
 const threadPrefetchReplyLimit = 10;
 const threadPrefetchCooldownMs = 5 * 60 * 1000;
@@ -215,7 +216,7 @@ export async function bootstrap() {
   addEventListener('offline', () => online.set(false));
 
   const [cachedEvents, cachedProfiles] = await Promise.all([getCachedEvents(cachedFeedBufferLimit), getCachedProfiles()]);
-  const cachedTopLevelEvents = recentFeedEvents(cachedEventsForMode(currentMode, topLevelFeedEvents(filterSpam(cachedEvents, currentMutedPubkeys)), cachedFeedBufferLimit));
+  const cachedTopLevelEvents = recentFeedEventsForMode(currentMode, cachedEventsForMode(currentMode, topLevelFeedEvents(filterSpam(cachedEvents, currentMutedPubkeys)), cachedFeedBufferLimit));
   const visibleEvents = cachedTopLevelEvents.slice(0, Math.min(initialFeedLimit, maxFeedEvents));
   cachedOlderEvents = limitFeedBuffer(cachedTopLevelEvents.slice(visibleEvents.length), maxCachedOlderEvents);
   events.set(visibleEvents);
@@ -237,9 +238,12 @@ export async function bootstrap() {
     });
 }
 
-export async function refreshFeed(mode = currentMode, options: { replaceVisible?: boolean; reset?: boolean } = {}) {
+export async function refreshFeed(mode = currentMode, options: { replaceVisible?: boolean; reset?: boolean; clearCache?: boolean } = {}) {
   const fetchMode = currentHashtag ? 'global' : mode;
-  if (options.reset) clearFeedState();
+  if (options.reset) {
+    clearFeedState();
+    if (options.clearCache) await clearEventCache();
+  }
   const visibleEvents = feedEventsForActiveHashtag(getStoreSnapshot(events));
   const shouldReplaceVisible = options.reset || options.replaceVisible || !visibleEvents.length;
   loadingFeed.set(true);
@@ -353,7 +357,7 @@ function eventsForFeedMode(mode: FeedMode, items: NostrEvent[], follows = curren
 
 async function getCachedFeedCandidates(mode: FeedMode, limit = cachedFeedBufferLimit) {
   const cachedEvents = currentHashtag ? await getCachedHashtagEvents(currentHashtag, limit) : await getCachedEvents(limit);
-  return recentFeedEvents(topLevelFeedEvents(filterSpam(cachedEventsForMode(mode, topLevelFeedEvents(filterSpam(cachedEvents, currentMutedPubkeys)), limit), currentMutedPubkeys)));
+  return recentFeedEventsForMode(mode, topLevelFeedEvents(filterSpam(cachedEventsForMode(mode, topLevelFeedEvents(filterSpam(cachedEvents, currentMutedPubkeys)), limit), currentMutedPubkeys)));
 }
 
 async function primeCachedFeedBuffers(mode: FeedMode, visibleEvents: NostrEvent[]) {
@@ -669,7 +673,7 @@ async function fetchOlderFeedPage(fetchMode: FeedMode, target = olderFetchTarget
     const nextEvents = filterMutedEvents(
       await fetchFeed(fetchMode, currentRelays, currentFollows, effectiveFeedSettings(fetchMode), {
         limit: olderFetchBatchLimit,
-        since: olderFeedPageCutoff(cursor),
+        since: olderFeedPageCutoff(cursor, fetchMode),
         until: olderThan,
         hashtag: currentHashtag,
         globalAuthors: currentGlobalFeedAuthors,
@@ -744,12 +748,21 @@ function recentFeedCutoff() {
   return nowSeconds() - feedRecentWindowSeconds;
 }
 
-function olderFeedPageCutoff(cursor?: number) {
-  return cursor ? Math.max(0, cursor - olderFetchPageWindowSeconds) : recentFeedCutoff();
+function recentFeedCutoffForMode(mode = currentMode) {
+  return nowSeconds() - (mode === 'global' && !currentHashtag ? globalFeedCachedWindowSeconds : feedRecentWindowSeconds);
+}
+
+function olderFeedPageCutoff(cursor?: number, mode = currentMode) {
+  return cursor ? Math.max(0, cursor - olderFetchPageWindowSeconds) : recentFeedCutoffForMode(mode);
 }
 
 function recentFeedEvents(items: NostrEvent[]) {
   const cutoff = recentFeedCutoff();
+  return items.filter((event) => event.created_at >= cutoff);
+}
+
+function recentFeedEventsForMode(mode: FeedMode, items: NostrEvent[]) {
+  const cutoff = recentFeedCutoffForMode(mode);
   return items.filter((event) => event.created_at >= cutoff);
 }
 
@@ -1858,15 +1871,25 @@ function hydrateDefaultGlobalFeedContext() {
 }
 
 async function resolveDefaultGlobalFeedContext() {
-  const profile = await resolveNip05Profile(defaultGuestNip05).catch(() => null);
+  const [profile, curatorContacts] = await Promise.all([
+    resolveNip05Profile(defaultGuestNip05).catch(() => null),
+    fetchContactListDetails(globalFeedCuratorPubkey, currentRelays).catch(emptyContactListDetails)
+  ]);
+  mergeRelayHints(curatorContacts.relayHints, 74);
   if (profile) {
     mergeRelayHints(profile.relayHints, 96);
     const relayList = await fetchRelayListMetadata(profile.pubkey, currentRelays).catch(() => []);
     mergeRelayHints(relayList.map((relay) => relay.url), 90);
     const contacts = await fetchContactListDetails(profile.pubkey, currentRelays).catch(() => ({ pubkeys: [], relayHints: [], items: [] }));
     mergeRelayHints(contacts.relayHints, 74);
-    currentGlobalFeedAuthors = contacts.pubkeys;
+    currentGlobalFeedAuthors = mergeGlobalFeedAuthors(contacts.pubkeys, curatorContacts.pubkeys);
+  } else {
+    currentGlobalFeedAuthors = mergeGlobalFeedAuthors(curatorContacts.pubkeys);
   }
+}
+
+function mergeGlobalFeedAuthors(...groups: string[][]) {
+  return [...new Set(groups.flat().filter((pubkey) => /^[0-9a-f]{64}$/i.test(pubkey)))];
 }
 
 function dropMutedEvents() {

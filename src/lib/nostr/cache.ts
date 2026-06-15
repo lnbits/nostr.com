@@ -262,6 +262,14 @@ export async function getCachedProfiles() {
   }).catch(() => []);
 }
 
+export async function clearEventCache() {
+  await Promise.all([
+    withStore<void>('events', 'readwrite', (store) => store.clear()),
+    withStore<void>('profileEvents', 'readwrite', (store) => store.clear()),
+    withStore<void>('hashtagEvents', 'readwrite', (store) => store.clear())
+  ]).catch(() => undefined);
+}
+
 export async function resetCacheConnectionForTests() {
   const db = await dbPromise?.catch(() => undefined);
   db?.close();

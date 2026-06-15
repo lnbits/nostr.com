@@ -1537,7 +1537,7 @@ function globalFeedFilters(base: Filter, since?: number, authors: string[] = [])
     return [withOptionalSince({ ...base, '#t': globalFeedHashtags }, since), withOptionalSince({ ...base, authors: cleanAuthors }, since)];
   }
 
-  const authorLimit = Math.max(1, Math.round(total * 0.35));
+  const authorLimit = Math.max(1, Math.round(total * 0.5));
   const tagLimit = Math.max(1, total - authorLimit);
   return [
     withOptionalSince({ ...base, limit: tagLimit, '#t': globalFeedHashtags }, since),

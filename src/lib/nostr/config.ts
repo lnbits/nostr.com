@@ -21,6 +21,8 @@ export const defaultCustomFeedSettings: CustomFeedSettings = {
 
 export const globalFeedHashtags = ['technology', 'food', 'foodstr', 'music', 'musicstr', 'introductions'];
 
+export const globalFeedCuratorPubkey = 'c1fc7771f5fa418fd3ac49221a18f19b42ccb7a663da8f04cbbf6c08c80d20b1';
+
 export const socialInterests = [
   'art',
   'photography',
