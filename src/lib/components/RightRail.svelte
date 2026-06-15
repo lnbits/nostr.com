@@ -108,7 +108,9 @@
         <button class="primary" on:click={() => (installDialogOpen = true)}>
           <Download size={18} /> Install
         </button>
+         
       </section>
+       
     {/if}
   {/if}
 </aside>

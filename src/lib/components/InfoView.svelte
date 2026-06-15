@@ -143,12 +143,12 @@
       social media and many other applications without creating walled gardens or centralized
       platforms.
     </p>
-    <p>This Nostr social client is just one of the kazillion clients that exist.</p>
+    <p>This Nostr social client is one of many clients that exist.</p>
     <p>
       Nostr is modular and evolves through Nostr Improvement Proposals (NIPs). Because clients
-      share the same open protocol, users are free to choose whichever client they prefer. The
-      freedom to move between clients is what makes Nostr a commons, not a walled garden that
-      can be controlled. You can even build your own client!
+      share the same open protocol, users are free to choose whichever client they prefer. Unlike
+      centralised platforms like X and Meta, your digital self and data are free to move between clients,
+      rather than being locked in and weaponised by some CEO.
     </p>
     <p>
       Learn more at <a href="https://nostr.org" target="_blank" rel="noreferrer">nostr.org</a>

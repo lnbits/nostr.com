@@ -102,13 +102,16 @@
   </div>
 
   <button class="primary google-login-button" disabled={busy} on:click={() => login('google')}><ShieldCheck size={18} /> {loggingIn ? 'Connecting' : 'Continue with Google'}</button>
-  <p>
-    Google auth uses <a href="https://viewsource.win/fiatjaf.com/pomegranate" target="_blank" rel="noreferrer">Pomegranate</a>
-    to split your nsec across operators and sign remotely without compromising your key.
-  </p>
+
 
   <details class="login-advanced" bind:open={showOtherMethods}>
-    <summary>Import existing Nostr key to pomegranate</summary>
+    <summary>Import</summary>
+      <p>
+      Import an nsec using  
+    <a href="https://viewsource.win/fiatjaf.com/pomegranate" target="_blank" rel="noreferrer">Pomegranate</a>.
+     <br/>Your key will be split across operators and kept safe. Pomegranate uses Google-auth to authenticate signing notes (more oauth methods coming soon).
+     <br/>
+  </p>
 
     <div class="login-section">
       <input aria-label="Private key" type="password" bind:value={nsec} autocomplete="off" spellcheck="false" placeholder="nsec1..." />
