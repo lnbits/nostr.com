@@ -7,7 +7,15 @@ import { adultDomains, adultHashtags, mutedWords } from './contentFilters';
 import { defaultGuestNip05, defaultPomegranateCentral, defaultRelays, globalFeedHashtags } from './config';
 import type { ContactListDetails, ContactListItem, CustomFeedSettings, DirectMessage, EventStats, FeedMode, FeedQueryOptions, Nip05Profile, NostrEvent, NotificationItem, Profile, RelayState, Session } from './types';
 
+type RelayBackoffState = { failures: number; retryAt: number };
+
+const relayBackoff = new Map<string, RelayBackoffState>();
+const relayBackoffBaseMs = 30_000;
+const relayBackoffMaxMs = 5 * 60_000;
 const pool = new SimplePool();
+pool.onRelayConnectionFailure = (url: string) => noteRelayConnectionFailure(url);
+pool.onRelayConnectionSuccess = (url: string) => noteRelayConnectionSuccess(url);
+pool.allowConnectingToRelay = (url: string, operation: ['read', Filter[]] | ['write', NostrToolsEvent]) => operation[0] !== 'read' || !relayInBackoff(url);
 const maxFeedPostContentLength = 900;
 type SearchFilter = Filter & { search?: string };
 const bunkerSigners = new Map<string, nip46.BunkerSigner>();
@@ -57,6 +65,42 @@ export function connectedRelayUrls() {
     .filter(([, connected]) => connected)
     .map(([url]) => normalizeRelayUrl(url))
     .filter(Boolean);
+}
+
+export function temporarilyUnavailableRelayUrls(now = Date.now()) {
+  pruneRelayBackoff(now);
+  return [...relayBackoff.entries()].filter(([, state]) => state.retryAt > now).map(([url]) => url);
+}
+
+function relayInBackoff(url: string, now = Date.now()) {
+  const normalized = normalizeRelayUrl(url);
+  const state = normalized ? relayBackoff.get(normalized) : undefined;
+  if (!state) return false;
+  if (state.retryAt <= now) {
+    relayBackoff.delete(normalized);
+    return false;
+  }
+  return true;
+}
+
+function noteRelayConnectionFailure(url: string, now = Date.now()) {
+  const normalized = normalizeRelayUrl(url);
+  if (!normalized) return;
+  const previous = relayBackoff.get(normalized);
+  const failures = Math.min((previous?.failures ?? 0) + 1, 5);
+  const delay = Math.min(relayBackoffBaseMs * 2 ** (failures - 1), relayBackoffMaxMs);
+  relayBackoff.set(normalized, { failures, retryAt: now + delay });
+}
+
+function noteRelayConnectionSuccess(url: string) {
+  const normalized = normalizeRelayUrl(url);
+  if (normalized) relayBackoff.delete(normalized);
+}
+
+function pruneRelayBackoff(now = Date.now()) {
+  for (const [url, state] of relayBackoff) {
+    if (state.retryAt <= now) relayBackoff.delete(url);
+  }
 }
 
 function queryShortLived(relayUrls: string[], filter: Filter, maxWait = 5000) {
@@ -1556,35 +1600,17 @@ async function relayCount(relayUrls: string[], filter: Filter) {
 
 function countOnRelay(url: string, filter: Filter): Promise<number | undefined> {
   if (typeof WebSocket === 'undefined') return Promise.resolve(undefined);
-  return new Promise((resolve) => {
-    const ws = new WebSocket(url);
-    const id = `count-${Math.random().toString(16).slice(2)}`;
-    const timeout = setTimeout(() => {
-      ws.close();
-      resolve(undefined);
-    }, 1800);
-    ws.onopen = () => ws.send(JSON.stringify(['COUNT', id, filter]));
-    ws.onerror = () => {
-      clearTimeout(timeout);
-      resolve(undefined);
-    };
-    ws.onmessage = (message) => {
-      try {
-        const data = JSON.parse(String(message.data)) as unknown[];
-        if (data[0] === 'COUNT' && data[1] === id && data[2] && typeof data[2] === 'object') {
-          clearTimeout(timeout);
-          ws.close();
-          resolve(Number((data[2] as { count?: number }).count ?? 0));
-        } else if (data[0] === 'CLOSED' && data[1] === id) {
-          clearTimeout(timeout);
-          ws.close();
-          resolve(undefined);
-        }
-      } catch {
-        // Ignore malformed relay frames.
-      }
-    };
-  });
+  if (relayInBackoff(url)) return Promise.resolve(undefined);
+  const id = `count-${Math.random().toString(16).slice(2)}`;
+  return withTimeout(
+    pool
+      .ensureRelay(url, { connectionTimeout: 1800 })
+      .then((relay) => relay.count([filter], { id }))
+      .then((count) => (Number.isFinite(count) ? count : undefined))
+      .catch(() => undefined),
+    1800,
+    'Relay count timed out.'
+  ).catch(() => undefined);
 }
 
 function compactProfile(profile: Profile): Omit<Profile, 'pubkey'> {

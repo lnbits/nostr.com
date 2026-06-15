@@ -4,7 +4,7 @@ import { writable } from 'svelte/store';
 import { getCachedEvents, getCachedHashtagEvents, getCachedProfiles } from '$lib/nostr/cache';
 import { defaultCustomFeedSettings, defaultGuestNip05, defaultRelays, globalFeedHashtags, keywordsForInterests } from '$lib/nostr/config';
 import { appPath } from '$lib/paths';
-import { markRelaysOnline, syncRelayStatus } from '$lib/stores/relayStatus';
+import { markRelaysOffline, markRelaysOnline, syncRelayStatus } from '$lib/stores/relayStatus';
 import { insertTimelineItems, timelineCursor, uniqueFreshItems } from '$lib/timeline/window';
 import { mergeDirectMessages } from './directMessages';
 import {
@@ -46,6 +46,7 @@ import {
   subscribeEventStats,
   subscribeFeed,
   subscribeNotifications,
+  temporarilyUnavailableRelayUrls,
   topLevelFeedEvents
 } from '$lib/nostr/client';
 import { clearPomegranateAuth, importNsecIntoPomegranate, loginWithPomegranateProvider, type PomegranateLoginProvider } from '$lib/nostr/pomegranateAuth';
@@ -827,6 +828,7 @@ export async function refreshRelayInfo() {
 
 function markConnectedRelaysOnline() {
   markRelaysOnline(connectedRelayUrls());
+  markRelaysOffline(temporarilyUnavailableRelayUrls());
 }
 
 export async function refreshMessages() {
