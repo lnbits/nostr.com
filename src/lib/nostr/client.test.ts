@@ -11,6 +11,7 @@ import {
   feedFiltersForMode,
   fetchFeed,
   fetchRelayInfoDocuments,
+  filterEventsDeletedByRequests,
   filterSpam,
   isReplyEvent,
   isMachineGeneratedContent,
@@ -292,6 +293,15 @@ describe('nostr client helpers', () => {
     expect(isReplyEvent(markedReply)).toBe(true);
     expect(isReplyEvent(legacyReply)).toBe(true);
     expect(topLevelFeedEvents([root, markedReply, legacyReply])).toEqual([root]);
+  });
+
+  it('hides events only when deletion requests are signed by the original author', () => {
+    const kept = event({ id: '1'.repeat(64), pubkey: 'a'.repeat(64), content: 'keep me' });
+    const deleted = event({ id: '2'.repeat(64), pubkey: 'b'.repeat(64), content: 'delete me' });
+    const validDeletion = event({ kind: 5, pubkey: deleted.pubkey, tags: [['e', deleted.id], ['k', '1']] });
+    const forgedDeletion = event({ kind: 5, pubkey: 'c'.repeat(64), tags: [['e', kept.id], ['k', '1']] });
+
+    expect(filterEventsDeletedByRequests([kept, deleted], [validDeletion, forgedDeletion])).toEqual([kept]);
   });
 
   it('counts note stats using NIP-10, NIP-18, and NIP-25 targets', () => {

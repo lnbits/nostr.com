@@ -460,6 +460,10 @@ async function restartVisibleStatsSubscription() {
 }
 
 function mergeLiveStatEvent(ids: string[], event: NostrEvent) {
+  if (event.kind === 5) {
+    applyDeletionRequest(event);
+    return;
+  }
   const targetIds = statTargetIdsForLocalUse(event, ids);
   if (event.kind === 7 && targetIds.every((id) => seenLiveReactionAuthors.has(`${id}:${event.pubkey}`))) return;
   if ((event.kind === 6 || event.kind === 16) && targetIds.every((id) => seenLiveRepostAuthors.has(`${id}:${event.pubkey}`))) return;
@@ -484,6 +488,28 @@ function mergeLiveStatEvent(ids: string[], event: NostrEvent) {
     }
     return next;
   });
+}
+
+function applyDeletionRequest(event: NostrEvent) {
+  const deletedIds = event.tags
+    .filter((tag) => tag[0] === 'e' && tag[1])
+    .map((tag) => tag[1])
+    .filter((id) => eventAuthorForLocalUse(id) === event.pubkey);
+  if (!deletedIds.length) return;
+  const deleted = new Set(deletedIds);
+  deletedEventIds.update((existing) => new Set([...existing, ...deleted]));
+  events.update((existing) => existing.filter((item) => !deleted.has(item.id)));
+  pendingNewerEvents.update((existing) => existing.filter((item) => !deleted.has(item.id)));
+  cachedOlderEvents = cachedOlderEvents.filter((item) => !deleted.has(item.id));
+}
+
+function eventAuthorForLocalUse(id: string) {
+  return (
+    getStoreSnapshot(events).find((event) => event.id === id)?.pubkey ??
+    getStoreSnapshot(pendingNewerEvents).find((event) => event.id === id)?.pubkey ??
+    cachedOlderEvents.find((event) => event.id === id)?.pubkey ??
+    ''
+  );
 }
 
 function statTargetIdsForLocalUse(event: NostrEvent, ids: string[]) {
