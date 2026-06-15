@@ -139,9 +139,9 @@
       <img src={appPath('/robot.png')} alt="" class="info-robot" />
     </div>
     <p>
-      Nostr is a completely free and open-source protocol that nobody controls. It enables
-      social media and many other applications without creating walled gardens or centralized
-      platforms.
+      Nostr (Notes and Other Stuff Transmitted by Relays) is a completely free and open-source
+      protocol that nobody controls. It enables social media and many other applications without
+      creating walled gardens or centralized platforms.
     </p>
     <p>This Nostr social client is one of many clients that exist.</p>
     <p>
