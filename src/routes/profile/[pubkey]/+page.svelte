@@ -6,7 +6,7 @@
   import { ArrowLeft, Check, Copy, Globe2, MessageCircle, Pencil, QrCode, Save, UserMinus, UserX, Upload, UserPlus, X } from '@lucide/svelte';
   import { nip19 } from 'nostr-tools';
   import NoteCard from '$lib/components/NoteCard.svelte';
-  import { deletedEventIds, events, follows, mergeEvents, mergeProfileRecords, mutedPubkeys, muteAccount, profiles, refreshEventStats, relays, saveFollowList, saveProfile, selectMessagePeer, session, unmuteAccount } from '$lib/stores/app';
+  import { deletedEventIds, events, follows, mergeEvents, mergeProfileRecords, mutedPubkeys, muteAccount, profiles, pruneDeletedEvents, refreshEventStats, relays, saveFollowList, saveProfile, selectMessagePeer, session, unmuteAccount } from '$lib/stores/app';
   import { getCachedProfileEvents } from '$lib/nostr/cache';
   import { activeRelayUrls, dedupeEvents, fetchProfileEvents, fetchProfiles, isReplyEvent, topLevelFeedEvents } from '$lib/nostr/client';
   import { extractMediaAttachments } from '$lib/nostr/media';
@@ -248,6 +248,7 @@
     if (fetchedProfileEvents.length) {
       events.update((existing) => mergeEvents(fetchedProfileEvents, existing));
       addProfileEvents(fetchedProfileEvents);
+      void pruneDeletedEvents(fetchedProfileEvents);
     }
     profilePaginationCursor = nextProfilePaginationCursor(fetchedProfileEvents, profileRecentWindowLowerBound(), initialProfileEventLimit);
     loadingProfile = false;
@@ -296,6 +297,7 @@
       if (nextEvents.length) {
         if (cleanNextEvents.length) events.update((existing) => mergeEvents(cleanNextEvents, existing));
         addProfileEvents(nextEvents);
+        void pruneDeletedEvents(nextEvents);
       }
       return nextEvents.length > 0;
     } finally {

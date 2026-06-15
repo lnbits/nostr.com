@@ -11,11 +11,13 @@ import {
   activeRelayUrls,
   connectedRelayUrls,
   createGuestSession,
+  dedupeEvents,
   fetchDirectMessages,
   fetchContactListDetails,
   fetchFeed,
   fetchFriendsOfFriends,
   fetchEventStats,
+  fetchDeletedEventIdsForEvents,
   fetchMuteList,
   fetchProfiles,
   fetchNotifications,
@@ -75,6 +77,7 @@ const olderFetchPageWindowSeconds = 60 * 60 * 24 * 30;
 const threadPrefetchReplyLimit = 10;
 const threadPrefetchCooldownMs = 5 * 60 * 1000;
 const maxThreadPrefetchConcurrent = 2;
+const deletionCheckCooldownMs = 5 * 60 * 1000;
 
 const initialSession = browser ? readStoredSession() : null;
 const initialStoredContacts = browser && initialSession ? readStoredContactList(initialSession.pubkey) : undefined;
@@ -166,6 +169,7 @@ const pendingRepostToggles = new Set<string>();
 const queuedThreadPrefetches: NostrEvent[] = [];
 const queuedThreadPrefetchIds = new Set<string>();
 const recentThreadPrefetches = new Map<string, number>();
+const recentDeletionChecks = new Map<string, number>();
 let activeThreadPrefetches = 0;
 let defaultGlobalFeedContextPromise: Promise<void> | undefined;
 let pendingGoogleOnboardingPubkey = '';
@@ -273,6 +277,7 @@ export async function refreshFeed(mode = currentMode, options: { replaceVisible?
       }
       void refreshEventStats(nextEvents.map((event) => event.id));
       void hydrateMissingProfiles(nextEvents, 60);
+      void pruneDeletedEvents(nextEvents);
       void primeCachedFeedBuffers(fetchMode, getStoreSnapshot(events));
     }
     void restartLiveFeed(fetchMode, timelineCursor([...visibleEvents, ...nextEvents], 'newest'));
@@ -304,6 +309,7 @@ async function hydrateCachedFeed(mode = currentMode) {
   primeCachedNewerFeed(visibleEvents);
   void refreshEventStats(visibleEvents.map((event) => event.id));
   void hydrateMissingProfiles(visibleEvents, 40);
+  void pruneDeletedEvents(visibleEvents);
 }
 
 function cachedEventsForMode(mode: FeedMode, items: NostrEvent[], limit = initialFeedLimit) {
@@ -496,11 +502,34 @@ function applyDeletionRequest(event: NostrEvent) {
     .map((tag) => tag[1])
     .filter((id) => eventAuthorForLocalUse(id) === event.pubkey);
   if (!deletedIds.length) return;
-  const deleted = new Set(deletedIds);
+  applyDeletedEventIds(new Set(deletedIds));
+}
+
+function applyDeletedEventIds(deleted: Set<string>) {
+  if (!deleted.size) return;
   deletedEventIds.update((existing) => new Set([...existing, ...deleted]));
   events.update((existing) => existing.filter((item) => !deleted.has(item.id)));
   pendingNewerEvents.update((existing) => existing.filter((item) => !deleted.has(item.id)));
   cachedOlderEvents = cachedOlderEvents.filter((item) => !deleted.has(item.id));
+}
+
+export async function pruneDeletedEvents(candidateEvents: NostrEvent[], relayHints: string[] = []) {
+  if (!browser || !candidateEvents.length) return;
+  const checkedAt = Date.now();
+  const candidates = dedupeEvents(candidateEvents)
+    .filter((event) => /^[0-9a-f]{64}$/i.test(event.id) && /^[0-9a-f]{64}$/i.test(event.pubkey))
+    .filter((event) => checkedAt - (recentDeletionChecks.get(event.id) ?? 0) > deletionCheckCooldownMs);
+  if (!candidates.length) return;
+  candidates.forEach((event) => recentDeletionChecks.set(event.id, checkedAt));
+  pruneDeletionCheckHistory(checkedAt);
+  const deleted = await fetchDeletedEventIdsForEvents(candidates, currentRelays, relayHints).catch(() => new Set<string>());
+  applyDeletedEventIds(deleted);
+}
+
+function pruneDeletionCheckHistory(now = Date.now()) {
+  for (const [id, checkedAt] of recentDeletionChecks) {
+    if (now - checkedAt > deletionCheckCooldownMs) recentDeletionChecks.delete(id);
+  }
 }
 
 function eventAuthorForLocalUse(id: string) {
@@ -595,9 +624,11 @@ export async function loadMoreFeed(force = false) {
     void primeCachedFeedBuffers(fetchMode, getStoreSnapshot(events));
     void refreshEventStats(freshEvents.map((event) => event.id));
     void hydrateMissingProfiles(freshEvents, 40);
+    void pruneDeletedEvents(freshEvents);
     if (revealedEvents.length) {
       void refreshEventStats(revealedEvents.map((event) => event.id));
       void hydrateMissingProfiles(revealedEvents, 40);
+      void pruneDeletedEvents(revealedEvents);
     }
   } finally {
     loadingMoreFeed.set(false);
@@ -738,6 +769,7 @@ async function runThreadPreviewPrefetch(event: NostrEvent) {
   savePrefetchedThreadReplies(event.id, replies);
   refreshThreadPreviewStats(event, replies);
   void hydrateMissingProfiles(replies, 12);
+  void pruneDeletedEvents(replies);
 }
 
 function refreshThreadPreviewStats(event: NostrEvent, replies: NostrEvent[] = []) {

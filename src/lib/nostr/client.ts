@@ -595,7 +595,7 @@ export async function fetchFeed(
   const events = verifiedRelayEvents((await Promise.all(filters.map((filter) => queryShortLived(relayUrls, filter, 5000)))).flat()).filter((event) =>
     filters.some((filter) => eventMatchesTimeWindow(event, filter.since, filter.until))
   );
-  const clean = await filterDeletedEvents(dedupeEvents(topLevelFeedEvents(filterSpam(events))), relayUrls);
+  const clean = dedupeEvents(topLevelFeedEvents(filterSpam(events)));
   const output = mode === 'global' ? limitCryptoTopicDensity(limitConsecutiveAuthors(clean, 2), 10) : clean;
   await cacheEvents(output);
   return output;
@@ -607,10 +607,9 @@ export function eventMatchesTimeWindow(event: NostrEvent, since?: number, until?
   return true;
 }
 
-async function filterDeletedEvents(events: NostrEvent[], relayUrls: string[]) {
-  if (!events.length || !relayUrls.length) return events;
-  const deletedIds = await fetchDeletedEventIds(events, relayUrls);
-  return deletedIds.size ? events.filter((event) => !deletedIds.has(event.id)) : events;
+export async function fetchDeletedEventIdsForEvents(events: NostrEvent[], relays = defaultRelays, relayHints: string[] = []) {
+  const relayUrls = [...new Set([...relayHints.filter((url) => /^wss?:\/\//i.test(url)), ...activeRelayUrls(relays, 'read')])];
+  return fetchDeletedEventIds(events, relayUrls);
 }
 
 async function fetchDeletedEventIds(events: NostrEvent[], relayUrls: string[]) {
@@ -707,7 +706,7 @@ export async function fetchMissingEvents(ids: string[], relays = defaultRelays, 
   if (!ids.length) return [];
   const relayUrls = [...new Set([...relayHints.filter((url) => /^wss?:\/\//i.test(url)), ...activeRelayUrls(relays, 'read')])];
   const events = verifiedRelayEvents(await queryShortLived(relayUrls, { ids }, 5000));
-  const clean = await filterDeletedEvents(dedupeEvents(events), relayUrls);
+  const clean = dedupeEvents(events);
   await cacheEvents(clean);
   return clean;
 }
@@ -720,7 +719,7 @@ export async function fetchThreadReplies(rootId: string | string[], relays = def
   if (options.until) filter.until = options.until;
   if (options.since) filter.since = options.since;
   const events = verifiedRelayEvents(await queryShortLived(relayUrls, filter, 5000));
-  const clean = await filterDeletedEvents(dedupeEvents(filterSpam(events)), relayUrls);
+  const clean = dedupeEvents(filterSpam(events));
   await cacheEvents(clean);
   return clean;
 }
@@ -732,7 +731,7 @@ export async function fetchProfileEvents(pubkey: string, relays = defaultRelays,
   if (options.until) filter.until = options.until;
   if (options.since) filter.since = options.since;
   const events = verifiedRelayEvents(await queryShortLived(relayUrls, filter, 5000));
-  const clean = await filterDeletedEvents(dedupeEvents([...filterSpam(events.filter((event) => event.kind !== 6)), ...events.filter((event) => event.kind === 6 && parseRepostContent(event))]), relayUrls);
+  const clean = dedupeEvents([...filterSpam(events.filter((event) => event.kind !== 6)), ...events.filter((event) => event.kind === 6 && parseRepostContent(event))]);
   await cacheProfileEvents(clean);
   return clean;
 }

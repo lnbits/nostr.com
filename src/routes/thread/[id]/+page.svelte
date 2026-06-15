@@ -6,7 +6,7 @@
   import { ArrowLeft } from '@lucide/svelte';
   import NoteCard from '$lib/components/NoteCard.svelte';
   import { getCachedThreadEvents } from '$lib/nostr/cache';
-  import { deletedEventIds, eventStats, events, mergeEvents, mergeProfileRecords, profiles, refreshEventStats, relays } from '$lib/stores/app';
+  import { deletedEventIds, eventStats, events, mergeEvents, mergeProfileRecords, profiles, pruneDeletedEvents, refreshEventStats, relays } from '$lib/stores/app';
   import { eventStatsFromEvents, fetchMissingEvents, fetchProfiles, fetchThreadReplies } from '$lib/nostr/client';
   import { eventPointerFromIdentifier } from '$lib/nostr/identifiers';
   import { appPath } from '$lib/paths';
@@ -141,6 +141,7 @@
         rootEvent = found;
         localThreadEvents = mergeThreadEvents([found], localThreadEvents).filter((event) => event.id !== found.id);
         events.update((existing) => mergeEvents([found], existing));
+        void pruneDeletedEvents([found], pointer?.relays ?? []);
       }
       if (rootEvent) refreshThreadStats([rootEvent]);
       if (!restored) void hydrateCachedThreadReplies(rootId, runId);
@@ -165,6 +166,7 @@
         trimThreadReplyWindow('bottom');
         hydrateThreadProfiles(replyBatch.events);
         refreshThreadStats(replyBatch.events);
+        void pruneDeletedEvents(replyBatch.events);
         saveCurrentThreadState();
       }
     } finally {
@@ -189,6 +191,7 @@
     trimThreadReplyWindow('bottom');
     hydrateThreadProfiles(cached);
     refreshThreadStats(cached);
+    void pruneDeletedEvents(cached);
     saveCurrentThreadState();
   }
 
@@ -270,6 +273,7 @@
       trimThreadReplyWindow('bottom');
       hydrateThreadProfiles(replyBatch.events);
       refreshThreadStats(replyBatch.events);
+      void pruneDeletedEvents(replyBatch.events);
       saveCurrentThreadState();
     } finally {
       loadingOlderReplies = false;
@@ -295,6 +299,7 @@
     seededId = rootId;
     localThreadEvents = cachedThreadSeed(rootId, focusId);
     rootEvent = localThreadEvents.find((event) => event.id === rootId);
+    void pruneDeletedEvents(localThreadEvents);
   }
 
   function resetThreadRouteState(nextId: string, focusId: string) {
@@ -332,6 +337,7 @@
     hasOlderReplies = cached.hasOlderReplies;
     olderThreadReplyCursor = 0;
     hydrateThreadProfiles(cached.events);
+    void pruneDeletedEvents(cached.events);
     return true;
   }
 
@@ -363,6 +369,7 @@
     localThreadEvents = mergeThreadEvents(context.filter((event) => event.id !== rootId), localThreadEvents);
     hydrateThreadProfiles(context);
     refreshThreadStats(context);
+    void pruneDeletedEvents(context);
     saveCurrentThreadState();
   }
 
