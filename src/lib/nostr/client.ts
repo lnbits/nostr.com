@@ -1106,7 +1106,10 @@ export async function publishReport(session: Session, target: NostrEvent, relays
 
 export async function publishDeletion(session: Session, target: NostrEvent, relays = defaultRelays, reason = 'Edited by author') {
   if (target.pubkey !== session.pubkey) throw new Error('You can only delete your own events.');
-  return publishEventTemplate(session, { kind: 5, content: reason, tags: [['e', target.id], ['k', String(target.kind)]], created_at: now() }, relays);
+  const urls = deletionRelayUrls(target, relays);
+  const event = await signEventTemplate(session, { kind: 5, content: reason, tags: [['e', target.id], ['k', String(target.kind)]], created_at: now() });
+  await publishSignedEventToUrls(event, urls);
+  return event as unknown as NostrEvent;
 }
 
 async function toNip04DirectMessage(event: NostrEvent, session: Session): Promise<DirectMessage> {
@@ -1281,8 +1284,19 @@ async function publishEventTemplate(session: Session, draft: Pick<NostrToolsEven
 
 async function publishSignedEvent(event: NostrToolsEvent, relays = defaultRelays) {
   const urls = activeRelayUrls(relays, 'write');
-  if (!urls.length) throw new Error('No write relays are enabled.');
+  await publishSignedEventToUrls(event, urls, 'No write relays are enabled.');
+}
+
+async function publishSignedEventToUrls(event: NostrToolsEvent, urls: string[], emptyRelayMessage = 'No relays are available for publishing.') {
+  if (!urls.length) throw new Error(emptyRelayMessage);
   await Promise.any(pool.publish(urls, event));
+}
+
+function deletionRelayUrls(target: NostrEvent, relays = defaultRelays) {
+  const activeUrls = activeRelayUrls(relays, 'write');
+  const readUrls = activeRelayUrls(relays, 'read');
+  const hintedUrls = target.tags.flatMap((tag) => (tag[0] === 'e' && tag[2] ? [tag[2]] : []));
+  return [...new Set([...activeUrls, ...readUrls, ...sanitizeRelayHints(hintedUrls)])];
 }
 
 export async function signEventTemplate(session: Session, draft: Pick<NostrToolsEvent, 'kind' | 'content' | 'tags' | 'created_at'>) {

@@ -14,8 +14,50 @@
   import { themeMode, type ThemeMode } from '$lib/stores/theme';
 
   const rightRailStorageKey = 'nostr-right-rail-collapsed';
+  const siteUrl = 'https://nostr.com';
+  const homeDescription = 'Nostr is a free and open-source protocol for social media and other things - controlled by users, not platforms.';
+  const infoDescription =
+    'Learn how Nostr (Notes and Other Stuff Transmitted by Relays) enables social media and applications without centralized platforms or walled gardens.';
+  const homeSeo = {
+    title: 'nostr - controlled by users, not platforms',
+    description: homeDescription,
+    path: '/',
+    image: '/screenshot-feed-dark.png',
+    schema: {
+      '@context': 'https://schema.org',
+      '@type': 'WebApplication',
+      name: 'nostr',
+      url: siteUrl,
+      applicationCategory: 'SocialNetworkingApplication',
+      operatingSystem: 'Web',
+      description: homeDescription
+    }
+  };
+  const infoSeo = {
+    title: 'What is Nostr? Notes and Other Stuff Transmitted by Relays',
+    description: infoDescription,
+    path: '/info',
+    image: '/banner.png',
+    schema: {
+      '@context': 'https://schema.org',
+      '@type': 'Article',
+      headline: 'What is Nostr?',
+      description: infoDescription,
+      url: `${siteUrl}/info`,
+      mainEntityOfPage: `${siteUrl}/info`,
+      publisher: {
+        '@type': 'Organization',
+        name: 'nostr',
+        url: siteUrl
+      }
+    }
+  };
   let rightRailCollapsed = false;
   $: embeddedPage = $page.route.id?.startsWith('/embed/') ?? false;
+  $: seo = $page.route.id === '/info' ? infoSeo : $page.route.id === '/' ? homeSeo : null;
+  $: canonicalUrl = seo ? `${siteUrl}${seo.path}` : siteUrl;
+  $: previewImageUrl = seo ? `${siteUrl}${seo.image}` : `${siteUrl}/screenshot-feed-dark.png`;
+  $: seoJsonLd = seo ? JSON.stringify(seo.schema) : '';
   $: notificationCount = badgeCount($unreadNotificationCount);
   $: messageCount = badgeCount($unreadMessageCount);
   $: if ($session && $page.route.id === '/notifications') markNotificationsSeen();
@@ -64,7 +106,25 @@
 </script>
 
 <svelte:head>
-  <title>Nostr</title>
+  {#if seo}
+    <title>{seo.title}</title>
+    <meta name="description" content={seo.description} />
+    <link rel="canonical" href={canonicalUrl} />
+    <meta property="og:type" content={$page.route.id === '/info' ? 'article' : 'website'} />
+    <meta property="og:site_name" content="nostr" />
+    <meta property="og:title" content={seo.title} />
+    <meta property="og:description" content={seo.description} />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:image" content={previewImageUrl} />
+    <meta property="og:image:alt" content={$page.route.id === '/info' ? 'nostr information banner' : 'nostr social client feed preview'} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={seo.title} />
+    <meta name="twitter:description" content={seo.description} />
+    <meta name="twitter:image" content={previewImageUrl} />
+    {@html `<script type="application/ld+json">${seoJsonLd}</script>`}
+  {:else}
+    <title>Nostr</title>
+  {/if}
 </svelte:head>
 
 {#if embeddedPage}

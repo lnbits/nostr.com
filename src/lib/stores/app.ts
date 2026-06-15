@@ -1020,6 +1020,7 @@ export async function editNote(content: string, target: NostrEvent) {
 export async function deleteNote(target: NostrEvent) {
   const currentSession = requireSession('Sign in before deleting.');
   if (target.pubkey !== currentSession.pubkey) throw new Error('You can only delete your own posts.');
+  await publishDeletion(currentSession, target, currentRelays, 'Deleted by author');
   deletedEventIds.update((existing) => new Set(existing).add(target.id));
   editedEvents.update((existing) => {
     const next = { ...existing };
@@ -1031,7 +1032,6 @@ export async function deleteNote(target: NostrEvent) {
   cachedOlderEvents = cachedOlderEvents.filter((item) => item.id !== target.id);
   if (getStoreSnapshot(replyTarget)?.id === target.id) replyTarget.set(null);
   if (getStoreSnapshot(editTarget)?.id === target.id) editTarget.set(null);
-  await publishDeletion(currentSession, target, currentRelays, 'Deleted by author');
 }
 
 export async function repostNote(target: NostrEvent) {

@@ -323,8 +323,8 @@
     deleting = true;
     deleteError = '';
     try {
-      deleteDialogOpen = false;
       await deleteNote(displayEvent);
+      deleteDialogOpen = false;
     } catch (err) {
       deleteError = err instanceof Error ? err.message : 'Could not delete this post.';
     } finally {
