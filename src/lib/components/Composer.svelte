@@ -1,15 +1,19 @@
 <script lang="ts">
   import { ImagePlus, Loader2, Send, X } from '@lucide/svelte';
-  import { composerOpen, editNote, editTarget, postNote, replyTarget, session } from '$lib/stores/app';
+  import { composerOpen, editNote, editTarget, postNote, relays, replyTarget, session } from '$lib/stores/app';
   import { shouldSubmitTextareaOnEnter } from '$lib/keyboard';
+  import { hasPublishedTextNote } from '$lib/nostr/client';
   import { uploadToNostrBuild } from '$lib/nostr/upload';
 
+  const introductionPrefix = '#introductions\n\n';
   let content = '';
   let busy = false;
   let uploading = false;
   let error = '';
   let mediaInput: HTMLInputElement;
   let loadedEditId = '';
+  let introductionCheckKey = '';
+  let showingIntroductionTip = false;
 
   $: if ($composerOpen && $editTarget && loadedEditId !== $editTarget.id) {
     content = $editTarget.content;
@@ -18,6 +22,13 @@
   $: if ($composerOpen && !$editTarget && loadedEditId) {
     loadedEditId = '';
     content = '';
+  }
+  $: if (!$composerOpen) {
+    introductionCheckKey = '';
+    showingIntroductionTip = false;
+  }
+  $: if ($composerOpen && $session && !$editTarget && !$replyTarget && !content.trim()) {
+    void maybePrefillIntroduction();
   }
 
   async function submit() {
@@ -28,12 +39,24 @@
       if ($editTarget) await editNote(content.trim(), $editTarget);
       else await postNote(content.trim(), $replyTarget ?? undefined);
       content = '';
+      showingIntroductionTip = false;
       composerOpen.set(false);
     } catch (err) {
       error = friendlyPublishError(err);
     } finally {
       busy = false;
     }
+  }
+
+  async function maybePrefillIntroduction() {
+    if (!$session || $editTarget || $replyTarget || content.trim()) return;
+    const checkKey = `${$session.pubkey}:${$relays.map((relay) => relay.url).join(',')}`;
+    if (checkKey === introductionCheckKey) return;
+    introductionCheckKey = checkKey;
+    const hasPosted = await hasPublishedTextNote($session.pubkey, $relays).catch(() => true);
+    if (checkKey !== introductionCheckKey || hasPosted || !$composerOpen || $editTarget || $replyTarget || content.trim()) return;
+    content = introductionPrefix;
+    showingIntroductionTip = true;
   }
 
   async function uploadMedia(file: File | undefined) {
@@ -85,6 +108,9 @@
       {/if}
       {#if $replyTarget}
         <div class="reply-context">Replying to {$replyTarget.pubkey.slice(0, 10)}</div>
+      {/if}
+      {#if showingIntroductionTip && !$editTarget && !$replyTarget}
+        <div class="composer-tip">Tell us about yourself.</div>
       {/if}
       <textarea bind:value={content} on:keydown={submitOnEnter} placeholder={$session ? "What's happening on Nostr?" : 'Sign in before posting'} maxlength="2000"></textarea>
       <div class="composer-actions">

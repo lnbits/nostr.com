@@ -704,6 +704,14 @@ export async function fetchProfileEvents(pubkey: string, relays = defaultRelays,
   return clean;
 }
 
+export async function hasPublishedTextNote(pubkey: string, relays = defaultRelays) {
+  if (!/^[0-9a-f]{64}$/i.test(pubkey)) return true;
+  const relayUrls = activeRelayUrls(relays, 'read');
+  if (!relayUrls.length) return true;
+  const events = verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [1], authors: [pubkey], limit: 1 }, 3500));
+  return events.length > 0;
+}
+
 export function parseRepostContent(event: NostrEvent) {
   if (event.kind !== 6 || !event.content.trim()) return null;
   try {

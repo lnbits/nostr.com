@@ -1371,6 +1371,11 @@ label span, label strong { color: var(--text); }
   margin-bottom: 10px;
   padding: 10px 12px;
 }
+.composer-tip {
+  color: var(--muted);
+  margin: 0 0 10px;
+  padding: 0 2px;
+}
 .dialog-backdrop {
   position: fixed;
   inset: 0;
