@@ -230,6 +230,10 @@
     return item?.display_name || item?.name || `${pubkey.slice(0, 8)}...${pubkey.slice(-4)}`;
   }
 
+  function nostrReferenceLabel(part: { label: string; pubkey?: string }) {
+    return part.pubkey ? `@${profileName(part.pubkey)}` : part.label;
+  }
+
   function embedUrl() {
     const origin = browser ? window.location.origin : '';
     return `${origin}${appPath(`/embed/${event.id}`)}`;
@@ -250,6 +254,10 @@
 
   function isAddressableEvent(kind: number) {
     return kind >= 30000 && kind < 40000;
+  }
+
+  function shouldResetHiddenEmbed(provider: string) {
+    return provider === 'instagram' || provider === 'tiktok';
   }
 
   async function copyEmbed() {
@@ -489,7 +497,7 @@
         {#if part.type === 'hashtag'}
           <button class="hashtag" on:click={() => filterHashtag(part.value)}>#{part.value}</button>
         {:else if part.type === 'nostr'}
-          <a href={part.href}>{part.label}</a>
+          <a href={part.href}>{nostrReferenceLabel(part)}</a>
         {:else if part.type === 'mention'}
           <a href={part.href}>{part.value}</a>
         {:else if part.type === 'link'}
@@ -520,6 +528,7 @@
         {#each socialEmbeds as embed (embed.url)}
           <div class="social-embed" class:portrait={embed.aspect === 'portrait'} class:square={embed.aspect === 'square'}>
             <iframe
+              use:pauseWhenHidden={{ resetIframe: shouldResetHiddenEmbed(embed.provider) }}
               src={embed.embedUrl}
               title={embed.title}
               loading="lazy"

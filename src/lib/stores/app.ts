@@ -1314,7 +1314,9 @@ async function refreshFriendsOfFriendsAuthors() {
 
 async function hydrateMissingProfiles(nextEvents: NostrEvent[], limit = 40) {
   const existingProfiles = getStoreSnapshot(profiles);
-  const pubkeys = [...new Set(nextEvents.map((event) => event.pubkey))]
+  const pubkeys = [...new Set(nextEvents.flatMap((event) => [event.pubkey, ...event.tags.filter((tag) => tag[0] === 'p' && tag[1]).map((tag) => tag[1])]))]
+    .map(normalizePubkey)
+    .filter(Boolean)
     .filter((pubkey) => !existingProfiles[pubkey])
     .slice(0, limit);
   if (!pubkeys.length) return;

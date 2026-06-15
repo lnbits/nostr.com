@@ -47,7 +47,7 @@ export function extractMediaAttachments(event: NostrEvent): MediaAttachment[] {
 export type NoteTextPart =
   | { type: 'text'; value: string }
   | { type: 'hashtag'; value: string }
-  | { type: 'nostr'; value: string; href: string; label: string }
+  | { type: 'nostr'; value: string; href: string; label: string; pubkey?: string }
   | { type: 'mention'; value: string; href: string }
   | { type: 'link'; value: string; href: string };
 
@@ -186,7 +186,7 @@ function parseNip19References(content: string): NoteTextPart[] {
   while ((match = nostrRefPattern.exec(content))) {
     if (match.index > lastIndex) parts.push({ type: 'text', value: content.slice(lastIndex, match.index) });
     const raw = match[0];
-    parts.push({ type: 'nostr', value: raw, href: hrefForNostrReference(match[1]), label: labelForNostrReference(match[1]) });
+    parts.push({ type: 'nostr', value: raw, href: hrefForNostrReference(match[1]), label: labelForNostrReference(match[1]), pubkey: pubkeyForNostrReference(match[1]) });
     lastIndex = match.index + raw.length;
   }
 
@@ -235,7 +235,10 @@ function parseMentions(content: string): NoteTextPart[] {
 
 function indexedReferencePart(raw: string, tag: string[] | undefined): NoteTextPart {
   if (!tag || !tag[1]) return { type: 'text', value: raw };
-  if (tag[0] === 'p' && /^[0-9a-f]{64}$/i.test(tag[1])) return { type: 'nostr', value: raw, href: appPath(`/profile/${tag[1].toLowerCase()}`), label: '@nostr' };
+  if (tag[0] === 'p' && /^[0-9a-f]{64}$/i.test(tag[1])) {
+    const pubkey = tag[1].toLowerCase();
+    return { type: 'nostr', value: raw, href: appPath(`/profile/${pubkey}`), label: '@nostr', pubkey };
+  }
   if (tag[0] === 'e' && /^[0-9a-f]{64}$/i.test(tag[1])) return { type: 'nostr', value: raw, href: appPath(`/thread/${tag[1].toLowerCase()}`), label: 'note' };
   return { type: 'text', value: raw };
 }
@@ -297,7 +300,7 @@ function socialEmbedForUrl(raw: string): SocialEmbed | null {
     return {
       provider: 'youtube',
       url,
-      embedUrl: `https://www.youtube-nocookie.com/embed/${youtubeId}`,
+      embedUrl: `https://www.youtube-nocookie.com/embed/${youtubeId}?enablejsapi=1`,
       title: 'YouTube video',
       aspect: 'video'
     };
@@ -396,6 +399,17 @@ function labelForNostrReference(value: string) {
     // fall through
   }
   return `nostr:${value.slice(0, 12)}...`;
+}
+
+function pubkeyForNostrReference(value: string) {
+  try {
+    const decoded = nip19.decode(value);
+    if (decoded.type === 'npub') return decoded.data;
+    if (decoded.type === 'nprofile') return decoded.data.pubkey;
+  } catch {
+    // Not a profile reference.
+  }
+  return undefined;
 }
 
 function noteIdForNostrReference(value: string) {

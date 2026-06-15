@@ -80,14 +80,14 @@ describe('media helpers', () => {
       {
         provider: 'youtube',
         url: 'https://youtu.be/7UtgB_enTw8',
-        embedUrl: 'https://www.youtube-nocookie.com/embed/7UtgB_enTw8',
+        embedUrl: 'https://www.youtube-nocookie.com/embed/7UtgB_enTw8?enablejsapi=1',
         title: 'YouTube video',
         aspect: 'video'
       },
       {
         provider: 'youtube',
         url: 'https://www.youtube.com/watch?v=IpOktupkl0c',
-        embedUrl: 'https://www.youtube-nocookie.com/embed/IpOktupkl0c',
+        embedUrl: 'https://www.youtube-nocookie.com/embed/IpOktupkl0c?enablejsapi=1',
         title: 'YouTube video',
         aspect: 'video'
       },
@@ -125,7 +125,7 @@ describe('media helpers', () => {
       { type: 'text', value: ' ' },
       { type: 'mention', value: '@PodcastsLive/116624629041088746', href: '/profile/PodcastsLive?note=116624629041088746' },
       { type: 'text', value: ' ' },
-      { type: 'nostr', value: npub, href: `/profile/${pubkey}`, label: '@nostr' }
+      { type: 'nostr', value: npub, href: `/profile/${pubkey}`, label: '@nostr', pubkey }
     ]);
   });
 
@@ -147,7 +147,7 @@ describe('media helpers', () => {
       ])
     ).toEqual([
       { type: 'text', value: 'hello ' },
-      { type: 'nostr', value: '#[0]', href: `/profile/${pubkey}`, label: '@nostr' },
+      { type: 'nostr', value: '#[0]', href: `/profile/${pubkey}`, label: '@nostr', pubkey },
       { type: 'text', value: ' see ' },
       { type: 'nostr', value: '#[1]', href: `/thread/${noteId}`, label: 'note' }
     ]);
