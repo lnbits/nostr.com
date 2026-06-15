@@ -266,7 +266,8 @@ export async function refreshFeed(mode = currentMode, options: { replaceVisible?
         limit: initialFeedLimit,
         since: newestTimestamp ? newestTimestamp + 1 : undefined,
         hashtag: currentHashtag,
-        globalAuthors: currentGlobalFeedAuthors
+        globalAuthors: currentGlobalFeedAuthors,
+        customFriendsOfFriends: currentFriendsOfFriends
       })
     );
     markConnectedRelaysOnline();
@@ -401,7 +402,8 @@ export async function loadNewerFeed() {
       limit: initialFeedLimit,
       since: newestTimestamp + 1,
       hashtag: currentHashtag,
-      globalAuthors: currentGlobalFeedAuthors
+      globalAuthors: currentGlobalFeedAuthors,
+      customFriendsOfFriends: currentFriendsOfFriends
     }));
     markConnectedRelaysOnline();
     if (!nextEvents.length) return [];
@@ -583,7 +585,7 @@ async function restartLiveFeed(mode = currentMode, newestTimestamp?: number) {
     currentRelays,
     currentFollows,
     effectiveFeedSettings(mode),
-    { since: newestTimestamp ? newestTimestamp + 1 : Math.floor(Date.now() / 1000), hashtag: currentHashtag, globalAuthors: currentGlobalFeedAuthors },
+    { since: newestTimestamp ? newestTimestamp + 1 : Math.floor(Date.now() / 1000), hashtag: currentHashtag, globalAuthors: currentGlobalFeedAuthors, customFriendsOfFriends: currentFriendsOfFriends },
     (event) => {
       if (token !== liveFeedToken || isKnownFeedEvent(event.id) || currentMutedPubkeys.has(event.pubkey)) return;
       queuePendingNewer([event]);
@@ -670,7 +672,8 @@ async function fetchOlderFeedPage(fetchMode: FeedMode, target = olderFetchTarget
         since: olderFeedPageCutoff(cursor),
         until: olderThan,
         hashtag: currentHashtag,
-        globalAuthors: currentGlobalFeedAuthors
+        globalAuthors: currentGlobalFeedAuthors,
+        customFriendsOfFriends: currentFriendsOfFriends
       })
     );
     markConnectedRelaysOnline();
@@ -756,19 +759,20 @@ export async function refreshEventStats(ids: string[], force = false) {
   nextIds.forEach((id) => requestedStats.set(id, checkedAt));
   if (!nextIds.length) return;
   const currentSession = currentSessionValue;
-  const [stats, ownActions] = await Promise.all([
-    fetchEventStats(nextIds, currentRelays).catch(() => ({})),
-    currentSession
-      ? fetchUserEventActions(nextIds, currentSession.pubkey, currentRelays).catch(() => ({
-          liked: new Set<string>(),
-          reposted: new Set<string>(),
-          likeEvents: new Map<string, NostrEvent>(),
-          repostEvents: new Map<string, NostrEvent>()
-        }))
-      : undefined
-  ]);
+  const stats = await fetchEventStats(nextIds, currentRelays).catch(() => ({}));
   eventStats.update((existing) => mergeStats(existing, stats));
-  if (ownActions) mergeOwnEventActions(ownActions);
+  if (currentSession) void refreshOwnEventActions(nextIds, currentSession);
+}
+
+async function refreshOwnEventActions(ids: string[], currentSession: Session) {
+  const ownActions = await fetchUserEventActions(ids, currentSession.pubkey, currentRelays).catch(() => ({
+    liked: new Set<string>(),
+    reposted: new Set<string>(),
+    likeEvents: new Map<string, NostrEvent>(),
+    repostEvents: new Map<string, NostrEvent>()
+  }));
+  if (currentSessionValue?.pubkey !== currentSession.pubkey) return;
+  mergeOwnEventActions(ownActions);
 }
 
 export function prefetchThreadPreview(event: NostrEvent) {

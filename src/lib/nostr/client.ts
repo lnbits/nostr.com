@@ -8,6 +8,10 @@ import { defaultGuestNip05, defaultPomegranateCentral, defaultRelays, globalFeed
 import type { ContactListDetails, ContactListItem, CustomFeedSettings, DirectMessage, EventStats, FeedMode, FeedQueryOptions, Nip05Profile, NostrEvent, NotificationItem, Profile, RelayState, Session } from './types';
 
 type RelayBackoffState = { failures: number; retryAt: number };
+type QueryShortLivedOptions = {
+  minEvents?: number;
+  idleAfterMs?: number;
+};
 
 const relayBackoff = new Map<string, RelayBackoffState>();
 const relayBackoffBaseMs = 30_000;
@@ -103,7 +107,7 @@ function pruneRelayBackoff(now = Date.now()) {
   }
 }
 
-function queryShortLived(relayUrls: string[], filter: Filter, maxWait = 5000) {
+function queryShortLived(relayUrls: string[], filter: Filter, maxWait = 5000, options: QueryShortLivedOptions = {}) {
   return new Promise<NostrEvent[]>((resolve) => {
     if (!relayUrls.length) {
       resolve([]);
@@ -114,14 +118,24 @@ function queryShortLived(relayUrls: string[], filter: Filter, maxWait = 5000) {
     let closer: SubCloser | undefined;
     const filterLimit = filter.limit ?? 80;
     const maxEvents = Math.min(160, Math.max(filterLimit, filterLimit * relayUrls.length));
+    const minEvents = Math.min(maxEvents, Math.max(1, options.minEvents ?? maxEvents));
+    const idleAfterMs = options.idleAfterMs ?? 0;
     const timeout = setTimeout(() => finish(), maxWait + 250);
+    let idleTimer: ReturnType<typeof setTimeout> | undefined;
 
     const finish = () => {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
+      if (idleTimer) clearTimeout(idleTimer);
       closer?.close();
       resolve(events);
+    };
+
+    const finishWhenIdle = () => {
+      if (!idleAfterMs || events.length < minEvents) return;
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => finish(), idleAfterMs);
     };
 
     closer = pool.subscribeManyEose(relayUrls, filter, {
@@ -133,6 +147,7 @@ function queryShortLived(relayUrls: string[], filter: Filter, maxWait = 5000) {
         }
         events.push(event as NostrEvent);
         if (events.length >= maxEvents) finish();
+        else finishWhenIdle();
       },
       onclose() {
         finish();
@@ -570,7 +585,7 @@ export function feedFiltersForMode(
   const tag = normalizedHashtag(options.hashtag);
   const taggedBase = tag ? { ...base, '#t': [tag] } : base;
   if (mode === 'follow' && follows.length) return [withOptionalSince({ ...taggedBase, authors: follows }, since)];
-  if (mode === 'custom') return customFeedFilters(taggedBase, follows, settings, since, relayUrls);
+  if (mode === 'custom') return customFeedFilters(taggedBase, follows, settings, since, relayUrls, options.customFriendsOfFriends);
   if (mode === 'global' && tag) return [withOptionalSince(taggedBase, since)];
   if (mode === 'global') return globalFeedFilters(taggedBase, since, options.globalAuthors);
   return [withOptionalSince(taggedBase, since)];
@@ -592,13 +607,18 @@ export async function fetchFeed(
   if (options.until) base.until = options.until;
   const filters = await feedFiltersForMode(mode, base, follows, settings, since, relayUrls, options);
 
-  const events = verifiedRelayEvents((await Promise.all(filters.map((filter) => queryShortLived(relayUrls, filter, 5000)))).flat()).filter((event) =>
+  const events = verifiedRelayEvents((await Promise.all(filters.map((filter) => queryShortLived(relayUrls, filter, 5000, { minEvents: feedIdleMinEvents(mode, filter.limit), idleAfterMs: 650 })))).flat()).filter((event) =>
     filters.some((filter) => eventMatchesTimeWindow(event, filter.since, filter.until))
   );
   const clean = dedupeEvents(topLevelFeedEvents(filterSpam(events)));
   const output = mode === 'global' ? limitCryptoTopicDensity(limitConsecutiveAuthors(clean, 2), 10) : clean;
   await cacheEvents(output);
   return output;
+}
+
+function feedIdleMinEvents(mode: FeedMode, limit = 24) {
+  if (mode === 'follow' || mode === 'custom') return Math.min(limit, 8);
+  return Math.min(limit, 24);
 }
 
 export function eventMatchesTimeWindow(event: NostrEvent, since?: number, until?: number) {
@@ -718,7 +738,7 @@ export async function fetchThreadReplies(rootId: string | string[], relays = def
   const filter: Filter = { kinds: [1], '#e': ids, limit };
   if (options.until) filter.until = options.until;
   if (options.since) filter.since = options.since;
-  const events = verifiedRelayEvents(await queryShortLived(relayUrls, filter, 5000));
+  const events = verifiedRelayEvents(await queryShortLived(relayUrls, filter, 5000, { minEvents: Math.min(limit, 40), idleAfterMs: 650 }));
   const clean = dedupeEvents(filterSpam(events));
   await cacheEvents(clean);
   return clean;
@@ -730,7 +750,7 @@ export async function fetchProfileEvents(pubkey: string, relays = defaultRelays,
   const filter: Filter = { kinds: [1, 6, 30023], authors: [pubkey], limit };
   if (options.until) filter.until = options.until;
   if (options.since) filter.since = options.since;
-  const events = verifiedRelayEvents(await queryShortLived(relayUrls, filter, 5000));
+  const events = verifiedRelayEvents(await queryShortLived(relayUrls, filter, 5000, { minEvents: Math.min(limit, 36), idleAfterMs: 650 }));
   const clean = dedupeEvents([...filterSpam(events.filter((event) => event.kind !== 6)), ...events.filter((event) => event.kind === 6 && parseRepostContent(event))]);
   await cacheProfileEvents(clean);
   return clean;
@@ -873,8 +893,10 @@ export async function fetchEventStats(ids: string[], relays = defaultRelays) {
     { kinds: [7], '#e': uniqueIds, limit: Math.min(800, uniqueIds.length * 35) },
     { kinds: [9735], '#e': uniqueIds, limit: Math.min(500, uniqueIds.length * 20) }
   ];
-  const countStats: Record<string, Partial<EventStats>> = await fetchCountStats(uniqueIds, relayUrls).catch(() => ({}));
-  const events = dedupeEvents(verifiedRelayEvents((await Promise.all(filters.map((filter) => queryShortLived(relayUrls, filter, 4500)))).flat()));
+  const [countStats, events]: [Record<string, Partial<EventStats>>, NostrEvent[]] = await Promise.all([
+    fetchCountStats(uniqueIds, relayUrls).catch(() => ({})),
+    Promise.all(filters.map((filter) => queryShortLived(relayUrls, filter, 4500))).then((results) => dedupeEvents(verifiedRelayEvents(results.flat())))
+  ]);
 
   const eventStats = eventStatsFromEvents(uniqueIds, events);
   for (const id of uniqueIds) {
@@ -1470,11 +1492,11 @@ function normalizedHashtag(tag?: string) {
   return clean && /^[a-z0-9_]{2,64}$/.test(clean) ? clean : '';
 }
 
-async function customFeedFilters(base: Filter, follows: string[], settings: CustomFeedSettings, since: number | undefined, relayUrls: string[]) {
+async function customFeedFilters(base: Filter, follows: string[], settings: CustomFeedSettings, since: number | undefined, relayUrls: string[], prefetchedFriendsOfFriends?: string[]) {
   const total = base.limit ?? 24;
   const keywordFilterItems = keywordFilters(settings);
   if (!follows.length && !keywordFilterItems.length) return [];
-  const friendsOfFriends = settings.friendsOfFriends && follows.length ? await fetchFriendsOfFriends(follows, relayUrls) : [];
+  const friendsOfFriends = settings.friendsOfFriends && follows.length ? (prefetchedFriendsOfFriends ?? (await fetchFriendsOfFriends(follows, relayUrls))) : [];
   const { followLimit, friendsOfFriendsLimit, keywordLimit } = customFeedSliceLimits(total, follows.length > 0, friendsOfFriends.length > 0, keywordFilterItems.length > 0);
   const filters: Filter[] = followLimit ? [withOptionalSince({ ...base, authors: follows, limit: followLimit }, since)] : [];
 

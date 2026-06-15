@@ -66,6 +66,7 @@ export interface FeedQueryOptions {
   until?: number;
   hashtag?: string;
   globalAuthors?: string[];
+  customFriendsOfFriends?: string[];
 }
 
 export interface Session {
