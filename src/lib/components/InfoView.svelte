@@ -150,10 +150,12 @@
     </div>
     <p>
       Nostr (Notes and Other Stuff Transmitted by Relays) is a free and open network that nobody
-      owns or controls. Instead of one company running everything, Nostr uses
-      <a href={appPath('/relays')}>relays</a> (servers) to store and share information, and
-      <a href={appPath('/clients')}>clients</a> (apps) to let people read, write, and interact with
-      that information.
+      owns or controls.
+    </p>
+    <p>
+      Nostr uses <a href={appPath('/relays')}>relays</a> (servers) to store and share information,
+      and <a href={appPath('/clients')}>clients</a> (apps) to let people read, write, and interact
+      with that information.
     </p>
     <p>
       Every account has <a href={appPath('/nostr-keys')}>Nostr keys</a>. Your public key is like

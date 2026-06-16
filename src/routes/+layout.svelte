@@ -2,9 +2,10 @@
   import '../styles.css';
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
-  import { Bell, Home, Info, LogIn, Mail, Settings, UserRound } from '@lucide/svelte';
+  import { Bell, Home, Info, LogIn, Mail, Settings, SlidersHorizontal, UserRound, X } from '@lucide/svelte';
   import { bootstrap, directMessages, goHome, loginDialogOpen, markMessagesSeen, markNotificationsSeen, notifications, selectMessagePeer, session, unreadMessageCount, unreadNotificationCount } from '$lib/stores/app';
   import Composer from '$lib/components/Composer.svelte';
+  import AlgorithmPanel from '$lib/components/AlgorithmPanel.svelte';
   import LeftNav from '$lib/components/LeftNav.svelte';
   import LoginDialog from '$lib/components/LoginDialog.svelte';
   import OnboardingDialog from '$lib/components/OnboardingDialog.svelte';
@@ -137,6 +138,7 @@
     }
   };
   let rightRailCollapsed = false;
+  let guestAlgorithmDialogOpen = false;
   $: embeddedPage = $page.route.id?.startsWith('/embed/') ?? false;
   $: seo =
     $page.route.id === '/clients'
@@ -275,7 +277,8 @@
         </a>
       </div>
       <div class="topbar-actions">
-        <ThemeToggle />
+        <span class="guest-theme-toggle"><ThemeToggle /></span>
+        <button class="topbar-algo-button" type="button" on:click={() => (guestAlgorithmDialogOpen = true)} aria-label="Open algorithm settings"><SlidersHorizontal size={17} /> Algo</button>
       </div>
     </header>
 
@@ -313,6 +316,17 @@
   </nav>
 
   <LoginDialog />
+  {#if guestAlgorithmDialogOpen}
+    <div class="dialog-backdrop algorithm-dialog-backdrop" role="presentation" tabindex="-1" on:click={(event) => event.target === event.currentTarget && (guestAlgorithmDialogOpen = false)}>
+      <div class="dialog-panel compact algorithm-dialog" role="dialog" aria-modal="true" aria-labelledby="guest-algorithm-title">
+        <div class="dialog-head">
+          <h2 id="guest-algorithm-title">Your algorithm</h2>
+          <button class="icon-button" on:click={() => (guestAlgorithmDialogOpen = false)} aria-label="Close algorithm settings"><X size={20} /></button>
+        </div>
+        <AlgorithmPanel title="" labelledBy="guest-algorithm-title" />
+      </div>
+    </div>
+  {/if}
   <OnboardingDialog />
   <Composer />
   </div>

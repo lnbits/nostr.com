@@ -704,7 +704,6 @@
               <h2 id="profile-qr-title">Profile QR</h2>
               <p>Share this Nostr profile with another client.</p>
             </div>
-            <button class="icon-button" on:click={() => (qrDialogOpen = false)} aria-label="Close profile QR"><X size={20} /></button>
           </div>
 
           {#if qrGenerating}

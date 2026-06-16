@@ -4,7 +4,7 @@ import { writable } from 'svelte/store';
 export type ThemeMode = 'light' | 'dark';
 
 const storageKey = 'nostr-theme';
-const initialTheme = browser ? readThemeMode() : 'light';
+const initialTheme = browser ? readThemeMode() : 'dark';
 
 export const themeMode = writable<ThemeMode>(initialTheme);
 
@@ -25,7 +25,8 @@ themeMode.subscribe((mode) => {
 
 function readThemeMode(): ThemeMode {
   const saved = localStorage.getItem(storageKey);
+  if (saved === 'light') return 'light';
   if (saved === 'dark') return 'dark';
-  if (saved !== 'light') localStorage.setItem(storageKey, 'light');
-  return 'light';
+  localStorage.setItem(storageKey, 'dark');
+  return 'dark';
 }

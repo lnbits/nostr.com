@@ -116,9 +116,9 @@
 <section class="login-panel" id="login">
   {#if showGoogleNsecPrompt}
     <div class="login-section">
-      <input aria-label="nsec to import" type="password" bind:value={googleNsec} on:input={handleGoogleNsecInput} autocomplete="off" spellcheck="false" placeholder="nsec1..." />
+      <input aria-label="optional nsec to import" type="password" bind:value={googleNsec} on:input={handleGoogleNsecInput} autocomplete="off" spellcheck="false" placeholder="nsec (optional)" />
       <div class="login-method-row">
-        <button class="primary google-login-button" disabled={busy} on:click={() => login('google')}><ShieldCheck size={18} /> {loggingIn ? 'Connecting' : "I don't have an nsec"}</button>
+        <button class="primary google-login-button" disabled={busy} on:click={() => login('google')}><ShieldCheck size={18} /> {loggingIn ? 'Connecting' : 'Login/Signup'}</button>
         <a class="login-info-link" href={appPath('/pomegranate')} aria-label="Learn about Pomegranate" on:click={closeForInfoLink}><Info size={17} /></a>
       </div>
     </div>
@@ -137,7 +137,7 @@
       <div class="login-method-row">
         <div class="login-input-action">
           <input aria-label="Bunker URI" bind:value={bunkerUri} autocomplete="off" spellcheck="false" placeholder="bunker://..." />
-          <button disabled={busy || !bunkerUri.trim()} on:click={() => void loginWithBunker()}><KeyRound size={18} /> Connect</button>
+          <button class="login-compact-action" disabled={busy || !bunkerUri.trim()} on:click={() => void loginWithBunker()}><KeyRound size={18} /> Connect</button>
         </div>
         <a class="login-info-link" href={appPath('/nip46')} aria-label="Learn about NIP-46" on:click={closeForInfoLink}><Info size={17} /></a>
       </div>
@@ -145,7 +145,7 @@
       <div class="login-method-row">
         <div class="login-input-action">
           <input aria-label="nsec or hex key" type="password" bind:value={privateKey} autocomplete="off" spellcheck="false" placeholder="nsec1..." />
-          <button disabled={busy || !privateKey.trim()} on:click={() => void loginWithPrivateKey()}><KeyRound size={18} /> Sign in</button>
+          <button class="login-compact-action" disabled={busy || !privateKey.trim()} on:click={() => void loginWithPrivateKey()}><KeyRound size={18} /> Sign in</button>
         </div>
         <a class="login-info-link" href={appPath('/nostr-keys')} aria-label="Learn about Nostr keys" on:click={closeForInfoLink}><Info size={17} /></a>
       </div>

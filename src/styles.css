@@ -1,25 +1,4 @@
 :root {
-  color-scheme: light;
-  --bg: #fffdf8;
-  --surface: #fffffd;
-  --panel: #ffffff;
-  --text: #1b1b1f;
-  --muted: #55545c;
-  --line: #25252a;
-  --accent: #5ca9d6;
-  --accent-strong: #2678a8;
-  --danger: #b93a3a;
-  --shadow: 0 18px 50px rgba(20, 20, 24, 0.12);
-  --native-status-offset: 0px;
-  --app-top-safe: max(env(safe-area-inset-top), var(--native-status-offset));
-  font-family: Inter, "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, ui-sans-serif, sans-serif;
-}
-
-:root.native-shell {
-  --native-status-offset: 28px;
-}
-
-:root[data-theme='dark'] {
   color-scheme: dark;
   --bg: #0f172a;
   --surface: #111c31;
@@ -31,6 +10,27 @@
   --accent-strong: #8bd5f7;
   --danger: #ff817d;
   --shadow: 0 18px 50px rgba(0, 0, 0, 0.24);
+  --native-status-offset: 0px;
+  --app-top-safe: max(env(safe-area-inset-top), var(--native-status-offset));
+  font-family: Inter, "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, ui-sans-serif, sans-serif;
+}
+
+:root.native-shell {
+  --native-status-offset: 28px;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #fffdf8;
+  --surface: #fffffd;
+  --panel: #ffffff;
+  --text: #1b1b1f;
+  --muted: #55545c;
+  --line: #25252a;
+  --accent: #5ca9d6;
+  --accent-strong: #2678a8;
+  --danger: #b93a3a;
+  --shadow: 0 18px 50px rgba(20, 20, 24, 0.12);
 }
 
 /* System mode only follows the OS when no explicit theme has been chosen. */
@@ -158,6 +158,17 @@ label span, label strong { color: var(--text); }
   display: flex;
   align-items: center;
   gap: 8px;
+}
+.guest-theme-toggle {
+  display: inline-flex;
+}
+.topbar-algo-button {
+  display: none;
+  min-height: 44px;
+  gap: 7px;
+  padding-inline: 14px;
+  color: var(--text);
+  font-weight: 850;
 }
 .left-nav-list {
   display: grid;
@@ -2685,7 +2696,23 @@ label span, label strong { color: var(--text); }
   overflow-wrap: anywhere;
 }
 .profile-qr-dialog {
-  justify-items: stretch;
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  text-align: center;
+}
+.profile-qr-dialog .dialog-head {
+  width: 100%;
+  justify-content: center;
+}
+.profile-qr-dialog .dialog-head > div {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+.profile-qr-dialog .dialog-head p {
+  margin: 0;
+  color: var(--muted);
 }
 .profile-qr-code {
   width: min(300px, 100%);
@@ -2701,8 +2728,8 @@ label span, label strong { color: var(--text); }
   border-radius: 4px;
 }
 .profile-share-copy {
-  width: 100%;
-  justify-self: stretch;
+  width: min(386px, 100%);
+  justify-self: center;
 }
 .profile-editor {
   display: grid;
@@ -2824,6 +2851,11 @@ label span, label strong { color: var(--text); }
   }
   .info-link { display: none; }
   .topbar-actions { gap: 6px; }
+  .guest-theme-toggle { display: none; }
+  .topbar-algo-button {
+    display: inline-flex;
+    min-height: 44px;
+  }
   .shell {
     width: 100%;
     max-width: none;
@@ -2885,7 +2917,22 @@ label span, label strong { color: var(--text); }
   .dm-media-grid video {
     max-height: 280px;
   }
-  .login-actions, .login-input-action, .profile-title-row, .profile-edit-grid { grid-template-columns: 1fr; }
+  .login-actions, .profile-title-row, .profile-edit-grid { grid-template-columns: 1fr; }
+  .login-input-action {
+    grid-template-columns: minmax(0, 1fr) minmax(102px, 28%);
+    gap: 8px;
+  }
+  .login-input-action input,
+  .login-input-action button {
+    min-width: 0;
+  }
+  .login-compact-action {
+    gap: 0;
+    padding-inline: 8px;
+  }
+  .login-compact-action svg {
+    display: none;
+  }
   .public-key-copy { min-width: 0; }
   .relay-editor {
     position: relative;
