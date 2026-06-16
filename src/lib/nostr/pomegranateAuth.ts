@@ -3,7 +3,7 @@ import { finalizeEvent, generateSecretKey, getPublicKey, nip19 } from 'nostr-too
 import { bytesToHex } from '@noble/hashes/utils.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { hexPubShard, hexShard, trustedKeyDeal } from '@fiatjaf/promenade-trusted-dealer';
-import { defaultPomegranateCentral, defaultPomegranateOperators } from './config';
+import { defaultPomegranateCentral, defaultPomegranateGoogleClientId, defaultPomegranateOperators } from './config';
 import { loginWithBunker, normalizePomegranateCentralUrl, pomegranateBunkerUrl } from './client';
 import type { Session } from './types';
 
@@ -171,6 +171,7 @@ async function authenticatePomegranate(provider: PomegranateLoginProvider) {
 
 async function authenticatePomegranateCentral(centralUrl: string, provider: PomegranateLoginProvider) {
   if (typeof window === 'undefined') throw new Error('Pomegranate login is only available in the browser.');
+  if (provider === 'google' && (await isAndroidNativeApp())) return authenticatePomegranateCentralAndroid(centralUrl);
   return new Promise<string>((resolve, reject) => {
     const loginUrl = new URL(`${centralUrl}/login/${provider}`);
     if (provider === 'google') loginUrl.searchParams.set('prompt', 'select_account');
@@ -206,6 +207,43 @@ async function authenticatePomegranateCentral(centralUrl: string, provider: Pome
     };
     window.addEventListener('message', onMessage);
   });
+}
+
+async function authenticatePomegranateCentralAndroid(centralUrl: string) {
+  if (centralUrl !== normalizePomegranateCentralUrl(defaultPomegranateCentral)) {
+    throw new Error('Android Google login is only configured for the default Pomegranate coordinator.');
+  }
+  const { GoogleAuth } = await import('@southdevs/capacitor-google-auth');
+  await GoogleAuth.initialize({
+    clientId: defaultPomegranateGoogleClientId,
+    scopes: ['profile', 'email'],
+    grantOfflineAccess: false
+  });
+  const user = await GoogleAuth.signIn({
+    clientId: defaultPomegranateGoogleClientId,
+    scopes: ['profile', 'email'],
+    grantOfflineAccess: false
+  });
+  const idToken = user.authentication?.idToken ?? '';
+  if (!idToken) throw new Error('Google did not return an Android ID token.');
+  const response = await fetch(`${centralUrl}/login/google/android`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id_token: idToken })
+  });
+  if (!response.ok) throw new PomegranateRequestError(response.status, pomegranateRequestMessage(response.status));
+  const payload = (await response.json()) as { token?: string };
+  if (!payload.token) throw new Error('Pomegranate did not return an auth token.');
+  return payload.token;
+}
+
+async function isAndroidNativeApp() {
+  try {
+    const { Capacitor } = await import('@capacitor/core');
+    return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+  } catch {
+    return false;
+  }
 }
 
 async function createPomegranateAccount(auth: StoredPomegranateAuth, secretKey: Uint8Array) {

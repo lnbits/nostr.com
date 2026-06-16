@@ -70,4 +70,7 @@ export const defaultGuestNip05 = 'benarc@nostr.com';
 
 export const defaultPomegranateCentral = 'auth.njump.me';
 
+// Public Google OAuth client ID used by the default Pomegranate coordinator.
+export const defaultPomegranateGoogleClientId = '300561989816-7nv10jo4vdn0d6p9knf12g7rq4fcusnc.apps.googleusercontent.com';
+
 export const defaultPomegranateOperators = ['po.njump.me', 'po.f7z.io', 'po.nostrver.se'];
