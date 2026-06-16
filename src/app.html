@@ -1,22 +1,22 @@
 <!doctype html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#0f172a" />
+    <meta name="theme-color" content="#000000" />
     <script>
       try {
         const base = '%sveltekit.assets%';
         const embedded = location.pathname.startsWith(`${base}/embed/`);
         const native = window.Capacitor?.isNativePlatform?.();
         const theme = embedded ? 'dark' : localStorage.getItem('nostr-theme');
-        const resolvedTheme = theme === 'dark' ? 'dark' : 'light';
+        const resolvedTheme = theme === 'light' ? 'light' : 'dark';
         document.documentElement.dataset.theme = resolvedTheme;
-        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', resolvedTheme === 'dark' ? '#0f172a' : '#fffdf8');
+        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', resolvedTheme === 'dark' ? '#000000' : '#fffdf8');
         if (native) document.documentElement.classList.add('native-shell');
-        if (!embedded && theme !== 'dark' && theme !== 'light') localStorage.setItem('nostr-theme', 'light');
+        if (!embedded && theme !== 'dark' && theme !== 'light') localStorage.setItem('nostr-theme', 'dark');
       } catch {
-        document.documentElement.dataset.theme = 'light';
+        document.documentElement.dataset.theme = 'dark';
       }
     </script>
     <link rel="manifest" href="%sveltekit.assets%/manifest.webmanifest" />

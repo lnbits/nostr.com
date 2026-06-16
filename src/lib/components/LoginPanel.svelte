@@ -1,8 +1,10 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { Info, KeyRound, ShieldCheck } from '@lucide/svelte';
   import { loginDialogOpen, signIn, signInWithImportedNsec } from '$lib/stores/app';
   import { validateImportedNsec, type PomegranateLoginProvider } from '$lib/nostr/pomegranateAuth';
   import { appPath } from '$lib/paths';
+  import { canUseNativeSecureSessionStorage } from '$lib/nativeSecureSession';
 
   let privateKey = '';
   let bunkerUri = '';
@@ -11,7 +13,13 @@
   let loggingIn = false;
   let importing = false;
   let showGoogleNsecPrompt = false;
+  let nativeSecureKeyAvailable = false;
+  let rememberPrivateKeyOnDevice = true;
   $: busy = loggingIn || importing;
+
+  onMount(() => {
+    void canUseNativeSecureSessionStorage().then((available) => (nativeSecureKeyAvailable = available));
+  });
 
   async function login(provider: PomegranateLoginProvider) {
     if (loggingIn) return;
@@ -32,7 +40,7 @@
     error = '';
     loggingIn = true;
     try {
-      await signIn('private-key', privateKey);
+      await signIn('private-key', privateKey, { rememberNativePrivateKey: nativeSecureKeyAvailable && rememberPrivateKeyOnDevice });
       privateKey = '';
       loginDialogOpen.set(false);
     } catch (err) {
@@ -143,9 +151,17 @@
       </div>
 
       <div class="login-method-row">
-        <div class="login-input-action">
-          <input aria-label="nsec or hex key" type="password" bind:value={privateKey} autocomplete="off" spellcheck="false" placeholder="nsec1..." />
-          <button class="login-compact-action" disabled={busy || !privateKey.trim()} on:click={() => void loginWithPrivateKey()}><KeyRound size={18} /> Sign in</button>
+        <div class="login-method-stack">
+          <div class="login-input-action">
+            <input aria-label="nsec or hex key" type="password" bind:value={privateKey} autocomplete="off" spellcheck="false" placeholder="nsec1..." />
+            <button class="login-compact-action" disabled={busy || !privateKey.trim()} on:click={() => void loginWithPrivateKey()}><KeyRound size={18} /> Sign in</button>
+          </div>
+          {#if nativeSecureKeyAvailable}
+            <label class="login-remember-option">
+              <input type="checkbox" bind:checked={rememberPrivateKeyOnDevice} />
+              <span>Remember securely on this device</span>
+            </label>
+          {/if}
         </div>
         <a class="login-info-link" href={appPath('/nostr-keys')} aria-label="Learn about Nostr keys" on:click={closeForInfoLink}><Info size={17} /></a>
       </div>

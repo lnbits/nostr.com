@@ -620,6 +620,11 @@ label span, label strong { color: var(--text); }
   color: var(--text);
   background: color-mix(in srgb, var(--text) 8%, transparent);
 }
+.login-method-stack {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+}
 .login-input-action {
   display: grid;
   grid-template-columns: minmax(0, 7fr) minmax(120px, 3fr);
@@ -628,6 +633,17 @@ label span, label strong { color: var(--text); }
 }
 .login-input-action button {
   width: 100%;
+}
+.login-remember-option {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.25;
+}
+.login-remember-option input {
+  margin: 0;
 }
 .nip07-login-button {
   width: 100%;

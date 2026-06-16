@@ -54,6 +54,7 @@ import {
 } from '$lib/nostr/client';
 import { clearPomegranateAuth, importNsecIntoPomegranate, loginWithPomegranateProvider, type PomegranateLoginProvider } from '$lib/nostr/pomegranateAuth';
 import { eventHasImgurUrl } from '$lib/nostr/media';
+import { clearNativePrivateKeySession, persistNativePrivateKeySession, readNativePrivateKeySession } from '$lib/nativeSecureSession';
 import { savePrefetchedThreadReplies } from '$lib/stores/threadSeed';
 import type { ContactListDetails, ContactListItem, CustomFeedSettings, DirectMessage, EventStats, FeedMode, LoginMode, NostrEvent, NotificationItem, Profile, RelayState, Session } from '$lib/nostr/types';
 
@@ -215,6 +216,11 @@ export async function bootstrap() {
   online.set(navigator.onLine);
   addEventListener('online', () => online.set(true));
   addEventListener('offline', () => online.set(false));
+
+  if (!currentSessionValue) {
+    const nativeSession = await readNativePrivateKeySession();
+    if (nativeSession) restoreSession(nativeSession);
+  }
 
   const [cachedEvents, cachedProfiles] = await Promise.all([getCachedEvents(cachedFeedBufferLimit), getCachedProfiles()]);
   const cachedTopLevelEvents = recentFeedEventsForMode(currentMode, cachedEventsForMode(currentMode, topLevelFeedEvents(filterSpam(cachedEvents, currentMutedPubkeys)), cachedFeedBufferLimit));
@@ -1025,7 +1031,7 @@ export async function sendDirectMessage(peer: string, content: string) {
   activeMessagePeer.set(recipient);
 }
 
-export async function signIn(mode: LoginMode | 'guest', value = '') {
+export async function signIn(mode: LoginMode | 'guest', value = '', options: { rememberNativePrivateKey?: boolean } = {}) {
   const pomegranateProvider = mode === 'pomegranate' ? ((value || 'google') as PomegranateLoginProvider) : undefined;
   const next =
     mode === 'nip07'
@@ -1038,45 +1044,23 @@ export async function signIn(mode: LoginMode | 'guest', value = '') {
             ? await loginWithPomegranateProvider(pomegranateProvider)
             : createGuestSession();
   if (isCurrentSession(next)) return;
-  session.set(next);
-  pendingGoogleOnboardingPubkey = shouldOfferGoogleOnboarding(next, pomegranateProvider) ? next.pubkey : '';
-  const previousFeedMode = currentMode;
-  persistSession(next);
-  restoreStoredContactListForSession(next);
-  restoreStoredFeedModeForSession(next);
-  activeHashtag.set('');
-  currentNotificationSeenAt = browser ? readLastSeen(notificationSeenStorageKey, next.pubkey) : 0;
-  currentMessageSeenAt = browser ? readLastSeen(messageSeenStorageKey, next.pubkey) : 0;
-  directMessages.set([]);
-  notifications.set([]);
-  loadingFeed.set(true);
-  if (!hasExplicitFeedModeSelection && previousFeedMode === 'global') feedMode.set('global');
-  void finishSignedInBootstrap(next);
+  await activateSession(next, {
+    pomegranateProvider,
+    rememberNativePrivateKey: mode === 'private-key' ? options.rememberNativePrivateKey : undefined
+  });
 }
 
 export async function signInWithImportedNsec(value: string, provider: PomegranateLoginProvider = 'google', options: { replaceExisting?: boolean } = {}) {
   const next = await importNsecIntoPomegranate(value, provider, options);
   if (isCurrentSession(next)) return;
-  session.set(next);
-  pendingGoogleOnboardingPubkey = '';
-  const previousFeedMode = currentMode;
-  persistSession(next);
-  restoreStoredContactListForSession(next);
-  restoreStoredFeedModeForSession(next);
-  activeHashtag.set('');
-  currentNotificationSeenAt = browser ? readLastSeen(notificationSeenStorageKey, next.pubkey) : 0;
-  currentMessageSeenAt = browser ? readLastSeen(messageSeenStorageKey, next.pubkey) : 0;
-  directMessages.set([]);
-  notifications.set([]);
-  loadingFeed.set(true);
-  if (!hasExplicitFeedModeSelection && previousFeedMode === 'global') feedMode.set('global');
-  void finishSignedInBootstrap(next);
+  await activateSession(next);
 }
 
 export async function signOut() {
   session.set(null);
   if (browser) localStorage.removeItem(sessionStorageKey);
   if (browser) sessionStorage.removeItem(sessionStorageKey);
+  await clearNativePrivateKeySession();
   clearPomegranateAuth();
   activeHashtag.set('');
   hasExplicitFeedModeSelection = false;
@@ -1507,7 +1491,42 @@ export function startCompose() {
 
 function hydrateSession() {
   const saved = readStoredSession();
-  if (saved) session.set(saved);
+  if (saved) restoreSession(saved);
+}
+
+async function activateSession(
+  next: Session,
+  options: {
+    pomegranateProvider?: PomegranateLoginProvider;
+    rememberNativePrivateKey?: boolean;
+  } = {}
+) {
+  session.set(next);
+  pendingGoogleOnboardingPubkey = shouldOfferGoogleOnboarding(next, options.pomegranateProvider) ? next.pubkey : '';
+  const previousFeedMode = currentMode;
+  persistSession(next);
+  if (next.mode === 'private-key') {
+    if (options.rememberNativePrivateKey) await persistNativePrivateKeySession(next);
+    else await clearNativePrivateKeySession();
+  }
+  restoreStoredContactListForSession(next);
+  restoreStoredFeedModeForSession(next);
+  activeHashtag.set('');
+  currentNotificationSeenAt = browser ? readLastSeen(notificationSeenStorageKey, next.pubkey) : 0;
+  currentMessageSeenAt = browser ? readLastSeen(messageSeenStorageKey, next.pubkey) : 0;
+  directMessages.set([]);
+  notifications.set([]);
+  loadingFeed.set(true);
+  if (!hasExplicitFeedModeSelection && previousFeedMode === 'global') feedMode.set('global');
+  void finishSignedInBootstrap(next);
+}
+
+function restoreSession(next: Session) {
+  session.set(next);
+  restoreStoredContactListForSession(next);
+  restoreStoredFeedModeForSession(next);
+  currentNotificationSeenAt = browser ? readLastSeen(notificationSeenStorageKey, next.pubkey) : 0;
+  currentMessageSeenAt = browser ? readLastSeen(messageSeenStorageKey, next.pubkey) : 0;
 }
 
 function persistSession(next: Session) {
