@@ -353,20 +353,24 @@ function youtubeVideoId(host: string, parsed: URL, pathParts: string[]) {
 
 function vimeoVideoId(host: string, pathParts: string[]) {
   if (host === 'player.vimeo.com' && pathParts[0] === 'video') return validNumericId(pathParts[1]);
-  if (!host.endsWith('vimeo.com')) return '';
+  if (!isHostOrSubdomain(host, 'vimeo.com')) return '';
   return validNumericId(pathParts.find((part) => /^\d+$/.test(part)));
 }
 
 function instagramShortcode(host: string, pathParts: string[]) {
-  if (!host.endsWith('instagram.com')) return '';
+  if (!isHostOrSubdomain(host, 'instagram.com')) return '';
   if (!['p', 'reel', 'tv'].includes(pathParts[0])) return '';
   return validEmbedId(pathParts[1]);
 }
 
 function tiktokVideoId(host: string, pathParts: string[]) {
-  if (!host.endsWith('tiktok.com')) return '';
+  if (!isHostOrSubdomain(host, 'tiktok.com')) return '';
   const videoIndex = pathParts.findIndex((part) => part === 'video');
   return videoIndex >= 0 ? validNumericId(pathParts[videoIndex + 1]) : '';
+}
+
+function isHostOrSubdomain(host: string, domain: string) {
+  return host === domain || host.endsWith(`.${domain}`);
 }
 
 function validEmbedId(value = '') {

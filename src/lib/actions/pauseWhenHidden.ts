@@ -42,10 +42,20 @@ export function pauseWhenHidden(node: HTMLMediaElement | HTMLIFrameElement, opti
 function pauseIframe(node: HTMLIFrameElement) {
   const target = node.contentWindow;
   if (!target) return;
-  target.postMessage(JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }), '*');
-  target.postMessage(JSON.stringify({ method: 'pause' }), '*');
+  const targetOrigin = iframeOrigin(node);
+  if (!targetOrigin) return;
+  target.postMessage(JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }), targetOrigin);
+  target.postMessage(JSON.stringify({ method: 'pause' }), targetOrigin);
 }
 
 function restoreIframe(node: HTMLMediaElement | HTMLIFrameElement, source: string, unloaded: boolean) {
   if (node instanceof HTMLIFrameElement && unloaded && source && node.src === 'about:blank') node.src = source;
+}
+
+function iframeOrigin(node: HTMLIFrameElement) {
+  try {
+    return new URL(node.src).origin;
+  } catch {
+    return '';
+  }
 }

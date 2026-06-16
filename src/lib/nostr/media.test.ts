@@ -115,6 +115,18 @@ describe('media helpers', () => {
     ]);
   });
 
+  it('does not treat lookalike social domains as embeds', () => {
+    expect(
+      extractSocialEmbeds(
+        [
+          'https://evilvimeo.com/123456789',
+          'https://notinstagram.com/reel/Cabc123_def/',
+          'https://bad-tiktok.com/@nostr/video/7330000000000000000'
+        ].join('\n')
+      )
+    ).toEqual([]);
+  });
+
   it('makes bare domains, mentions, and bare nostr references clickable', () => {
     const pubkey = 'a'.repeat(64);
     const npub = nip19.npubEncode(pubkey);
