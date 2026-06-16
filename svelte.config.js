@@ -1,11 +1,14 @@
 import adapter from '@sveltejs/adapter-static';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
-import { readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 
 const base = process.env.BASE_PATH ?? '';
-const nipEntries = readdirSync('nips')
-  .filter((file) => /^[0-9A-F]{2}\.md$/i.test(file))
-  .map((file) => `/nip${file.slice(0, -3).toLowerCase()}`);
+const nipEntries = nipCodes().map((code) => `/nip${code.toLowerCase()}`);
+
+function nipCodes() {
+  const source = readFileSync('src/lib/nips.ts', 'utf8');
+  return [...source.matchAll(/^  '([0-9A-F]{2})': \{/gim)].map((match) => match[1].toUpperCase()).sort();
+}
 
 const config = {
   preprocess: vitePreprocess(),

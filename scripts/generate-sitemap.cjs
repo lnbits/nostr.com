@@ -1,10 +1,14 @@
-const { readdirSync, writeFileSync } = require('node:fs');
+const { readFileSync, writeFileSync } = require('node:fs');
 
 const origin = 'https://nostr.com';
-const nipUrls = readdirSync('nips')
-  .filter((file) => /^[0-9A-F]{2}\.md$/i.test(file))
-  .map((file) => `${origin}/nip${file.slice(0, -3).toLowerCase()}`)
+const nipUrls = nipCodes()
+  .map((code) => `${origin}/nip${code.toLowerCase()}`)
   .sort();
+
+function nipCodes() {
+  const source = readFileSync('src/lib/nips.ts', 'utf8');
+  return [...source.matchAll(/^  '([0-9A-F]{2})': \{/gim)].map((match) => match[1].toUpperCase()).sort();
+}
 
 const urls = [
   { loc: `${origin}/`, changefreq: 'daily', priority: '1.0' },
