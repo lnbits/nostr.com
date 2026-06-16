@@ -66,6 +66,7 @@ import {
 import { clearPomegranateAuth, importNsecIntoPomegranate, loginWithPomegranateProvider, type PomegranateLoginProvider } from '$lib/nostr/pomegranateAuth';
 import { eventHasImgurUrl } from '$lib/nostr/media';
 import { clearNativePrivateKeySession, persistNativePrivateKeySession, readNativePrivateKeySession } from '$lib/nativeSecureSession';
+import { setupNativeLocalNotifications, showNativeNotificationForItem } from '$lib/nativeLocalNotifications';
 import { savePrefetchedThreadReplies } from '$lib/stores/threadSeed';
 import type { ContactListDetails, ContactListItem, CustomFeedSettings, DirectMessage, EventStats, FeedMode, LoginMode, NostrEvent, NotificationItem, Profile, RelayState, Session } from '$lib/nostr/types';
 
@@ -228,6 +229,9 @@ export async function bootstrap() {
   online.set(navigator.onLine);
   addEventListener('online', () => online.set(true));
   addEventListener('offline', () => online.set(false));
+  void setupNativeLocalNotifications((route) => {
+    void goto(appPath(route));
+  });
 
   if (!currentSessionValue) {
     const nativeSession = await readNativePrivateKeySession();
@@ -1928,6 +1932,9 @@ function restartInboxSubscriptions() {
   const token = ++liveInboxToken;
   void subscribeNotifications(currentSession.pubkey, currentRelays, (items) => {
     if (token !== liveInboxToken || currentSessionValue?.pubkey !== currentSession.pubkey) return;
+    const existingNotifications = getStoreSnapshot(notifications);
+    const existingNotificationIds = new Set(existingNotifications.map((item) => item.id));
+    notifyNativeForLiveNotifications(items.filter((item) => !existingNotificationIds.has(item.id) && item.event.created_at > currentNotificationSeenAt));
     notifications.update((existing) => {
       const merged = mergeNotifications(items, existing);
       void cacheNotifications(currentSession.pubkey, merged);
@@ -1966,6 +1973,14 @@ function mergeNotifications(next: NotificationItem[], existing: NotificationItem
     if (!existingItem || item.event.created_at >= existingItem.event.created_at) byId.set(item.id, item);
   }
   return [...byId.values()].sort((a, b) => b.event.created_at - a.event.created_at).slice(0, maxNotificationItems);
+}
+
+function notifyNativeForLiveNotifications(items: NotificationItem[]) {
+  if (!browser || !items.length) return;
+  const currentProfiles = getStoreSnapshot(profiles);
+  for (const item of items.slice(0, 4)) {
+    void showNativeNotificationForItem(item, currentProfiles[item.actor]);
+  }
 }
 
 async function hydrateGuestFeedContext() {

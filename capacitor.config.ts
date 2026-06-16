@@ -1,3 +1,5 @@
+/// <reference types="@capacitor/local-notifications" />
+
 import type { CapacitorConfig } from '@capacitor/cli';
 
 // Public Google OAuth client ID used by auth.njump.me for Pomegranate login.
@@ -18,6 +20,9 @@ const config: CapacitorConfig = {
       scopes: ['profile', 'email'],
       androidClientId: pomegranateGoogleClientId,
       forceCodeForRefreshToken: false
+    },
+    LocalNotifications: {
+      iconColor: '#29a3e8'
     }
   }
 };
