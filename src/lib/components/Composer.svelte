@@ -5,7 +5,7 @@
   import { hasPublishedTextNote } from '$lib/nostr/client';
   import { uploadToNostrBuild } from '$lib/nostr/upload';
 
-  const introductionPrefix = '#introductions\n\n';
+  const introductionPrefix = '#nostr #introductions\n\n';
   let content = '';
   let busy = false;
   let uploading = false;

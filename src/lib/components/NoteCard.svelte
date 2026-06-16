@@ -466,8 +466,7 @@
     <button class="note-gutter-open" aria-label="Open note" on:click={openNote}></button>
   {/if}
 
-  <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-  <div class="note-body" role={embedded ? undefined : 'button'} tabindex={embedded ? undefined : 0} on:click={openFromNoteBody} on:keydown={openFromKeyboard}>
+  <div class="note-body">
     <div class="note-meta">
       <a href={appPath(`/profile/${displayEvent.pubkey}`)}><strong>{name}</strong></a>
       <time datetime={timestamp.toISOString()} title={fullTime}>{time}</time>
@@ -496,7 +495,8 @@
         </div>
       {/if}
     </div>
-    <div class="note-content" class:collapsed={isLong && !expanded}>
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+    <div class="note-content" class:collapsed={isLong && !expanded} role={embedded ? undefined : 'button'} tabindex={embedded ? undefined : 0} on:click={openFromNoteBody} on:keydown={openFromKeyboard}>
       {#each contentParts as part}
         {#if part.type === 'hashtag'}
           <button class="hashtag" on:click={() => filterHashtag(part.value)}>#{part.value}</button>

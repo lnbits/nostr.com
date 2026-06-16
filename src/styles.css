@@ -874,13 +874,17 @@ label span, label strong { color: var(--text); }
   padding: 0;
   background: transparent;
   cursor: pointer;
-}
-.note-gutter-open:hover {
-  background: color-mix(in srgb, var(--text) 4%, transparent);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 .note-gutter-open:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
+}
+@media (hover: none) {
+  .note-content[role='button']:active {
+    background: transparent;
+  }
 }
 .avatar.large { width: 84px; height: 84px; }
 .avatar img { width: 100%; height: 100%; object-fit: cover; }
@@ -893,8 +897,10 @@ label span, label strong { color: var(--text); }
   gap: 4px;
   overflow-x: clip;
 }
-.note-body[role='button'] {
+.note-content[role='button'] {
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 .note-meta {
   position: relative;
@@ -1235,6 +1241,8 @@ label span, label strong { color: var(--text); }
   justify-content: flex-start;
   gap: 4px;
   padding: 0 2px;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 .note-actions span {
   min-width: 1ch;
