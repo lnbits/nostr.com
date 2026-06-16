@@ -219,11 +219,7 @@ async function authenticatePomegranateCentralAndroid(centralUrl: string) {
     scopes: ['profile', 'email'],
     grantOfflineAccess: false
   });
-  const user = await GoogleAuth.signIn({
-    clientId: defaultPomegranateGoogleClientId,
-    scopes: ['profile', 'email'],
-    grantOfflineAccess: false
-  });
+  const user = await signInWithAndroidGoogle(GoogleAuth);
   const idToken = user.authentication?.idToken ?? '';
   if (!idToken) throw new Error('Google did not return an Android ID token.');
   const response = await fetch(`${centralUrl}/login/google/android`, {
@@ -231,10 +227,51 @@ async function authenticatePomegranateCentralAndroid(centralUrl: string) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id_token: idToken })
   });
-  if (!response.ok) throw new PomegranateRequestError(response.status, pomegranateRequestMessage(response.status));
+  if (!response.ok) throw new PomegranateRequestError(response.status, await pomegranateAndroidLoginMessage(response));
   const payload = (await response.json()) as { token?: string };
   if (!payload.token) throw new Error('Pomegranate did not return an auth token.');
   return payload.token;
+}
+
+type AndroidGoogleAuth = {
+  signIn(options: { clientId: string; scopes: string[]; grantOfflineAccess: boolean }): Promise<{ authentication?: { idToken?: string | null } }>;
+};
+
+async function signInWithAndroidGoogle(GoogleAuth: AndroidGoogleAuth) {
+  try {
+    return await GoogleAuth.signIn({
+      clientId: defaultPomegranateGoogleClientId,
+      scopes: ['profile', 'email'],
+      grantOfflineAccess: false
+    });
+  } catch (error) {
+    throw new Error(androidGoogleSignInMessage(error));
+  }
+}
+
+function androidGoogleSignInMessage(error: unknown) {
+  const code = nativePluginErrorCode(error);
+  if (code === '10') {
+    return 'Google login is not configured for this Android app yet. The APK package and signing key need to be added to the Pomegranate Google OAuth project.';
+  }
+  if (code === '12501') return 'Google login was cancelled.';
+  const message = error instanceof Error ? error.message : typeof error === 'string' ? error : 'Google login failed.';
+  return code && !message.includes(code) ? `${message} (${code})` : message;
+}
+
+function nativePluginErrorCode(error: unknown) {
+  if (!error || typeof error !== 'object') return '';
+  const candidate = error as { code?: unknown };
+  return typeof candidate.code === 'string' || typeof candidate.code === 'number' ? String(candidate.code) : '';
+}
+
+async function pomegranateAndroidLoginMessage(response: Response) {
+  const fallback = pomegranateRequestMessage(response.status);
+  const text = await response.text().catch(() => '');
+  if (response.status === 400 && text.toLowerCase().includes('invalid google token audience')) {
+    return 'Pomegranate rejected this Android Google token. The Android app needs to be configured in the same Google OAuth project as the Pomegranate coordinator.';
+  }
+  return fallback;
 }
 
 async function isAndroidNativeApp() {
