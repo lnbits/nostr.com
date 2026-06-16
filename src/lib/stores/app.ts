@@ -1,7 +1,7 @@
 import { browser } from '$app/environment';
 import { goto } from '$app/navigation';
 import { writable } from 'svelte/store';
-import { cacheDirectMessages, clearEventCache, getCachedDirectMessages, getCachedEvents, getCachedHashtagEvents, getCachedProfiles } from '$lib/nostr/cache';
+import { cacheDirectMessages, clearEventCache, getCachedDirectMessages, getCachedEvents, getCachedHashtagEvents, getCachedProfileEvents, getCachedProfiles } from '$lib/nostr/cache';
 import { defaultCustomFeedSettings, defaultGuestNip05, defaultRelays, globalFeedCuratorPubkey, globalFeedHashtags, keywordsForInterests } from '$lib/nostr/config';
 import { appPath } from '$lib/paths';
 import { markRelaysOffline, markRelaysOnline, syncRelayStatus } from '$lib/stores/relayStatus';
@@ -19,6 +19,7 @@ import {
   fetchEventStats,
   fetchDeletedEventIdsForEvents,
   fetchMuteList,
+  fetchProfileEvents,
   fetchProfiles,
   fetchUserEventActions,
   fetchNotifications,
@@ -238,7 +239,7 @@ export async function bootstrap() {
     .then(() => {
       void refreshRelayInfo();
       if (currentRelays.length !== relayCountBeforeContext || currentMode !== 'global' || currentHashtag) void refreshFeed();
-      void refreshNotifications();
+      if (currentSessionValue) void warmSignedInSession(currentSessionValue, { refreshFeed: false });
     })
     .catch(() => {
       void refreshNotifications();
@@ -642,9 +643,9 @@ export async function loadMoreFeed(force = false) {
   loadingMoreFeed.set(true);
   try {
     if (fetchMode === 'custom') await refreshFriendsOfFriendsAuthors();
-    const revealedEvents = revealCachedOlderFeed();
     const freshEvents = await fetchOlderFeedPage(fetchMode, olderFetchTarget);
     if (!freshEvents.length) {
+      const revealedEvents = revealCachedOlderFeed();
       if (revealedEvents.length) {
         olderFeedEmptyAttempts = 0;
         hasMoreFeed.set(true);
@@ -661,11 +662,6 @@ export async function loadMoreFeed(force = false) {
     void refreshEventStats(freshEvents.map((event) => event.id));
     void hydrateMissingProfiles(freshEvents, 40);
     void pruneDeletedEvents(freshEvents);
-    if (revealedEvents.length) {
-      void refreshEventStats(revealedEvents.map((event) => event.id));
-      void hydrateMissingProfiles(revealedEvents, 40);
-      void pruneDeletedEvents(revealedEvents);
-    }
   } finally {
     loadingMoreFeed.set(false);
   }
@@ -673,7 +669,7 @@ export async function loadMoreFeed(force = false) {
 
 async function fetchOlderFeedPage(fetchMode: FeedMode, target = olderFetchTarget) {
   const collected: NostrEvent[] = [];
-  let cursor = timelineCursor(feedEventsForActiveHashtag([...getStoreSnapshot(events), ...cachedOlderEvents]), 'oldest') ?? oldestFeedTimestamp;
+  let cursor = timelineCursor(feedEventsForActiveHashtag(getStoreSnapshot(events)), 'oldest') ?? oldestFeedTimestamp;
 
   for (let attempt = 0; attempt < olderFetchMaxAttempts && collected.length < target; attempt += 1) {
     const olderThan = cursor ? cursor - 1 : undefined;
@@ -1809,14 +1805,62 @@ async function finishSignedInBootstrap(next: Session) {
     if (!isCurrentSession(next)) return;
     selectPreferredSignedInFeed(true);
     await refreshFeed(currentMode);
-    void refreshNotifications();
-    void hydrateCachedDirectMessages(next);
-    if (next.mode !== 'nip07') void refreshMessages();
+    void warmSignedInSession(next, { refreshFeed: false });
     restartInboxSubscriptions();
     if (pendingGoogleOnboardingPubkey === next.pubkey && shouldOfferGoogleOnboarding(next, 'google')) onboardingDialogOpen.set(true);
   } finally {
     if (isCurrentSession(next)) loadingFeed.set(false);
   }
+}
+
+async function warmSignedInSession(currentSession: Session, options: { refreshFeed?: boolean } = {}) {
+  if (!isCurrentSession(currentSession)) return;
+  await Promise.all([
+    hydrateOwnProfileAndPosts(currentSession),
+    prefetchFollowFeed(currentSession),
+    refreshNotifications(),
+    refreshSignedInDirectMessages(currentSession),
+    options.refreshFeed ? refreshFeed(currentMode) : Promise.resolve()
+  ]);
+}
+
+async function hydrateOwnProfileAndPosts(currentSession: Session) {
+  await hydrateCachedOwnProfilePosts(currentSession);
+  if (!isCurrentSession(currentSession)) return;
+  const [ownProfile, ownEvents] = await Promise.all([
+    fetchProfiles([currentSession.pubkey], currentRelays).catch(() => []),
+    fetchProfileEvents(currentSession.pubkey, currentRelays, initialFeedLimit).catch(() => [])
+  ]);
+  if (!isCurrentSession(currentSession)) return;
+  if (ownProfile.length) profiles.update((existing) => mergeProfileRecords(existing, ownProfile));
+  if (ownEvents.length) {
+    events.update((existing) => mergeEvents(ownEvents, existing));
+    void refreshEventStats(ownEvents.map((event) => event.id));
+    void pruneDeletedEvents(ownEvents);
+  }
+}
+
+async function hydrateCachedOwnProfilePosts(currentSession: Session) {
+  const cached = await getCachedProfileEvents(currentSession.pubkey, initialFeedLimit).catch(() => []);
+  if (!cached.length || !isCurrentSession(currentSession)) return;
+  events.update((existing) => mergeEvents(cached, existing));
+}
+
+async function refreshSignedInDirectMessages(currentSession: Session) {
+  await hydrateCachedDirectMessages(currentSession);
+  if (currentSession.mode !== 'nip07' && isCurrentSession(currentSession)) await refreshMessages().catch(() => undefined);
+}
+
+async function prefetchFollowFeed(currentSession: Session) {
+  if (!currentFollows.length || currentMode === 'follow') return;
+  const followEvents = filterMutedEvents(
+    await fetchFeed('follow', currentRelays, currentFollows, effectiveFeedSettings('follow'), { limit: initialFeedLimit }).catch(() => [])
+  );
+  if (!followEvents.length || !isCurrentSession(currentSession)) return;
+  events.update((existing) => mergeEvents(followEvents, existing));
+  void refreshEventStats(followEvents.map((event) => event.id));
+  void hydrateMissingProfiles(followEvents, 40);
+  void pruneDeletedEvents(followEvents);
 }
 
 async function hydrateSignedInFeedContext(currentSession: Session) {
