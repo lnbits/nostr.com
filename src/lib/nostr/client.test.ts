@@ -173,6 +173,26 @@ describe('nostr client helpers', () => {
     ]);
   });
 
+  it('splits large following author filters so relays do not receive one huge authors list', async () => {
+    const follows = Array.from({ length: 100 }, (_, index) => index.toString(16).padStart(64, '0'));
+    const filters = await feedFiltersForMode('follow', { kinds: [1], limit: 24 }, follows, { friendsOfFriends: false, keywords: [], interests: [] }, 123, []);
+
+    expect(filters).toHaveLength(3);
+    expect(filters.flatMap((filter) => filter.authors ?? [])).toEqual(follows);
+    expect(filters.map((filter) => filter.authors?.length)).toEqual([48, 48, 4]);
+    expect(filters.map((filter) => filter.limit)).toEqual([8, 8, 8]);
+    expect(filters.every((filter) => filter.since === 123)).toBe(true);
+  });
+
+  it('does not add limits to live following filters when splitting large author lists', async () => {
+    const follows = Array.from({ length: 50 }, (_, index) => index.toString(16).padStart(64, '0'));
+    const filters = await feedFiltersForMode('follow', { kinds: [1] }, follows, { friendsOfFriends: false, keywords: [], interests: [] }, 123, []);
+
+    expect(filters).toHaveLength(2);
+    expect(filters.map((filter) => filter.limit)).toEqual([undefined, undefined]);
+    expect(filters.flatMap((filter) => filter.authors ?? [])).toEqual(follows);
+  });
+
 
   it('constrains the global feed to default hashtags while preserving custom feed keyword slices', async () => {
     const follows = ['c'.repeat(64)];

@@ -3,6 +3,12 @@ declare global {
     Capacitor?: {
       isNativePlatform(): boolean;
     };
+    nostrDesktopSecureStorage?: {
+      isAvailable(): Promise<boolean>;
+      read(): Promise<string | null>;
+      write(value: string): Promise<boolean>;
+      clear(): Promise<void>;
+    };
     nostr?: {
       getPublicKey(): Promise<string>;
       signEvent(event: Record<string, unknown>): Promise<Record<string, unknown>>;

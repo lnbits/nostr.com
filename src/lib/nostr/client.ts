@@ -22,6 +22,7 @@ pool.onRelayConnectionFailure = (url: string) => noteRelayConnectionFailure(url)
 pool.onRelayConnectionSuccess = (url: string) => noteRelayConnectionSuccess(url);
 pool.allowConnectingToRelay = (url: string, operation: ['read', Filter[]] | ['write', NostrToolsEvent]) => operation[0] !== 'read' || !relayInBackoff(url);
 const maxFeedPostContentLength = 900;
+const authorFilterChunkSize = 48;
 type SearchFilter = Filter & { search?: string };
 const bunkerSigners = new Map<string, nip46.BunkerSigner>();
 const connectedBunkerSignerKeys = new Set<string>();
@@ -585,7 +586,7 @@ export function feedFiltersForMode(
 ) {
   const tag = normalizedHashtag(options.hashtag);
   const taggedBase = tag ? { ...base, '#t': [tag] } : base;
-  if (mode === 'follow' && follows.length) return [withOptionalSince({ ...taggedBase, authors: follows }, since)];
+  if (mode === 'follow' && follows.length) return authorFeedFilters(taggedBase, follows, taggedBase.limit, since);
   if (mode === 'custom') return customFeedFilters(taggedBase, follows, settings, since, relayUrls, options.customFriendsOfFriends);
   if (mode === 'global' && tag) return [withOptionalSince(taggedBase, since)];
   if (mode === 'global') return globalFeedFilters(taggedBase, since, options.globalAuthors);
@@ -1500,10 +1501,10 @@ async function customFeedFilters(base: Filter, follows: string[], settings: Cust
   if (!follows.length && !keywordFilterItems.length) return [];
   const friendsOfFriends = settings.friendsOfFriends && follows.length ? (prefetchedFriendsOfFriends ?? (await fetchFriendsOfFriends(follows, relayUrls))) : [];
   const { followLimit, friendsOfFriendsLimit, keywordLimit } = customFeedSliceLimits(total, follows.length > 0, friendsOfFriends.length > 0, keywordFilterItems.length > 0);
-  const filters: Filter[] = followLimit ? [withOptionalSince({ ...base, authors: follows, limit: followLimit }, since)] : [];
+  const filters: Filter[] = followLimit ? authorFeedFilters(base, follows, followLimit, since) : [];
 
   if (friendsOfFriendsLimit) {
-    filters.push(withOptionalSince({ ...base, authors: friendsOfFriends, limit: friendsOfFriendsLimit }, since));
+    filters.push(...authorFeedFilters(base, friendsOfFriends, friendsOfFriendsLimit, since));
   }
 
   filters.push(...keywordFeedFilters(base, keywordFilterItems, keywordLimit, since));
@@ -1536,15 +1537,36 @@ function globalFeedFilters(base: Filter, since?: number, authors: string[] = [])
 
   const total = base.limit ?? 0;
   if (!total) {
-    return [withOptionalSince({ ...base, '#t': globalFeedHashtags }, since), withOptionalSince({ ...base, authors: cleanAuthors }, since)];
+    return [withOptionalSince({ ...base, '#t': globalFeedHashtags }, since), ...authorFeedFilters(base, cleanAuthors, base.limit, since)];
   }
 
   const authorLimit = Math.max(1, Math.round(total * 0.5));
   const tagLimit = Math.max(1, total - authorLimit);
   return [
     withOptionalSince({ ...base, limit: tagLimit, '#t': globalFeedHashtags }, since),
-    withOptionalSince({ ...base, limit: authorLimit, authors: cleanAuthors }, since)
+    ...authorFeedFilters(base, cleanAuthors, authorLimit, since)
   ];
+}
+
+function authorFeedFilters(base: Filter, authors: string[], totalLimit?: number, since?: number) {
+  const cleanAuthors = [...new Set(authors.filter((pubkey) => /^[0-9a-f]{64}$/i.test(pubkey)))];
+  if (!cleanAuthors.length) return [];
+  const chunks = chunkItems(cleanAuthors, authorFilterChunkSize);
+  if (totalLimit === undefined) return chunks.map((chunk) => withOptionalSince({ ...base, authors: chunk }, since));
+  const limits = splitAuthorLimit(Math.max(1, totalLimit), chunks.length);
+  return chunks.map((chunk, index) => withOptionalSince({ ...base, limit: limits[index], authors: chunk }, since));
+}
+
+function chunkItems<T>(items: T[], size: number) {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) chunks.push(items.slice(index, index + size));
+  return chunks;
+}
+
+function splitAuthorLimit(total: number, parts: number) {
+  const base = Math.floor(total / parts);
+  const remainder = total - base * parts;
+  return Array.from({ length: parts }, (_, index) => Math.max(1, base + (index < remainder ? 1 : 0)));
 }
 
 function withOptionalSince(filter: Filter, since?: number) {

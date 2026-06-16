@@ -1,9 +1,11 @@
-const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, safeStorage, shell } = require('electron');
 const fs = require('fs');
+const fsp = require('fs/promises');
 const http = require('http');
 const path = require('path');
 
 let server;
+const secureSessionFile = 'secure-private-key-session.dat';
 
 function createStaticServer() {
   const root = path.join(__dirname, '..', 'build');
@@ -51,6 +53,7 @@ async function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      preload: path.join(__dirname, 'preload.cjs'),
       sandbox: true
     }
   });
@@ -75,7 +78,54 @@ function contentType(filePath) {
   return 'application/octet-stream';
 }
 
-app.whenReady().then(createWindow);
+function secureSessionPath() {
+  return path.join(app.getPath('userData'), secureSessionFile);
+}
+
+function canUseSecureSessionStorage() {
+  if (!safeStorage.isEncryptionAvailable()) return false;
+  if (process.platform !== 'linux') return true;
+  const backend = safeStorage.getSelectedStorageBackend();
+  return backend !== 'basic_text' && backend !== 'unknown';
+}
+
+async function readSecureSession() {
+  if (!canUseSecureSessionStorage()) return null;
+  try {
+    const encoded = await fsp.readFile(secureSessionPath(), 'utf8');
+    return safeStorage.decryptString(Buffer.from(encoded, 'base64'));
+  } catch {
+    return null;
+  }
+}
+
+async function writeSecureSession(value) {
+  if (!canUseSecureSessionStorage()) return false;
+  const encrypted = safeStorage.encryptString(value);
+  await fsp.mkdir(app.getPath('userData'), { recursive: true });
+  await fsp.writeFile(secureSessionPath(), encrypted.toString('base64'), { mode: 0o600 });
+  return true;
+}
+
+async function clearSecureSession() {
+  try {
+    await fsp.rm(secureSessionPath(), { force: true });
+  } catch {
+    // Logout should still succeed if the secure session file is already gone.
+  }
+}
+
+function registerSecureSessionHandlers() {
+  ipcMain.handle('secure-session:available', () => canUseSecureSessionStorage());
+  ipcMain.handle('secure-session:read', () => readSecureSession());
+  ipcMain.handle('secure-session:write', (_event, value) => (typeof value === 'string' ? writeSecureSession(value) : false));
+  ipcMain.handle('secure-session:clear', () => clearSecureSession());
+}
+
+app.whenReady().then(() => {
+  registerSecureSessionHandlers();
+  return createWindow();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
