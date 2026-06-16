@@ -1,5 +1,6 @@
 <script lang="ts">
   import { appPath } from '$lib/paths';
+  import { slugForNipId } from '$lib/nips';
 
   const activeNips = [
     {
@@ -139,16 +140,23 @@
       <img src={appPath('/robot.png')} alt="" class="info-robot" />
     </div>
     <p>
-      Nostr (Notes and Other Stuff Transmitted by Relays) is a completely free and open-source
-      protocol that nobody controls. It enables social media and many other applications without
-      creating walled gardens or centralized platforms.
+      Nostr (Notes and Other Stuff Transmitted by Relays) is a free and open network that nobody
+      owns or controls. Instead of one company running everything, Nostr uses
+      <a href={appPath('/relays')}>relays</a> (servers) to store and share information, and
+      <a href={appPath('/clients')}>clients</a> (apps) to let people read, write, and interact with
+      that information.
     </p>
-    <p>This Nostr social client is one of many clients that exist.</p>
     <p>
-      Nostr is modular and evolves through Nostr Improvement Proposals (NIPs). Because clients
-      share the same open protocol, users are free to choose whichever client they prefer. Unlike
-      centralised platforms like X and Meta, your digital self and data are free to move between clients,
-      rather than being locked in and weaponised by some CEO.
+      Every account has <a href={appPath('/nostr-keys')}>Nostr keys</a>. Your public key is like
+      your username and can be shared with anyone. Your private key is like your password and must
+      be kept safe. These keys give you ownership of your identity, rather than a company owning it
+      for you.
+    </p>
+    <p>
+      Because your identity belongs to your keys, not a specific app, you can move between
+      different Nostr clients while keeping the same profile, followers, and content. Unlike
+      traditional social media platforms, your digital identity is not locked into a single company
+      or controlled by a CEO.
     </p>
     <p>
       Learn more at <a href="https://nostr.org" target="_blank" rel="noreferrer">nostr.org</a>
@@ -160,7 +168,7 @@
     <div class="nips-list">
       {#each activeNips as nip}
         <div class="nip-row">
-          <strong>{nip.id}</strong>
+          <strong><a href={appPath(`/${slugForNipId(nip.id)}`)}>{nip.id}</a></strong>
           <span>{nip.description}</span>
         </div>
       {/each}
@@ -173,7 +181,7 @@
       <div class="nips-list">
         {#each partialNips as nip}
           <div class="nip-row">
-            <strong>{nip.id}</strong>
+            <strong><a href={appPath(`/${slugForNipId(nip.id)}`)}>{nip.id}</a></strong>
             <span>{nip.description}</span>
           </div>
         {/each}

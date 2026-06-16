@@ -18,6 +18,14 @@
   const homeDescription = 'Nostr is a free and open-source protocol for social media and other things - controlled by users, not platforms.';
   const infoDescription =
     'Learn how Nostr (Notes and Other Stuff Transmitted by Relays) enables social media and applications without centralized platforms or walled gardens.';
+  const clientsDescription =
+    'Learn what Nostr clients are, why there are many different clients, how switching apps works, and how to protect your private key.';
+  const nostrKeysDescription =
+    'Learn the difference between Nostr public keys and private keys, how signed notes work, and why protecting your private key matters.';
+  const pomegranateDescription =
+    'Learn how Pomegranate helps you use Nostr without giving every app your private key, by splitting key control across operators and using Google sign-in.';
+  const relaysDescription =
+    'Learn what Nostr relays are, why they matter, how to choose reliable relays, and what happens when relays go offline.';
   const homeSeo = {
     title: 'nostr - controlled by users, not platforms',
     description: homeDescription,
@@ -52,12 +60,101 @@
       }
     }
   };
+  const clientsSeo = {
+    title: 'Nostr Clients: Apps for using the Nostr network',
+    description: clientsDescription,
+    path: '/clients',
+    image: '/banner.png',
+    schema: {
+      '@context': 'https://schema.org',
+      '@type': 'Article',
+      headline: 'Nostr Clients',
+      description: clientsDescription,
+      url: `${siteUrl}/clients`,
+      mainEntityOfPage: `${siteUrl}/clients`,
+      publisher: {
+        '@type': 'Organization',
+        name: 'nostr',
+        url: siteUrl
+      }
+    }
+  };
+  const nostrKeysSeo = {
+    title: 'Nostr Keys: Public keys, private keys, and signed notes',
+    description: nostrKeysDescription,
+    path: '/nostr-keys',
+    image: '/banner.png',
+    schema: {
+      '@context': 'https://schema.org',
+      '@type': 'Article',
+      headline: 'Nostr Keys',
+      description: nostrKeysDescription,
+      url: `${siteUrl}/nostr-keys`,
+      mainEntityOfPage: `${siteUrl}/nostr-keys`,
+      publisher: {
+        '@type': 'Organization',
+        name: 'nostr',
+        url: siteUrl
+      }
+    }
+  };
+  const pomegranateSeo = {
+    title: 'Pomegranate: Safer Nostr login with split key signing',
+    description: pomegranateDescription,
+    path: '/pomegranate',
+    image: '/banner.png',
+    schema: {
+      '@context': 'https://schema.org',
+      '@type': 'Article',
+      headline: 'Pomegranate',
+      description: pomegranateDescription,
+      url: `${siteUrl}/pomegranate`,
+      mainEntityOfPage: `${siteUrl}/pomegranate`,
+      publisher: {
+        '@type': 'Organization',
+        name: 'nostr',
+        url: siteUrl
+      }
+    }
+  };
+  const relaysSeo = {
+    title: 'Nostr Relays: What they are and why they matter',
+    description: relaysDescription,
+    path: '/relays',
+    image: '/banner.png',
+    schema: {
+      '@context': 'https://schema.org',
+      '@type': 'Article',
+      headline: 'Nostr Relays',
+      description: relaysDescription,
+      url: `${siteUrl}/relays`,
+      mainEntityOfPage: `${siteUrl}/relays`,
+      publisher: {
+        '@type': 'Organization',
+        name: 'nostr',
+        url: siteUrl
+      }
+    }
+  };
   let rightRailCollapsed = false;
   $: embeddedPage = $page.route.id?.startsWith('/embed/') ?? false;
-  $: seo = $page.route.id === '/info' ? infoSeo : $page.route.id === '/' ? homeSeo : null;
+  $: seo =
+    $page.route.id === '/clients'
+      ? clientsSeo
+      : $page.route.id === '/nostr-keys'
+        ? nostrKeysSeo
+        : $page.route.id === '/pomegranate'
+          ? pomegranateSeo
+          : $page.route.id === '/relays'
+            ? relaysSeo
+            : $page.route.id === '/info'
+              ? infoSeo
+              : $page.route.id === '/'
+                ? homeSeo
+                : null;
   $: canonicalUrl = seo ? `${siteUrl}${seo.path}` : siteUrl;
   $: previewImageUrl = seo ? `${siteUrl}${seo.image}` : `${siteUrl}/screenshot-feed-dark.png`;
-  $: seoJsonLd = seo ? JSON.stringify(seo.schema) : '';
+  $: seoJsonLd = seo ? JSON.stringify([seo.schema, breadcrumbSchema(seo.path, pageNameForSeo(seo))]) : '';
   $: notificationCount = badgeCount($unreadNotificationCount);
   $: messageCount = badgeCount($unreadMessageCount);
   $: if ($session && $page.route.id === '/notifications') markNotificationsSeen();
@@ -66,6 +163,31 @@
   function badgeCount(count: number) {
     if (!count) return '';
     return count > 99 ? '99+' : String(count);
+  }
+
+  function pageNameForSeo(selectedSeo: { title: string; schema: Record<string, unknown> }) {
+    return String(selectedSeo.schema.headline ?? selectedSeo.schema.name ?? selectedSeo.title);
+  }
+
+  function breadcrumbSchema(path: string, name: string) {
+    return {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: 'nostr',
+          item: siteUrl
+        },
+        {
+          '@type': 'ListItem',
+          position: 2,
+          name,
+          item: `${siteUrl}${path}`
+        }
+      ]
+    };
   }
 
   onMount(() => {
@@ -110,13 +232,13 @@
     <title>{seo.title}</title>
     <meta name="description" content={seo.description} />
     <link rel="canonical" href={canonicalUrl} />
-    <meta property="og:type" content={$page.route.id === '/info' ? 'article' : 'website'} />
+    <meta property="og:type" content={$page.route.id === '/info' || $page.route.id === '/clients' || $page.route.id === '/nostr-keys' || $page.route.id === '/pomegranate' || $page.route.id === '/relays' ? 'article' : 'website'} />
     <meta property="og:site_name" content="nostr" />
     <meta property="og:title" content={seo.title} />
     <meta property="og:description" content={seo.description} />
     <meta property="og:url" content={canonicalUrl} />
     <meta property="og:image" content={previewImageUrl} />
-    <meta property="og:image:alt" content={$page.route.id === '/info' ? 'nostr information banner' : 'nostr social client feed preview'} />
+    <meta property="og:image:alt" content={$page.route.id === '/info' || $page.route.id === '/clients' || $page.route.id === '/nostr-keys' || $page.route.id === '/pomegranate' || $page.route.id === '/relays' ? 'nostr information banner' : 'nostr social client feed preview'} />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={seo.title} />
     <meta name="twitter:description" content={seo.description} />
