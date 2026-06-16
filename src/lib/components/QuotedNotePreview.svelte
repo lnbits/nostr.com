@@ -5,6 +5,7 @@
   import { MessageSquareText } from '@lucide/svelte';
   import { events, mergeProfileRecords, profiles, relays } from '$lib/stores/app';
   import { fetchMissingEvents, fetchProfiles } from '$lib/nostr/client';
+  import { extractMediaAttachments } from '$lib/nostr/media';
   import { appPath } from '$lib/paths';
   import { saveRouteScrollState } from '$lib/stores/routeScroll';
   import { currentThreadReturnTarget, saveThreadReturnTarget } from '$lib/stores/threadNavigation';
@@ -50,6 +51,10 @@
     return content.replace(/\s+/g, ' ').trim().slice(0, 180);
   }
 
+  function firstImage(event: NostrEvent) {
+    return extractMediaAttachments(event).find((media) => media.type === 'image');
+  }
+
   function openQuotedNote(clickEvent: MouseEvent, event: NostrEvent) {
     if (clickEvent.button !== 0 || clickEvent.metaKey || clickEvent.ctrlKey || clickEvent.shiftKey || clickEvent.altKey) return;
     clickEvent.preventDefault();
@@ -80,6 +85,7 @@
   <div class="quoted-note-list" class:compact>
     {#each quotedEvents as event (event.id)}
       {@const profile = $profiles[event.pubkey]}
+      {@const image = firstImage(event)}
       <a
         class="quoted-note"
         href={appPath(`/thread/${event.id}`)}
@@ -96,6 +102,9 @@
         <span class="quoted-note-body">
           <strong>{profileName(event.pubkey, profile)}</strong>
           <span>{preview(event.content) || 'Open quoted note'}</span>
+          {#if image}
+            <img class="quoted-note-image" src={image.url} alt={image.alt ?? ''} loading="lazy" referrerpolicy="no-referrer" />
+          {/if}
         </span>
       </a>
     {/each}

@@ -3,6 +3,7 @@
   --bg: #000000;
   --surface: #16181c;
   --panel: #0f1419;
+  --quote-surface: color-mix(in srgb, var(--surface) 72%, var(--bg));
   --text: #f8fafc;
   --muted: #71767b;
   --line: #2f3336;
@@ -24,6 +25,7 @@
   --bg: #fffdf8;
   --surface: #fffffd;
   --panel: #ffffff;
+  --quote-surface: color-mix(in srgb, var(--surface) 72%, var(--bg));
   --text: #1b1b1f;
   --muted: #55545c;
   --line: #d6d9de;
@@ -40,6 +42,7 @@
     --bg: #000000;
     --surface: #16181c;
     --panel: #0f1419;
+    --quote-surface: color-mix(in srgb, var(--surface) 72%, var(--bg));
     --text: #f8fafc;
     --muted: #71767b;
     --line: #2f3336;
@@ -1050,15 +1053,12 @@ label span, label strong { color: var(--text); }
   gap: 9px;
   align-items: start;
   min-width: 0;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 9px;
+  border: 0;
+  border-left: 3px solid color-mix(in srgb, var(--accent) 65%, var(--line));
+  border-radius: 6px;
+  padding: 10px 11px;
   color: var(--text);
-  background: color-mix(in srgb, var(--surface) 76%, transparent);
-}
-.quoted-note:hover {
-  border-color: color-mix(in srgb, var(--accent) 58%, var(--line));
-  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  background: var(--quote-surface);
 }
 .quoted-note .avatar.mini {
   width: 34px;
@@ -1083,6 +1083,16 @@ label span, label strong { color: var(--text); }
   color: var(--muted);
   font-size: 14px;
   line-height: 1.25;
+}
+.quoted-note-image {
+  width: min(100%, 340px);
+  max-height: 220px;
+  margin-top: 7px;
+  display: block;
+  border: 1px solid color-mix(in srgb, var(--line) 62%, transparent);
+  border-radius: 7px;
+  object-fit: cover;
+  background: color-mix(in srgb, var(--bg) 82%, black);
 }
 .quoted-note.loading {
   color: var(--muted);
@@ -1798,7 +1808,7 @@ label span, label strong { color: var(--text); }
   border-radius: 6px;
   padding: 8px 10px;
   color: color-mix(in srgb, var(--text) 72%, var(--muted));
-  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  background: var(--quote-surface);
   font-size: 14px;
   line-height: 1.35;
 }
