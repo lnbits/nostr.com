@@ -1970,11 +1970,16 @@ function stopInboxSubscriptions() {
 function mergeNotifications(next: NotificationItem[], existing: NotificationItem[]) {
   const byId = new Map<string, NotificationItem>();
   for (const item of [...next, ...existing]) {
+    if (!isActivityNotification(item)) continue;
     if (currentMutedPubkeys.has(item.actor)) continue;
     const existingItem = byId.get(item.id);
     if (!existingItem || item.event.created_at >= existingItem.event.created_at) byId.set(item.id, item);
   }
   return [...byId.values()].sort((a, b) => b.event.created_at - a.event.created_at).slice(0, maxNotificationItems);
+}
+
+function isActivityNotification(item: NotificationItem) {
+  return item.type === 'reply' || item.type === 'mention' || item.type === 'like' || item.type === 'repost';
 }
 
 function notifyNativeForLiveNotifications(items: NotificationItem[]) {

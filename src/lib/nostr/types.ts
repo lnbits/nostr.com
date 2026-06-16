@@ -85,7 +85,7 @@ export interface Session {
 
 export interface NotificationItem {
   id: string;
-  type: 'reply' | 'repost' | 'like' | 'mention' | 'follow';
+  type: 'reply' | 'repost' | 'like' | 'mention';
   actor: string;
   event: NostrEvent;
   targetEvent?: NostrEvent;

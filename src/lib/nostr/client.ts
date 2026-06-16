@@ -1015,7 +1015,6 @@ export async function fetchNotifications(pubkey: string, relays = defaultRelays,
 
   const filters: Filter[] = [
     { kinds: [1], '#p': [pubkey], limit },
-    { kinds: [3], '#p': [pubkey], limit },
     { kinds: [7], '#p': [pubkey], limit: Math.min(240, limit * 3) },
     { kinds: [6, 16], '#p': [pubkey], limit: Math.min(180, limit * 2) }
   ];
@@ -1040,7 +1039,6 @@ export async function subscribeNotifications(pubkey: string, relays = defaultRel
   const ownPostById = new Map(ownPosts.map((event) => [event.id, event]));
   const filters: Filter[] = [
     { kinds: [1], '#p': [pubkey], since },
-    { kinds: [3], '#p': [pubkey], since },
     { kinds: [7], '#p': [pubkey], since },
     { kinds: [6, 16], '#p': [pubkey], since }
   ];
@@ -1082,9 +1080,6 @@ export function notificationForEvent(event: NostrEvent, pubkey: string, ownPostB
     const targetId = firstReferencedEventId(event, ownPostById) || (eventTagsPubkey(event, pubkey) ? firstReferencedEventId(event) : '');
     if (!targetId) return [];
     return [{ id: `repost:${targetId}:${event.pubkey}`, type: 'repost', actor: event.pubkey, event, targetId, targetEvent: ownPostById.get(targetId), seen: false }];
-  }
-  if (event.kind === 3 && extractContactListDetails(event).pubkeys.includes(pubkey)) {
-    return [{ id: `follow:${event.pubkey}`, type: 'follow', actor: event.pubkey, event, seen: false }];
   }
   return [];
 }

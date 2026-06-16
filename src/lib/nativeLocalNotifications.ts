@@ -89,8 +89,7 @@ function notificationTitle(item: NotificationItem, profile?: Profile) {
   if (item.type === 'reply') return `${actor} replied to you`;
   if (item.type === 'mention') return `${actor} mentioned you`;
   if (item.type === 'like') return `${actor} liked your note`;
-  if (item.type === 'repost') return `${actor} reposted your note`;
-  return `${actor} followed you`;
+  return `${actor} reposted your note`;
 }
 
 function notificationBody(item: NotificationItem) {
@@ -105,7 +104,6 @@ function notificationBody(item: NotificationItem) {
 }
 
 function notificationRoute(item: NotificationItem) {
-  if (item.type === 'follow') return `/profile/${item.actor}`;
   const targetId = item.targetId || item.event.id;
   const focus = item.type === 'reply' && targetId !== item.event.id ? `?focus=${item.event.id}` : '';
   return `/thread/${targetId}${focus}`;

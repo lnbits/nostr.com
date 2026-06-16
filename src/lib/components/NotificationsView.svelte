@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { Heart, MessageCircle, RefreshCw, Repeat2, UserPlus, UserRound } from '@lucide/svelte';
+  import { Heart, MessageCircle, RefreshCw, Repeat2, UserRound } from '@lucide/svelte';
   import { events, loadingNotifications, loginDialogOpen, markNotificationsSeen, mergeEvents, notifications, profiles, refreshNotifications, session } from '$lib/stores/app';
   import { appPath } from '$lib/paths';
   import type { NotificationItem, Profile } from '$lib/nostr/types';
@@ -14,15 +14,14 @@
     if (type === 'reply' || type === 'mention') return MessageCircle;
     if (type === 'like') return Heart;
     if (type === 'repost') return Repeat2;
-    return UserPlus;
+    return MessageCircle;
   }
 
   function notificationLabel(item: NotificationItem) {
     if (item.type === 'reply') return 'replied to you';
     if (item.type === 'mention') return 'mentioned you';
     if (item.type === 'like') return 'liked your note';
-    if (item.type === 'repost') return 'reposted your note';
-    return 'followed you';
+    return 'reposted your note';
   }
 
   function previewText(item: NotificationItem) {
@@ -33,21 +32,47 @@
       .find(Boolean);
     if (!firstLine) return '';
     const compact = firstLine.replace(/\s+/g, ' ');
-    return compact.length > 86 ? `${compact.slice(0, 86).trimEnd()}...` : compact;
+    return compact.length > 160 ? `${compact.slice(0, 160).trimEnd()}...` : compact;
+  }
+
+  function targetText(item: NotificationItem) {
+    const content = item.targetEvent?.content || '';
+    const firstLine = content
+      .split('\n')
+      .map((line) => line.trim())
+      .find(Boolean);
+    if (!firstLine) return '';
+    const compact = firstLine.replace(/\s+/g, ' ');
+    return compact.length > 120 ? `${compact.slice(0, 120).trimEnd()}...` : compact;
+  }
+
+  function notificationTime(timestamp: number) {
+    const date = new Date(timestamp * 1000);
+    const now = new Date();
+    const ageMs = now.getTime() - date.getTime();
+    if (ageMs < 60_000) return 'now';
+    if (ageMs < 60 * 60_000) return `${Math.floor(ageMs / 60_000)}m`;
+    if (ageMs < 24 * 60 * 60_000) return `${Math.floor(ageMs / (60 * 60_000))}h`;
+    if (date.getFullYear() === now.getFullYear()) return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  function notificationTitle(item: NotificationItem) {
+    if (item.type === 'reply') return 'New reply';
+    if (item.type === 'mention') return 'Mention';
+    if (item.type === 'like') return 'Like';
+    return 'Repost';
   }
 
   function openNotification(item: NotificationItem) {
-    if (item.type === 'follow') void goto(appPath(`/profile/${item.actor}`));
-    else {
-      events.update((existing) => mergeEvents([item.event, ...(item.targetEvent ? [item.targetEvent] : [])], existing));
-      const targetId = item.targetId || item.event.id;
-      const focus = item.type === 'reply' && targetId !== item.event.id ? `?focus=${item.event.id}` : '';
-      void goto(appPath(`/thread/${targetId}${focus}`));
-    }
+    events.update((existing) => mergeEvents([item.event, ...(item.targetEvent ? [item.targetEvent] : [])], existing));
+    const targetId = item.targetId || item.event.id;
+    const focus = item.type === 'reply' && targetId !== item.event.id ? `?focus=${item.event.id}` : '';
+    void goto(appPath(`/thread/${targetId}${focus}`));
   }
 
   onMount(() => {
-    markNotificationsSeen();
+    void refreshNotifications().finally(markNotificationsSeen);
   });
 
   $: if ($session && $notifications.length) markNotificationsSeen();
@@ -57,7 +82,7 @@
   <header class="messages-head">
     <div>
       <h1>Notifications</h1>
-      <p>Replies, mentions, reactions, reposts, and new follows.</p>
+      <p>Replies, mentions, likes, and reposts from relays.</p>
     </div>
     <button disabled={!$session || $loadingNotifications} on:click={() => refreshNotifications()}>
       <RefreshCw size={18} class={$loadingNotifications ? 'spin' : ''} /> Refresh
@@ -84,17 +109,24 @@
               {#if actor?.picture}
                 <img src={actor.picture} alt="" loading="lazy" />
               {:else}
-                <span>{actorName(actor, item.event.pubkey).slice(0, 1).toUpperCase()}</span>
+                <span>{actorName(actor, item.actor).slice(0, 1).toUpperCase()}</span>
               {/if}
               <span class="notification-badge"><Icon size={13} /></span>
             </span>
             <span class="notification-copy">
+              <span class="notification-meta">
+                <span class="notification-kind">{notificationTitle(item)}</span>
+                <time datetime={new Date(item.event.created_at * 1000).toISOString()}>{notificationTime(item.event.created_at)}</time>
+              </span>
               <span class="notification-line">
                 <strong>{actorName(actor, item.actor)}</strong>
                 <span>{notificationLabel(item)}</span>
               </span>
               {#if previewText(item)}
                 <span class="notification-preview">{previewText(item)}</span>
+              {/if}
+              {#if targetText(item)}
+                <span class="notification-target">{targetText(item)}</span>
               {/if}
             </span>
           </button>
@@ -104,7 +136,7 @@
   {:else}
     <div class="empty-state">
       <strong>No notifications yet</strong>
-      <span>Relays did not return replies, mentions, likes, reposts, or follows.</span>
+      <span>Relays did not return replies, mentions, likes, or reposts.</span>
     </div>
   {/if}
 </section>
