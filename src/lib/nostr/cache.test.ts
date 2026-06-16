@@ -1,5 +1,16 @@
-import { cacheEvents, cacheProfile, cacheProfileEvents, getCachedEvents, getCachedHashtagEvents, getCachedProfileEvents, getCachedProfiles, resetCacheConnectionForTests } from './cache';
-import type { NostrEvent } from './types';
+import {
+  cacheDirectMessages,
+  cacheEvents,
+  cacheProfile,
+  cacheProfileEvents,
+  getCachedDirectMessages,
+  getCachedEvents,
+  getCachedHashtagEvents,
+  getCachedProfileEvents,
+  getCachedProfiles,
+  resetCacheConnectionForTests
+} from './cache';
+import type { DirectMessage, NostrEvent } from './types';
 
 function event(id: string, created_at: number, pubkey = 'a'.repeat(64), content = `event ${id}`, tags: string[][] = []): NostrEvent {
   return {
@@ -10,6 +21,19 @@ function event(id: string, created_at: number, pubkey = 'a'.repeat(64), content 
     tags,
     content,
     sig: 'b'.repeat(128)
+  };
+}
+
+function dm(id: string, created_at: number, peer = 'b'.repeat(64)): DirectMessage {
+  return {
+    id,
+    protocol: 'NIP-17',
+    peer,
+    from: peer,
+    to: 'a'.repeat(64),
+    created_at,
+    encrypted: `encrypted ${id}`,
+    content: `message ${id}`
   };
 }
 
@@ -92,5 +116,15 @@ describe('IndexedDB cache', () => {
     expect(await getCachedHashtagEvents('topic0')).toEqual([]);
     expect((await getCachedHashtagEvents('topic1204')).map((item) => item.id)).toEqual(['tagged-1204']);
     expect((await getCachedHashtagEvents('topic5')).map((item) => item.id)).toEqual(['tagged-5']);
+  });
+
+  it('caches direct messages per account and returns newest first', async () => {
+    const alice = 'a'.repeat(64);
+    const bob = 'b'.repeat(64);
+    await cacheDirectMessages(alice, [dm('alice-old', 10), dm('alice-new', 30)]);
+    await cacheDirectMessages(bob, [dm('bob-note', 20, 'c'.repeat(64))]);
+
+    expect((await getCachedDirectMessages(alice)).map((message) => message.id)).toEqual(['alice-new', 'alice-old']);
+    expect((await getCachedDirectMessages(bob)).map((message) => message.id)).toEqual(['bob-note']);
   });
 });

@@ -22,6 +22,7 @@
   export let featured = false;
   export let embedded = false;
   export let prefetchThread = false;
+  export let initialExpanded = false;
   export let hiddenQuotedNoteIds: string[] = [];
   export let onOpen: ((event: NostrEvent) => void) | undefined = undefined;
 
@@ -33,7 +34,7 @@
   const maxMediaAttachments = 6;
   const maxSocialEmbeds = 3;
   const maxQuotedNotes = 3;
-  let expanded = false;
+  let expanded = initialExpanded;
   let openImage: { url: string; alt?: string } | null = null;
   let menuOpen = false;
   let copiedEmbed = false;
@@ -461,6 +462,9 @@
       <span>{name.slice(0, 1).toUpperCase()}</span>
     {/if}
   </a>
+  {#if !embedded}
+    <button class="note-gutter-open" aria-label="Open note" on:click={openNote}></button>
+  {/if}
 
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
   <div class="note-body" role={embedded ? undefined : 'button'} tabindex={embedded ? undefined : 0} on:click={openFromNoteBody} on:keydown={openFromKeyboard}>

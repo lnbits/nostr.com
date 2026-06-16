@@ -826,6 +826,7 @@ label span, label strong { color: var(--text); }
 .note-card {
   display: grid;
   grid-template-columns: 40px minmax(0, 1fr);
+  grid-template-rows: minmax(40px, auto);
   gap: 10px;
   min-width: 0;
   max-width: 100%;
@@ -855,9 +856,37 @@ label span, label strong { color: var(--text); }
   color: var(--bg);
   font-weight: 800;
 }
+.note-card > .avatar {
+  grid-column: 1;
+  grid-row: 1;
+  position: relative;
+  z-index: 1;
+}
+.note-gutter-open {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: stretch;
+  width: 100%;
+  min-height: 100%;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.note-gutter-open:hover {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+.note-gutter-open:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
 .avatar.large { width: 84px; height: 84px; }
 .avatar img { width: 100%; height: 100%; object-fit: cover; }
 .note-body {
+  grid-column: 2;
+  grid-row: 1;
   min-width: 0;
   max-width: 100%;
   display: grid;
@@ -1644,7 +1673,7 @@ label span, label strong { color: var(--text); }
   padding: 18px;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 14px;
+  gap: 12px;
   height: 100svh;
   min-height: 0;
   overflow: hidden;
@@ -1733,8 +1762,7 @@ label span, label strong { color: var(--text); }
 }
 .messages-head {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 14px;
+  gap: 10px;
   align-items: start;
 }
 .messages-head h1 {
@@ -1748,13 +1776,13 @@ label span, label strong { color: var(--text); }
   line-height: 1.45;
 }
 .messages-chat-link {
-  display: flex;
-  flex-wrap: wrap;
+  width: min(100%, 520px);
+  display: grid;
   gap: 6px;
-  align-items: center;
+  align-items: start;
   border-left: 3px solid var(--accent);
   border-radius: 0 8px 8px 0;
-  padding: 8px 10px;
+  padding: 10px 12px;
   background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 .messages-chat-link a {
@@ -1949,11 +1977,12 @@ label span, label strong { color: var(--text); }
   background: transparent;
 }
 .dm-inbox {
+  position: relative;
   min-width: 0;
   min-height: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 12px;
+  gap: 0;
   padding: 0;
   background: transparent;
 }
@@ -2031,6 +2060,51 @@ label span, label strong { color: var(--text); }
 .dm-follow-picker {
   gap: 6px;
 }
+.dm-tabs {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 58%, transparent);
+}
+.dm-tabs button {
+  min-width: 0;
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 0;
+  padding: 0 10px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 16px;
+  font-weight: 800;
+}
+.dm-tabs button.active {
+  position: relative;
+  color: var(--text);
+}
+.dm-tabs button.active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 3px;
+  border-radius: 999px 999px 0 0;
+  background: var(--accent);
+}
+.dm-tabs span {
+  min-width: 20px;
+  height: 20px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--bg);
+  background: var(--accent);
+  font-size: 12px;
+}
 .conversation-list {
   min-height: 0;
   overflow-x: hidden;
@@ -2038,25 +2112,31 @@ label span, label strong { color: var(--text); }
   overscroll-behavior: contain;
   display: grid;
   align-content: start;
-  gap: 4px;
-  padding-right: 4px;
+  gap: 0;
+  padding: 0 0 86px;
 }
 .conversation-row {
   width: 100%;
-  min-height: 0;
+  min-height: 72px;
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) auto;
-  gap: 12px;
+  grid-template-columns: 56px minmax(0, 1fr) minmax(40px, auto);
+  gap: 10px;
   align-items: center;
   justify-content: start;
-  padding: 10px 8px;
+  padding: 10px 4px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 42%, transparent);
   text-align: left;
 }
 .conversation-row.active,
 .conversation-row:hover {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.conversation-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
 }
 .conversation-row strong,
 .conversation-row small {
@@ -2066,19 +2146,64 @@ label span, label strong { color: var(--text); }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.conversation-row strong {
+  color: var(--text-strong);
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.15;
+}
 .conversation-row small {
   color: var(--muted);
-  margin-top: 3px;
+  font-size: 15px;
+  line-height: 1.2;
 }
-.conversation-row em {
-  font-style: normal;
+.conversation-meta {
+  min-width: 0;
+  align-self: stretch;
+  display: grid;
+  align-content: center;
+  justify-items: end;
+  gap: 6px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 14px;
+  line-height: 1;
+}
+.conversation-meta time {
+  white-space: nowrap;
+}
+.conversation-meta em {
+  min-width: 18px;
+  height: 18px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  font-style: normal;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
 }
 .dm-empty-list {
-  padding: 12px;
+  padding: 22px 12px;
   color: var(--muted);
   text-align: center;
+}
+.dm-new-fab {
+  position: absolute;
+  right: 16px;
+  bottom: 18px;
+}
+.dm-new-dialog {
+  display: grid;
+  gap: 14px;
+  overflow: visible;
+}
+.dm-new-dialog .dm-recipient-form {
+  grid-template-columns: minmax(0, 1fr) minmax(94px, auto);
+}
+.dm-new-dialog .dm-search-results {
+  position: static;
+  margin-top: 8px;
 }
 .dm-chat {
   min-width: 0;
@@ -2920,6 +3045,35 @@ label span, label strong { color: var(--text); }
   .messages-view {
     height: calc(100svh - 64px - env(safe-area-inset-bottom));
     padding: 10px;
+  }
+  .dm-inbox {
+    gap: 0;
+  }
+  .dm-new-dialog .dm-recipient-form {
+    grid-template-columns: minmax(0, 1fr) minmax(86px, 110px);
+  }
+  .dm-tabs button {
+    min-height: 46px;
+    font-size: 16px;
+  }
+  .dm-new-fab {
+    right: 12px;
+    bottom: 14px;
+  }
+  .conversation-row {
+    grid-template-columns: 48px minmax(0, 1fr) minmax(34px, auto);
+    gap: 8px;
+    min-height: 68px;
+    padding: 9px 0;
+  }
+  .conversation-row strong {
+    font-size: 16px;
+  }
+  .conversation-row small {
+    font-size: 14px;
+  }
+  .conversation-meta {
+    font-size: 13px;
   }
   .dm-messages { padding: 12px 10px; }
   .dm-message { max-width: 92%; }

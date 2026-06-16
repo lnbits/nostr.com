@@ -900,6 +900,7 @@ export async function fetchEventStats(ids: string[], relays = defaultRelays) {
     fetchCountStats(uniqueIds, relayUrls).catch(() => ({})),
     Promise.all(filters.map((filter) => queryShortLived(relayUrls, filter, 4500))).then((results) => dedupeEvents(verifiedRelayEvents(results.flat())))
   ]);
+  await cacheEvents(events);
 
   const eventStats = eventStatsFromEvents(uniqueIds, events);
   for (const id of uniqueIds) {

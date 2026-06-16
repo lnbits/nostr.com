@@ -5,9 +5,9 @@
   import { page } from '$app/stores';
   import { ArrowLeft } from '@lucide/svelte';
   import NoteCard from '$lib/components/NoteCard.svelte';
-  import { getCachedThreadEvents } from '$lib/nostr/cache';
+  import { cacheEvents, getCachedThreadEvents } from '$lib/nostr/cache';
   import { deletedEventIds, eventStats, events, mergeEvents, mergeProfileRecords, profiles, pruneDeletedEvents, refreshEventStats, relays } from '$lib/stores/app';
-  import { eventStatsFromEvents, fetchMissingEvents, fetchProfiles, fetchThreadReplies } from '$lib/nostr/client';
+  import { eventStatsFromEvents, fetchMissingEvents, fetchProfiles, fetchThreadReplies, subscribeEventStats } from '$lib/nostr/client';
   import { eventPointerFromIdentifier } from '$lib/nostr/identifiers';
   import { appPath } from '$lib/paths';
   import { readRouteScrollState, saveRouteScrollState } from '$lib/stores/routeScroll';
@@ -39,6 +39,10 @@
   let focusedThreadRouteKey = '';
   let activeRouteId = '';
   let hydrationRunId = 0;
+  let liveThreadSub: { close: (reason?: string) => void } | undefined;
+  let liveThreadKey = '';
+  let liveThreadToken = 0;
+  const seenLiveThreadEventIds = new Set<string>();
 
   $: routeId = decodeURIComponent($page.params.id ?? '');
   $: pointer = eventPointerFromIdentifier(routeId);
@@ -60,6 +64,7 @@
   $: if (browser && routeKey && focusedReplyId && sortedReplies.some((reply) => reply.id === focusedReplyId) && `${routeKey}:${focusedReplyId}` !== focusedThreadRouteKey) {
     void scrollFocusedReplyIntoView(routeKey, focusedReplyId);
   }
+  $: if (browser) syncThreadLiveSubscription(root?.id ?? '', [root?.id ?? '', ...replies.map((reply) => reply.id)]);
 
   beforeNavigate(() => {
     saveCurrentThreadState();
@@ -82,6 +87,7 @@
     saveCurrentThreadState();
     saveCurrentThreadScrollPosition();
     bottomObserver?.disconnect();
+    stopThreadLiveSubscription('leaving thread page');
   });
 
   $: if (browser && id && id !== hydratedId) void hydrateThread();
@@ -147,13 +153,20 @@
       if (!restored) void hydrateCachedThreadReplies(rootId, runId);
       await hydrateFocusedReplyContext(rootId, runId);
 
-      const replyBatch =
+      let replyBatch =
         restored && rootEvent
           ? await fetchLatestThreadReplyBatch(rootId, initialThreadReplyLimit)
           : rootEvent
             ? await fetchForwardThreadReplyBatch(rootEvent.created_at, initialThreadReplyLimit)
             : await fetchThreadReplyWindow({ limit: initialThreadReplyLimit });
       if (!isCurrentHydration(rootId, runId)) return;
+      if (!replyBatch.events.length && rootEvent) {
+        const fallbackBatch = await fetchThreadReplyWindow({ limit: initialThreadReplyLimit });
+        if (!isCurrentHydration(rootId, runId)) return;
+        if (fallbackBatch.events.length) {
+          replyBatch = 'cursor' in replyBatch ? { ...replyBatch, events: fallbackBatch.events, hasMore: false } : fallbackBatch;
+        }
+      }
       if ('cursor' in replyBatch) {
         olderThreadReplyCursor = replyBatch.cursor;
         hasOlderReplies = replyBatch.hasMore;
@@ -315,6 +328,7 @@
     loadingOlderReplies = false;
     hasOlderReplies = true;
     olderThreadReplyCursor = 0;
+    stopThreadLiveSubscription('thread changed');
     if (restoreHydratedThread(nextId)) {
       loading = false;
       return;
@@ -413,6 +427,96 @@
   function threadEventsForRoot(rootId: string, items: NostrEvent[]) {
     const rootItem = items.find((event) => event.id === rootId);
     return mergeThreadEvents([...(rootItem ? [rootItem] : []), ...threadReplyEvents(items, rootId)], []);
+  }
+
+  function syncThreadLiveSubscription(rootId: string, ids: string[]) {
+    const cleanIds = [...new Set(ids)].filter((item) => /^[0-9a-f]{64}$/i.test(item)).slice(0, 80).sort();
+    const relayKey = $relays
+      .filter((relay) => relay.enabled && relay.read)
+      .map((relay) => relay.url)
+      .sort()
+      .join(',');
+    const nextKey = rootId && cleanIds.length ? `${rootId}:${relayKey}:${cleanIds.join(',')}` : '';
+    if (nextKey === liveThreadKey) return;
+    stopThreadLiveSubscription('thread live target changed');
+    if (!rootId || !cleanIds.length) return;
+
+    const token = ++liveThreadToken;
+    liveThreadKey = nextKey;
+    void subscribeEventStats(cleanIds, $relays, (event) => handleLiveThreadEvent(rootId, cleanIds, event, token))
+      .then((sub) => {
+        if (token === liveThreadToken && nextKey === liveThreadKey) liveThreadSub = sub;
+        else sub?.close('stale thread subscription');
+      })
+      .catch(() => undefined);
+  }
+
+  function stopThreadLiveSubscription(reason: string) {
+    liveThreadToken += 1;
+    liveThreadSub?.close(reason);
+    liveThreadSub = undefined;
+    liveThreadKey = '';
+  }
+
+  function handleLiveThreadEvent(rootId: string, statIds: string[], event: NostrEvent, token: number) {
+    if (token !== liveThreadToken || id !== rootId || seenLiveThreadEventIds.has(event.id)) return;
+    seenLiveThreadEventIds.add(event.id);
+    if (seenLiveThreadEventIds.size > 1200) seenLiveThreadEventIds.clear();
+
+    if (event.kind === 5) {
+      applyLiveThreadDeletion(event);
+      return;
+    }
+
+    void cacheEvents([event]);
+    mergeLiveThreadStats(statIds, event);
+
+    if (event.kind !== 1) return;
+    const candidateThread = mergeThreadEvents([event], threadEventsForCache());
+    if (!threadReplyEvents(candidateThread, rootId).some((reply) => reply.id === event.id)) return;
+
+    localThreadEvents = mergeThreadEvents([event], localThreadEvents);
+    trimThreadReplyWindow('bottom');
+    events.update((existing) => mergeEvents([event], existing));
+    hydrateThreadProfiles([event]);
+    void pruneDeletedEvents([event]);
+    saveCurrentThreadState();
+  }
+
+  function mergeLiveThreadStats(statIds: string[], event: NostrEvent) {
+    const stats = eventStatsFromEvents(statIds, [event]);
+    eventStats.update((existing) => {
+      const next = { ...existing };
+      for (const [statId, stat] of Object.entries(stats)) {
+        if (!stat.replies && !stat.reposts && !stat.likes && !stat.zaps && !stat.zapSats && !stat.dislikes && !stat.emoji) continue;
+        const previous = next[statId] ?? { replies: 0, reposts: 0, likes: 0, zaps: 0, zapSats: 0, dislikes: 0, emoji: 0 };
+        next[statId] = {
+          replies: previous.replies + stat.replies,
+          reposts: previous.reposts + stat.reposts,
+          likes: previous.likes + stat.likes,
+          zaps: previous.zaps + stat.zaps,
+          zapSats: previous.zapSats + stat.zapSats,
+          dislikes: previous.dislikes + stat.dislikes,
+          emoji: previous.emoji + stat.emoji
+        };
+      }
+      return next;
+    });
+  }
+
+  function applyLiveThreadDeletion(event: NostrEvent) {
+    const byId = new Map(threadEventsForCache().map((item) => [item.id, item]));
+    const deleted = new Set(
+      event.tags
+        .filter((tag) => tag[0] === 'e' && tag[1])
+        .map((tag) => tag[1])
+        .filter((targetId) => byId.get(targetId)?.pubkey === event.pubkey)
+    );
+    if (!deleted.size) return;
+    deletedEventIds.update((existing) => new Set([...existing, ...deleted]));
+    localThreadEvents = localThreadEvents.filter((item) => !deleted.has(item.id));
+    if (rootEvent && deleted.has(rootEvent.id)) rootEvent = undefined;
+    events.update((existing) => existing.filter((item) => !deleted.has(item.id)));
   }
 
   function sameThreadQuotedNoteIds(rootId: string, items: NostrEvent[]) {
@@ -576,7 +680,7 @@
 
   {#if root}
     <div class="feed-list">
-      <NoteCard event={root} profile={$profiles[root.pubkey]} hiddenQuotedNoteIds={hiddenThreadQuoteIds} onOpen={openThreadNote} />
+      <NoteCard event={root} profile={$profiles[root.pubkey]} hiddenQuotedNoteIds={hiddenThreadQuoteIds} initialExpanded onOpen={openThreadNote} />
       {#if replies.length}
         {#each sortedReplies as reply (reply.id)}
           <NoteCard event={reply} profile={$profiles[reply.pubkey]} featured={reply.id === focusedReplyId} hiddenQuotedNoteIds={hiddenThreadQuoteIds} onOpen={openThreadNote} />

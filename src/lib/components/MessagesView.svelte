@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
-  import { ArrowLeft, ExternalLink, Image as ImageIcon, Loader2, MessageSquareText, RefreshCw, Send, UserPlus } from '@lucide/svelte';
+  import { ArrowLeft, ExternalLink, Image as ImageIcon, Loader2, MessageSquareText, Plus, Send, UserPlus } from '@lucide/svelte';
   import { nip19 } from 'nostr-tools';
   import {
     activeMessagePeer,
@@ -43,8 +43,13 @@
   let chatLoginDialogOpen = false;
   let openingNostrChat = false;
   let nostrChatError = '';
+  let newDmDialogOpen = false;
+  let activeDmTab: 'known' | 'requests' = 'known';
 
   $: conversations = groupMessages($directMessages);
+  $: knownConversations = conversations.filter((conversation) => $follows.includes(conversation.peer));
+  $: requestConversations = conversations.filter((conversation) => !$follows.includes(conversation.peer));
+  $: visibleConversations = activeDmTab === 'known' ? knownConversations : requestConversations;
   $: activePeer = $activeMessagePeer;
   $: activeMessages = activePeer ? [...($directMessages.filter((message) => message.peer === activePeer))].sort((a, b) => a.created_at - b.created_at) : [];
   $: followChoices = $follows.map((pubkey) => ({ pubkey, label: profileName(pubkey, $profiles[pubkey]) })).sort((a, b) => a.label.localeCompare(b.label));
@@ -91,6 +96,7 @@
       });
       selectMessagePeer(pubkey);
       recipientInput = profileName(pubkey, $profiles[pubkey]);
+      newDmDialogOpen = false;
       remoteProfiles = [];
       await tick();
       chatScroll?.scrollTo({ top: chatScroll.scrollHeight });
@@ -124,6 +130,22 @@
   function chooseProfile(profile: Profile) {
     selectMessagePeer(profile.pubkey);
     recipientInput = profileName(profile.pubkey, profile);
+    newDmDialogOpen = false;
+    remoteProfiles = [];
+    clearTimeout(searchTimer);
+  }
+
+  function openNewDmDialog() {
+    recipientInput = '';
+    remoteProfiles = [];
+    error = '';
+    newDmDialogOpen = true;
+  }
+
+  function closeNewDmDialog() {
+    if (resolving) return;
+    newDmDialogOpen = false;
+    recipientInput = '';
     remoteProfiles = [];
     clearTimeout(searchTimer);
   }
@@ -159,6 +181,7 @@
     if (!pubkey) return;
     selectMessagePeer(pubkey);
     recipientInput = profileName(pubkey, $profiles[pubkey]);
+    newDmDialogOpen = false;
   }
 
   function profileName(pubkey: string, profile?: Profile) {
@@ -202,6 +225,25 @@
 
   function avatarLetter(pubkey: string, profile?: Profile) {
     return profileName(pubkey, profile).slice(0, 1).toUpperCase();
+  }
+
+  function conversationPreview(message: DirectMessage) {
+    const content = (message.content || `${message.protocol} encrypted message`).replace(/\s+/g, ' ').trim();
+    return content || `${message.protocol} encrypted message`;
+  }
+
+  function conversationTime(timestamp: number) {
+    const date = new Date(timestamp * 1000);
+    const now = new Date();
+    const ageMs = now.getTime() - date.getTime();
+    const minuteMs = 60_000;
+    const hourMs = 60 * minuteMs;
+    const dayMs = 24 * hourMs;
+    if (ageMs < minuteMs) return 'now';
+    if (ageMs < hourMs) return `${Math.max(1, Math.floor(ageMs / minuteMs))}m`;
+    if (ageMs < dayMs) return `${Math.floor(ageMs / hourMs)}h`;
+    if (ageMs < 7 * dayMs) return `${Math.floor(ageMs / dayMs)}d`;
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   }
 
   function messageMedia(message: DirectMessage) {
@@ -268,7 +310,6 @@
   <header class="messages-head">
     <div>
       <h1>Messages</h1>
-      <p>NIP-17 private chats, with legacy NIP-04 messages shown when they can be decrypted.</p>
       <p class="messages-chat-link">
         For a dedicated DM client checkout
         <a href={nostrChatUrl} target="_blank" rel="noreferrer" on:click={handleNostrChatClick} aria-busy={openingNostrChat}>
@@ -276,9 +317,6 @@
         </a>
       </p>
     </div>
-    <button disabled={!$session || $loadingMessages} on:click={() => refreshMessages()}>
-      <RefreshCw size={18} class={$loadingMessages ? 'spin' : ''} /> Pull
-    </button>
   </header>
 
   {#if !$session}
@@ -292,56 +330,20 @@
     <section class="dm-shell" class:chat-open={activePeer} aria-label="Direct messages">
       {#if !activePeer}
         <section class="dm-inbox" aria-label="Message inbox">
-          <div class="dm-inbox-controls">
-            <form class="dm-recipient-form" on:submit|preventDefault={startConversation}>
-              <div class="dm-recipient-search">
-                <label>
-                  <input bind:value={recipientInput} on:input={scheduleProfileSearch} placeholder="Search name, npub, or NIP-05" autocomplete="off" />
-                </label>
-                {#if cleanRecipientInput.length >= 2 && (recipientSuggestions.length || searchingProfiles)}
-                  <div class="dm-search-results" aria-label="Profile suggestions">
-                    {#each recipientSuggestions as profile (profile.pubkey)}
-                      <button type="button" on:click={() => chooseProfile(profile)}>
-                        <span class="avatar mini">
-                          {#if profile.picture}
-                            <img src={profile.picture} alt="" loading="lazy" referrerpolicy="no-referrer" />
-                          {:else}
-                            <span>{profileName(profile.pubkey, profile).slice(0, 1).toUpperCase()}</span>
-                          {/if}
-                        </span>
-                        <span>
-                          <strong>{profileName(profile.pubkey, profile)}</strong>
-                          <small>{profileSubline(profile)}</small>
-                        </span>
-                      </button>
-                    {/each}
-                    {#if searchingProfiles}
-                      <div class="dm-search-empty"><Loader2 size={16} class="spin" /> Searching profiles</div>
-                    {/if}
-                  </div>
-                {/if}
-              </div>
-              <button type="submit" disabled={resolving || !recipientInput.trim()}>
-                {#if resolving}<Loader2 size={17} class="spin" />{:else}<UserPlus size={17} />{/if}
-                Open
-              </button>
-            </form>
-
-            {#if followChoices.length}
-              <label class="dm-follow-picker">
-                <span>Follow list</span>
-                <select on:change={chooseFollow} value="">
-                  <option value="">Select someone</option>
-                  {#each followChoices as follow}
-                    <option value={follow.pubkey}>{follow.label}</option>
-                  {/each}
-                </select>
-              </label>
-            {/if}
+          <div class="dm-tabs" role="tablist" aria-label="Message filters">
+            <button type="button" class:active={activeDmTab === 'known'} role="tab" aria-selected={activeDmTab === 'known'} on:click={() => (activeDmTab = 'known')}>
+              Known
+            </button>
+            <button type="button" class:active={activeDmTab === 'requests'} role="tab" aria-selected={activeDmTab === 'requests'} on:click={() => (activeDmTab = 'requests')}>
+              New Requests
+              {#if requestConversations.length}
+                <span>{requestConversations.length}</span>
+              {/if}
+            </button>
           </div>
 
           <div class="conversation-list" aria-label="Direct message conversations">
-            {#each conversations as conversation}
+            {#each visibleConversations as conversation}
               <button class="conversation-row" on:click={() => selectMessagePeer(conversation.peer)}>
                 <span class="avatar">
                   {#if $profiles[conversation.peer]?.picture}
@@ -350,16 +352,26 @@
                     <span>{avatarLetter(conversation.peer, $profiles[conversation.peer])}</span>
                   {/if}
                 </span>
-                <span>
+                <span class="conversation-copy">
                   <strong>{profileName(conversation.peer, $profiles[conversation.peer])}</strong>
-                  <small>{conversation.latest.content || `${conversation.latest.protocol} encrypted message`}</small>
+                  <small>{conversationPreview(conversation.latest)}</small>
                 </span>
-                <em>{conversation.messages.length}</em>
+                <span class="conversation-meta">
+                  <time datetime={new Date(conversation.latest.created_at * 1000).toISOString()}>{conversationTime(conversation.latest.created_at)}</time>
+                  {#if conversation.messages.length > 1}
+                    <em>{conversation.messages.length}</em>
+                  {/if}
+                </span>
               </button>
             {:else}
-              <div class="dm-empty-list">No conversations yet</div>
+              <div class="dm-empty-list">
+                {#if activeDmTab === 'known'}No known conversations yet{:else}No new requests{/if}
+              </div>
             {/each}
           </div>
+          <button class="fab dm-new-fab" type="button" aria-label="New direct message" on:click={openNewDmDialog}>
+            <Plus size={30} />
+          </button>
         </section>
       {:else}
         <section class="dm-chat" aria-label="Conversation">
@@ -450,6 +462,62 @@
     {/if}
   {/if}
 </section>
+
+{#if newDmDialogOpen}
+  <div class="dialog-backdrop dm-new-dialog-backdrop" role="presentation" tabindex="-1" on:click={(event) => event.target === event.currentTarget && closeNewDmDialog()}>
+    <div class="dialog-panel compact dm-new-dialog" role="dialog" aria-modal="true" aria-labelledby="new-dm-title">
+      <div class="dialog-head">
+        <h2 id="new-dm-title">New message</h2>
+        <button class="icon-button" aria-label="Close new message dialog" on:click={closeNewDmDialog}>×</button>
+      </div>
+      <form class="dm-recipient-form" on:submit|preventDefault={startConversation}>
+        <div class="dm-recipient-search">
+          <label>
+            <input bind:value={recipientInput} on:input={scheduleProfileSearch} placeholder="Search name, npub, or NIP-05" autocomplete="off" />
+          </label>
+          {#if cleanRecipientInput.length >= 2 && (recipientSuggestions.length || searchingProfiles)}
+            <div class="dm-search-results" aria-label="Profile suggestions">
+              {#each recipientSuggestions as profile (profile.pubkey)}
+                <button type="button" on:click={() => chooseProfile(profile)}>
+                  <span class="avatar mini">
+                    {#if profile.picture}
+                      <img src={profile.picture} alt="" loading="lazy" referrerpolicy="no-referrer" />
+                    {:else}
+                      <span>{profileName(profile.pubkey, profile).slice(0, 1).toUpperCase()}</span>
+                    {/if}
+                  </span>
+                  <span>
+                    <strong>{profileName(profile.pubkey, profile)}</strong>
+                    <small>{profileSubline(profile)}</small>
+                  </span>
+                </button>
+              {/each}
+              {#if searchingProfiles}
+                <div class="dm-search-empty"><Loader2 size={16} class="spin" /> Searching profiles</div>
+              {/if}
+            </div>
+          {/if}
+        </div>
+        <button type="submit" disabled={resolving || !recipientInput.trim()}>
+          {#if resolving}<Loader2 size={17} class="spin" />{:else}<UserPlus size={17} />{/if}
+          Open
+        </button>
+      </form>
+
+      {#if followChoices.length}
+        <label class="dm-follow-picker">
+          <span>Follow list</span>
+          <select on:change={chooseFollow} value="">
+            <option value="">Select someone</option>
+            {#each followChoices as follow}
+              <option value={follow.pubkey}>{follow.label}</option>
+            {/each}
+          </select>
+        </label>
+      {/if}
+    </div>
+  </div>
+{/if}
 
 {#if openImage}
   <div class="dialog-backdrop image-viewer-backdrop" role="presentation" tabindex="-1" on:click={(event) => event.target === event.currentTarget && (openImage = null)}>

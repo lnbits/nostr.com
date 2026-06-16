@@ -1,7 +1,7 @@
 import { browser } from '$app/environment';
 import { goto } from '$app/navigation';
 import { writable } from 'svelte/store';
-import { clearEventCache, getCachedEvents, getCachedHashtagEvents, getCachedProfiles } from '$lib/nostr/cache';
+import { cacheDirectMessages, clearEventCache, getCachedDirectMessages, getCachedEvents, getCachedHashtagEvents, getCachedProfiles } from '$lib/nostr/cache';
 import { defaultCustomFeedSettings, defaultGuestNip05, defaultRelays, globalFeedCuratorPubkey, globalFeedHashtags, keywordsForInterests } from '$lib/nostr/config';
 import { appPath } from '$lib/paths';
 import { markRelaysOffline, markRelaysOnline, syncRelayStatus } from '$lib/stores/relayStatus';
@@ -949,20 +949,29 @@ function markConnectedRelaysOnline() {
 }
 
 export async function refreshMessages() {
-  let currentSession: Session | null = null;
-  session.subscribe((value) => (currentSession = value))();
+  const currentSession = getStoreSnapshot(session);
   if (!currentSession) {
     directMessages.set([]);
     return;
   }
 
+  await hydrateCachedDirectMessages(currentSession);
   loadingMessages.set(true);
   try {
     const messages = await fetchDirectMessages(currentSession, currentRelays);
-    directMessages.update((existing) => mergeDirectMessages(messages, existing, currentSessionValue?.pubkey));
+    const merged = mergeDirectMessages(messages, getStoreSnapshot(directMessages), currentSession.pubkey);
+    directMessages.set(merged);
+    void cacheDirectMessages(currentSession.pubkey, merged);
   } finally {
     loadingMessages.set(false);
   }
+}
+
+async function hydrateCachedDirectMessages(currentSession: Session) {
+  if (getStoreSnapshot(directMessages).length) return;
+  const cached = await getCachedDirectMessages(currentSession.pubkey).catch(() => []);
+  if (!cached.length || currentSessionValue?.pubkey !== currentSession.pubkey) return;
+  directMessages.set(mergeDirectMessages(cached, [], currentSession.pubkey));
 }
 
 export async function refreshNotifications() {
@@ -1027,7 +1036,9 @@ export async function sendDirectMessage(peer: string, content: string) {
     encrypted: wraps[0]?.content ?? '',
     content: clean
   };
-  directMessages.update((existing) => mergeDirectMessages([message], existing, currentSession.pubkey));
+  const merged = mergeDirectMessages([message], getStoreSnapshot(directMessages), currentSession.pubkey);
+  directMessages.set(merged);
+  void cacheDirectMessages(currentSession.pubkey, merged);
   activeMessagePeer.set(recipient);
 }
 
@@ -1799,6 +1810,7 @@ async function finishSignedInBootstrap(next: Session) {
     selectPreferredSignedInFeed(true);
     await refreshFeed(currentMode);
     void refreshNotifications();
+    void hydrateCachedDirectMessages(next);
     if (next.mode !== 'nip07') void refreshMessages();
     restartInboxSubscriptions();
     if (pendingGoogleOnboardingPubkey === next.pubkey && shouldOfferGoogleOnboarding(next, 'google')) onboardingDialogOpen.set(true);
@@ -1858,7 +1870,9 @@ function restartInboxSubscriptions() {
 
   void subscribeDirectMessages(currentSession, currentRelays, (message) => {
     if (token !== liveInboxToken || currentSessionValue?.pubkey !== currentSession.pubkey) return;
-    directMessages.update((existing) => mergeDirectMessages([message], existing, currentSession.pubkey));
+    const merged = mergeDirectMessages([message], getStoreSnapshot(directMessages), currentSession.pubkey);
+    directMessages.set(merged);
+    void cacheDirectMessages(currentSession.pubkey, merged);
   }).then((sub) => {
     if (token === liveInboxToken && currentSessionValue?.pubkey === currentSession.pubkey) liveMessagesSub = sub;
     else sub?.close();

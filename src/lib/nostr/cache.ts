@@ -1,10 +1,11 @@
-import type { NostrEvent, Profile } from './types';
+import type { DirectMessage, NostrEvent, Profile } from './types';
 
 const DB_NAME = 'nostr-social-cache';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 const MAX_CACHED_EVENTS = 2400;
 const MAX_CACHED_PROFILE_EVENTS = 1200;
 const MAX_CACHED_HASHTAG_EVENTS = 1200;
+const MAX_CACHED_DIRECT_MESSAGES_PER_OWNER = 500;
 
 interface CachedProfileEvent {
   cacheKey: string;
@@ -18,6 +19,13 @@ interface CachedHashtagEvent {
   tag: string;
   created_at: number;
   event: NostrEvent;
+}
+
+interface CachedDirectMessage {
+  cacheKey: string;
+  owner: string;
+  created_at: number;
+  message: DirectMessage;
 }
 
 let dbPromise: Promise<IDBDatabase> | undefined;
@@ -51,6 +59,10 @@ function openDb() {
       }
       if (!db.objectStoreNames.contains('contacts')) db.createObjectStore('contacts', { keyPath: 'pubkey' });
       if (!db.objectStoreNames.contains('settings')) db.createObjectStore('settings', { keyPath: 'key' });
+      if (!db.objectStoreNames.contains('directMessages')) {
+        const directMessages = db.createObjectStore('directMessages', { keyPath: 'cacheKey' });
+        directMessages.createIndex('owner_created_at', ['owner', 'created_at']);
+      }
     };
 
     request.onerror = () => reject(request.error);
@@ -260,6 +272,65 @@ export async function getCachedProfiles() {
       (store as IDBObjectStore & { __setResult(value: Profile[]): void }).__setResult(request.result as Profile[]);
     };
   }).catch(() => []);
+}
+
+export async function cacheDirectMessages(ownerPubkey: string, messages: DirectMessage[]) {
+  const owner = normalizePubkey(ownerPubkey);
+  if (!owner || !messages.length) return;
+  await withStore<void>('directMessages', 'readwrite', (store) => {
+    messages.forEach((message) => {
+      const normalized = normalizeDirectMessage(message);
+      if (!normalized) return;
+      store.put({
+        cacheKey: `${owner}:${normalized.id}`,
+        owner,
+        created_at: normalized.created_at,
+        message: normalized
+      } satisfies CachedDirectMessage);
+    });
+    pruneOldDirectMessages(store, owner, MAX_CACHED_DIRECT_MESSAGES_PER_OWNER);
+  }).catch(() => undefined);
+}
+
+export async function getCachedDirectMessages(ownerPubkey: string, limit = 400) {
+  const owner = normalizePubkey(ownerPubkey);
+  if (!owner) return [];
+  return withStore<DirectMessage[]>('directMessages', 'readonly', (store) => {
+    const range = IDBKeyRange.bound([owner, 0], [owner, Number.MAX_SAFE_INTEGER]);
+    const request = store.index('owner_created_at').openCursor(range, 'prev');
+    const messages: DirectMessage[] = [];
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor || messages.length >= limit) {
+        (store as IDBObjectStore & { __setResult(value: DirectMessage[]): void }).__setResult(messages);
+        return;
+      }
+      messages.push((cursor.value as CachedDirectMessage).message);
+      cursor.continue();
+    };
+  }).catch(() => []);
+}
+
+function pruneOldDirectMessages(store: IDBObjectStore, owner: string, maxMessages: number) {
+  const range = IDBKeyRange.bound([owner, 0], [owner, Number.MAX_SAFE_INTEGER]);
+  pruneOverflow(store.index('owner_created_at'), maxMessages, range);
+}
+
+function normalizeDirectMessage(message: DirectMessage) {
+  const peer = normalizePubkey(message.peer);
+  const from = normalizePubkey(message.from);
+  const to = message.to
+    .split(',')
+    .map(normalizePubkey)
+    .filter(Boolean)
+    .join(',');
+  if (!message.id || !peer || !from) return null;
+  return { ...message, peer, from, to };
+}
+
+function normalizePubkey(value: string) {
+  const clean = value.trim().toLowerCase();
+  return /^[0-9a-f]{64}$/.test(clean) ? clean : '';
 }
 
 export async function clearEventCache() {
