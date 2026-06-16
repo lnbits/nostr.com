@@ -5,6 +5,7 @@ import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { cacheEvents, cacheProfile, cacheProfileEvents } from './cache';
 import { adultDomains, adultHashtags, mutedWords } from './contentFilters';
 import { defaultGuestNip05, defaultPomegranateCentral, defaultRelays, globalFeedHashtags } from './config';
+import { eventHasImgurUrl } from './media';
 import type { ContactListDetails, ContactListItem, CustomFeedSettings, DirectMessage, EventStats, FeedMode, FeedQueryOptions, Nip05Profile, NostrEvent, NotificationItem, Profile, RelayState, Session } from './types';
 
 type RelayBackoffState = { failures: number; retryAt: number };
@@ -611,7 +612,8 @@ export async function fetchFeed(
     filters.some((filter) => eventMatchesTimeWindow(event, filter.since, filter.until))
   );
   const clean = dedupeEvents(topLevelFeedEvents(filterSpam(events)));
-  const output = mode === 'global' ? limitCryptoTopicDensity(limitConsecutiveAuthors(clean, 2), 10) : clean;
+  const feedClean = mode === 'global' ? clean.filter((event) => !eventHasImgurUrl(event)) : clean;
+  const output = mode === 'global' ? limitCryptoTopicDensity(limitConsecutiveAuthors(feedClean, 2), 10) : feedClean;
   await cacheEvents(output);
   return output;
 }

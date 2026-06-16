@@ -1,5 +1,5 @@
 import { nip19 } from 'nostr-tools';
-import { extractMediaAttachments, extractMediaUrls, extractQuotedNoteReferences, extractSocialEmbeds, isVideoUrl, parseHashtags, parseNoteText } from './media';
+import { eventHasImgurUrl, extractMediaAttachments, extractMediaUrls, extractQuotedNoteReferences, extractSocialEmbeds, isVideoUrl, parseHashtags, parseNoteText } from './media';
 import type { NostrEvent } from './types';
 
 function event(overrides: Partial<NostrEvent> = {}): NostrEvent {
@@ -43,6 +43,13 @@ describe('media helpers', () => {
         })
       )
     ).toEqual([{ url: 'https://cdn.example.com/media/abc123', type: 'image', alt: 'profile photo', fallbackUrls: [] }]);
+  });
+
+  it('detects imgur urls in content and media tags', () => {
+    expect(eventHasImgurUrl(event({ content: 'look imgur.com/a/example' }))).toBe(true);
+    expect(eventHasImgurUrl(event({ content: 'look https://i.imgur.com/photo.jpg' }))).toBe(true);
+    expect(eventHasImgurUrl(event({ tags: [['imeta', 'url https://imgur.com/gallery/example', 'm image/jpeg']] }))).toBe(true);
+    expect(eventHasImgurUrl(event({ content: 'look https://example.com/photo.jpg' }))).toBe(false);
   });
 
   it('parses hashtags into clickable text parts', () => {

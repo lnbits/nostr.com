@@ -53,6 +53,7 @@ import {
   topLevelFeedEvents
 } from '$lib/nostr/client';
 import { clearPomegranateAuth, importNsecIntoPomegranate, loginWithPomegranateProvider, type PomegranateLoginProvider } from '$lib/nostr/pomegranateAuth';
+import { eventHasImgurUrl } from '$lib/nostr/media';
 import { savePrefetchedThreadReplies } from '$lib/stores/threadSeed';
 import type { ContactListDetails, ContactListItem, CustomFeedSettings, DirectMessage, EventStats, FeedMode, LoginMode, NostrEvent, NotificationItem, Profile, RelayState, Session } from '$lib/nostr/types';
 
@@ -351,8 +352,8 @@ function eventsForFeedMode(mode: FeedMode, items: NostrEvent[], follows = curren
         feedKeywords.some((keyword) => eventMatchesKeyword(event, keyword))
     );
   }
-  if (currentHashtag) return items;
-  return items.filter((event) => globalFeedHashtags.some((tag) => eventHasHashtag(event, tag)));
+  if (currentHashtag) return items.filter((event) => !eventHasImgurUrl(event));
+  return items.filter((event) => globalFeedHashtags.some((tag) => eventHasHashtag(event, tag)) && !eventHasImgurUrl(event));
 }
 
 async function getCachedFeedCandidates(mode: FeedMode, limit = cachedFeedBufferLimit) {
@@ -1382,7 +1383,8 @@ function mergeFeedEvents(incoming: NostrEvent[], existing: NostrEvent[]) {
   const byId = new Map<string, NostrEvent>();
   [...existing, ...incoming].forEach((event) => byId.set(event.id, event));
   const merged = [...byId.values()].filter((event) => !currentDeletedEventIds.has(event.id)).sort((a, b) => b.created_at - a.created_at);
-  const limited = currentMode === 'global' ? limitCryptoTopicDensity(limitConsecutiveAuthors(merged, 2), 10) : merged;
+  const globalClean = currentMode === 'global' ? merged.filter((event) => !eventHasImgurUrl(event)) : merged;
+  const limited = currentMode === 'global' ? limitCryptoTopicDensity(limitConsecutiveAuthors(globalClean, 2), 10) : globalClean;
   return limited;
 }
 

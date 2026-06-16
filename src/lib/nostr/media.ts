@@ -44,6 +44,17 @@ export function extractMediaAttachments(event: NostrEvent): MediaAttachment[] {
   return [...byUrl.values()];
 }
 
+export function eventHasImgurUrl(event: NostrEvent) {
+  return eventUrls(event).some((url) => {
+    try {
+      const host = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+      return host === 'imgur.com' || host.endsWith('.imgur.com');
+    } catch {
+      return false;
+    }
+  });
+}
+
 export type NoteTextPart =
   | { type: 'text'; value: string }
   | { type: 'hashtag'; value: string }
@@ -150,6 +161,28 @@ function extractWebUrls(content: string) {
   webUrlPattern.lastIndex = 0;
   while ((match = webUrlPattern.exec(content))) urls.push(trimTrailingUrlPunctuation(match[0]));
   return [...new Set(urls)];
+}
+
+function eventUrls(event: NostrEvent) {
+  const urls = new Set([...extractWebUrls(event.content), ...extractBareDomainUrls(event.content), ...extractMediaUrls(event.content)]);
+  for (const tag of event.tags) {
+    for (const value of tag.slice(1)) {
+      const maybeUrl = value.includes(' ') ? value.split(' ').slice(1).join(' ').trim() : value;
+      if (/^https?:\/\//i.test(maybeUrl)) urls.add(trimTrailingUrlPunctuation(maybeUrl));
+    }
+  }
+  return [...urls];
+}
+
+function extractBareDomainUrls(content: string) {
+  const urls: string[] = [];
+  let match: RegExpExecArray | null;
+  bareDomainPattern.lastIndex = 0;
+  while ((match = bareDomainPattern.exec(content))) {
+    const raw = trimTrailingUrlPunctuation(match[2] ?? '');
+    if (looksLikeDomainUrl(raw)) urls.push(`https://${raw}`);
+  }
+  return urls;
 }
 
 function parseBareDomainLinks(content: string): NoteTextPart[] {
