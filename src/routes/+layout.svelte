@@ -99,14 +99,14 @@
     }
   };
   const pomegranateSeo = {
-    title: 'Pomegranate: Safer Nostr login with split key signing',
+    title: 'Pomegranate / Google-Auth: Safer Nostr login with split key signing',
     description: pomegranateDescription,
     path: '/pomegranate',
     image: '/banner.png',
     schema: {
       '@context': 'https://schema.org',
       '@type': 'Article',
-      headline: 'Pomegranate',
+      headline: 'Pomegranate / Google-Auth',
       description: pomegranateDescription,
       url: `${siteUrl}/pomegranate`,
       mainEntityOfPage: `${siteUrl}/pomegranate`,

@@ -130,6 +130,15 @@
   ];
 
   const partialNips: { id: string; description: string }[] = [];
+  let videoDialogOpen = false;
+
+  function closeVideoDialog() {
+    videoDialogOpen = false;
+  }
+
+  function closeVideoFromKeyboard(event: KeyboardEvent) {
+    if (event.key === 'Escape') closeVideoDialog();
+  }
 </script>
 
 <section class="info-view">
@@ -161,6 +170,7 @@
     <p>
       Learn more at <a href="https://nostr.org" target="_blank" rel="noreferrer">nostr.org</a>
     </p>
+    <button class="info-video-button" on:click={() => (videoDialogOpen = true)}>Watch a video</button>
   </header>
 
   <section class="panel info-panel">
@@ -189,3 +199,18 @@
     </section>
   {/if}
 </section>
+
+{#if videoDialogOpen}
+  <div class="dialog-backdrop" role="presentation" tabindex="-1" on:click={(event) => event.target === event.currentTarget && closeVideoDialog()} on:keydown={closeVideoFromKeyboard}>
+    <div class="dialog-panel info-video-dialog" role="dialog" aria-modal="true" aria-label="Nostr video">
+      <div class="info-video-frame">
+        <iframe
+          src="https://www.youtube.com/embed/5W-jtbbh3eA?autoplay=1&rel=0"
+          title="Nostr explainer video"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowfullscreen
+        ></iframe>
+      </div>
+    </div>
+  </div>
+{/if}

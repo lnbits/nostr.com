@@ -186,7 +186,7 @@ const summaries: Record<string, { title: string; summary: string }> = {
     summary: 'NIP-45 lets clients ask relays for counts instead of full event lists. That is useful for showing reply, reaction, repost, or search totals efficiently.'
   },
   '46': {
-    title: 'Remote signing',
+    title: 'Bunker / Remote signing',
     summary: 'NIP-46 lets one app ask another signer to approve and sign Nostr events. This supports bunker-style login, where your private key stays outside the website using it.'
   },
   '47': {

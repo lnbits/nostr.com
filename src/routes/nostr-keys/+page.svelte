@@ -10,6 +10,9 @@
       <img src={appPath('/keys.png')} alt="" class="info-robot" />
     </div>
     <p>
+      <i>Keep your private key safe and private, avoid signing into apps directly with your nsec!</i>
+    </p>
+    <p>
       Every Nostr account has two keys: a public key and a private key. Your public key is like your
       username. It is safe to share, and people use it to find you, follow you, and send you
       messages.
