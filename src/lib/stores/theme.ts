@@ -19,7 +19,7 @@ export function cycleThemeMode(mode: ThemeMode) {
 themeMode.subscribe((mode) => {
   if (!browser) return;
   document.documentElement.dataset.theme = mode;
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', mode === 'dark' ? '#0f172a' : '#fffdf8');
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', mode === 'dark' ? '#000000' : '#fffdf8');
   localStorage.setItem(storageKey, mode);
 });
 

@@ -219,7 +219,7 @@
     };
 
     return themeMode.subscribe((mode) => {
-      const color = mode === 'dark' ? '#0f172a' : '#fffdf8';
+      const color = mode === 'dark' ? '#000000' : '#fffdf8';
       void StatusBar.setStyle({ style: mode === 'dark' ? Style.Dark : Style.Light }).catch(() => undefined);
       void StatusBar.setBackgroundColor({ color }).catch(() => undefined);
       void (NavigationBar.setColor?.({ color, darkButtons: mode === 'light' }) ?? NavigationBar.setNavigationBarColor?.({ color, darkButtons: mode === 'light' }))?.catch(
