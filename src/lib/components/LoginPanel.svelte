@@ -3,16 +3,14 @@
   import { loginDialogOpen, signIn, signInWithImportedNsec } from '$lib/stores/app';
   import { validateImportedNsec, type PomegranateLoginProvider } from '$lib/nostr/pomegranateAuth';
 
-  let nsec = '';
   let privateKey = '';
   let bunkerUri = '';
+  let googleNsec = '';
   let error = '';
   let loggingIn = false;
   let importing = false;
-  let showOtherMethods = false;
-  let replaceExisting = false;
+  let showGoogleNsecPrompt = false;
   $: busy = loggingIn || importing;
-  $: importPreview = previewNsec(nsec);
 
   async function login(provider: PomegranateLoginProvider) {
     if (loggingIn) return;
@@ -44,6 +42,20 @@
     }
   }
 
+  async function loginWithNip07() {
+    if (loggingIn) return;
+    error = '';
+    loggingIn = true;
+    try {
+      await signIn('nip07');
+      loginDialogOpen.set(false);
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Could not sign in with your browser extension.';
+    } finally {
+      loggingIn = false;
+    }
+  }
+
   async function loginWithBunker() {
     if (loggingIn) return;
     error = '';
@@ -59,28 +71,24 @@
     }
   }
 
-  async function importKey() {
+  async function importKey(value: string) {
     if (importing) return;
     error = '';
     importing = true;
     try {
-      if (replaceExisting && !confirm('Replace the Pomegranate identity for this login? This revokes the current Pomegranate account connections for this login, but it does not change the imported npub.')) {
-        importing = false;
-        return;
-      }
-      await signInWithImportedNsec(nsec, 'google', { replaceExisting });
-      nsec = '';
-      replaceExisting = false;
+      await signInWithImportedNsec(value, 'google');
+      googleNsec = '';
+      showGoogleNsecPrompt = false;
       loginDialogOpen.set(false);
     } catch (err) {
-      nsec = '';
+      googleNsec = '';
       error = err instanceof Error ? err.message : 'Could not import that key.';
     } finally {
       importing = false;
     }
   }
 
-  function previewNsec(value: string) {
+  function validNsec(value: string) {
     if (!value.trim()) return '';
     try {
       return validateImportedNsec(value).npub;
@@ -88,48 +96,41 @@
       return '';
     }
   }
+
+  function promptForGoogleNsec() {
+    error = '';
+    showGoogleNsecPrompt = true;
+  }
+
+  function handleGoogleNsecInput() {
+    if (!validNsec(googleNsec)) return;
+    void importKey(googleNsec);
+  }
 </script>
 
 <section class="login-panel" id="login">
-  <div class="login-input-action">
-    <input aria-label="Bunker URI" bind:value={bunkerUri} autocomplete="off" spellcheck="false" placeholder="bunker://..." />
-    <button disabled={busy || !bunkerUri.trim()} on:click={() => void loginWithBunker()}><KeyRound size={18} /> Connect</button>
-  </div>
-
-  <div class="login-input-action">
-    <input aria-label="nsec or hex key" type="password" bind:value={privateKey} autocomplete="off" spellcheck="false" placeholder="nsec1..." />
-    <button disabled={busy || !privateKey.trim()} on:click={() => void loginWithPrivateKey()}><KeyRound size={18} /> Sign in</button>
-  </div>
-
-  <button class="primary google-login-button" disabled={busy} on:click={() => login('google')}><ShieldCheck size={18} /> {loggingIn ? 'Connecting' : 'Continue with Google'}</button>
-
-
-  <details class="login-advanced" bind:open={showOtherMethods}>
-    <summary>Import</summary>
-      <p>
-      Import an nsec using  
-    <a href="https://viewsource.win/fiatjaf.com/pomegranate" target="_blank" rel="noreferrer">Pomegranate</a>.
-     <br/>Your key will be split across operators and kept safe. Pomegranate uses Google-auth to authenticate signing notes (more oauth methods coming soon).
-     <br/>
-  </p>
+  {#if showGoogleNsecPrompt}
+    <div class="login-section">
+      <input aria-label="nsec to import" type="password" bind:value={googleNsec} on:input={handleGoogleNsecInput} autocomplete="off" spellcheck="false" placeholder="nsec1..." />
+      <button class="primary google-login-button" disabled={busy} on:click={() => login('google')}><ShieldCheck size={18} /> {loggingIn ? 'Connecting' : "I don't have an nsec"}</button>
+    </div>
+  {:else}
+    <button class="primary google-login-button" disabled={busy} on:click={promptForGoogleNsec}><ShieldCheck size={18} /> Continue with Google</button>
 
     <div class="login-section">
-      <input aria-label="Private key" type="password" bind:value={nsec} autocomplete="off" spellcheck="false" placeholder="nsec1..." />
-      {#if importPreview}
-        <p>Matches {importPreview}</p>
-      {:else if nsec.trim()}
-        <p class="error">Enter a valid nsec private key.</p>
-      {/if}
-      <label class="login-replace-option">
-        <input type="checkbox" bind:checked={replaceExisting} />
-        <span>Replace the Pomegranate identity for this login</span>
-      </label>
-      {#if replaceExisting}
-        <p>This resets the Pomegranate account for the login you approve, then imports this key. Your npub will be the imported npub.</p>
-      {/if}
-      <button disabled={busy || !importPreview} on:click={() => void importKey()}><KeyRound size={18} /> {importing ? 'Importing' : replaceExisting ? 'Replace and import' : 'Import with Pomegranate'}</button>
+      <button class="nip07-login-button" disabled={busy} on:click={() => void loginWithNip07()}><KeyRound size={18} /> Connect with NIP-07</button>
+
+      <div class="login-input-action">
+        <input aria-label="Bunker URI" bind:value={bunkerUri} autocomplete="off" spellcheck="false" placeholder="bunker://..." />
+        <button disabled={busy || !bunkerUri.trim()} on:click={() => void loginWithBunker()}><KeyRound size={18} /> Connect</button>
+      </div>
+
+      <div class="login-input-action">
+        <input aria-label="nsec or hex key" type="password" bind:value={privateKey} autocomplete="off" spellcheck="false" placeholder="nsec1..." />
+        <button disabled={busy || !privateKey.trim()} on:click={() => void loginWithPrivateKey()}><KeyRound size={18} /> Sign in</button>
+      </div>
     </div>
-  </details>
+  {/if}
 
   {#if error}
     <p class="error">{error}</p>

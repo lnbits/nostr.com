@@ -594,6 +594,14 @@ label span, label strong { color: var(--text); }
 .login-input-action button {
   width: 100%;
 }
+.nip07-login-button {
+  width: 100%;
+  border-color: color-mix(in srgb, var(--line) 35%, transparent);
+  color: var(--muted);
+}
+.nip07-login-button:not(:disabled) {
+  color: color-mix(in srgb, var(--text) 52%, var(--surface));
+}
 .login-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .filter-card-form {
   display: grid;
