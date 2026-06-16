@@ -426,7 +426,7 @@
                       {#each media as item}
                         {#if item.type === 'video'}
                           <!-- svelte-ignore a11y_media_has_caption -->
-                          <video use:pauseWhenHidden src={item.url} controls preload="metadata" playsinline title={item.alt}></video>
+                          <video use:pauseWhenHidden src={item.url} poster={item.poster} controls preload="metadata" playsinline title={item.alt}></video>
                         {:else}
                           <button type="button" on:click={() => (openImage = { url: item.url, alt: item.alt })} aria-label="Open image">
                             <img src={item.url} alt={item.alt ?? ''} loading="lazy" referrerpolicy="no-referrer" />

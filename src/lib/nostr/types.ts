@@ -119,5 +119,6 @@ export interface MediaAttachment {
   alt?: string;
   blurhash?: string;
   dim?: string;
+  poster?: string;
   fallbackUrls: string[];
 }

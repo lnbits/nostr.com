@@ -302,6 +302,7 @@ function parseImeta(tag: string[]) {
     if (key === 'alt') metadata.alt = value;
     if (key === 'blurhash') metadata.blurhash = value;
     if (key === 'dim') metadata.dim = value;
+    if (key === 'image' && !metadata.poster) metadata.poster = safeHttpUrl(value);
     if (key === 'fallback') {
       const fallbackUrl = safeHttpUrl(value);
       if (fallbackUrl) metadata.fallbackUrls = [...(metadata.fallbackUrls ?? []), fallbackUrl];

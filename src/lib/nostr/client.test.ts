@@ -361,6 +361,15 @@ describe('nostr client helpers', () => {
     });
   });
 
+  it('deduplicates repeat likes from the same pubkey', () => {
+    const root = event({ id: '1'.repeat(64), content: 'root' });
+    const liker = 'c'.repeat(64);
+    const oldLike = event({ id: '6'.repeat(64), kind: 7, pubkey: liker, content: '+', tags: [['e', root.id]] });
+    const newLike = event({ id: '7'.repeat(64), kind: 7, pubkey: liker, content: '+', tags: [['e', root.id]] });
+
+    expect(eventStatsFromEvents([root.id], [oldLike, newLike])[root.id].likes).toBe(1);
+  });
+
   it('filters obvious adult content by keyword, hashtag, domain, and warning tags', () => {
     const keyword = event({ content: 'this is nsfw content' });
     const hashtag = event({ content: 'look at this #porn account' });

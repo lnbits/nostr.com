@@ -45,6 +45,16 @@ describe('media helpers', () => {
     ).toEqual([{ url: 'https://cdn.example.com/media/abc123', type: 'image', alt: 'profile photo', fallbackUrls: [] }]);
   });
 
+  it('uses NIP-71 imeta image fields as video posters', () => {
+    expect(
+      extractMediaAttachments(
+        event({
+          tags: [['imeta', 'url https://cdn.example.com/video.mp4', 'm video/mp4', 'image https://cdn.example.com/video.jpg', 'image https://cdn.example.com/fallback.jpg']]
+        })
+      )
+    ).toEqual([{ url: 'https://cdn.example.com/video.mp4', type: 'video', poster: 'https://cdn.example.com/video.jpg', fallbackUrls: [] }]);
+  });
+
   it('detects imgur urls in content and media tags', () => {
     expect(eventHasImgurUrl(event({ content: 'look imgur.com/a/example' }))).toBe(true);
     expect(eventHasImgurUrl(event({ content: 'look https://i.imgur.com/photo.jpg' }))).toBe(true);

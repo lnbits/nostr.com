@@ -1236,7 +1236,6 @@ export async function reactToNote(target: NostrEvent, content = '+') {
     });
     try {
       if (reactionEvent) await publishDeletion(currentSession, reactionEvent, currentRelays, 'Unliked by author');
-      seenLiveReactionAuthors.delete(pendingKey);
       return;
     } catch (err) {
       if (reactionEvent) ownLikeEvents.set(target.id, reactionEvent);
