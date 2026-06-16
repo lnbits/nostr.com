@@ -1,7 +1,17 @@
 import { browser } from '$app/environment';
 import { goto } from '$app/navigation';
 import { writable } from 'svelte/store';
-import { cacheDirectMessages, clearEventCache, getCachedDirectMessages, getCachedEvents, getCachedHashtagEvents, getCachedProfileEvents, getCachedProfiles } from '$lib/nostr/cache';
+import {
+  cacheDirectMessages,
+  cacheNotifications,
+  clearEventCache,
+  getCachedDirectMessages,
+  getCachedEvents,
+  getCachedHashtagEvents,
+  getCachedNotifications,
+  getCachedProfileEvents,
+  getCachedProfiles
+} from '$lib/nostr/cache';
 import { defaultCustomFeedSettings, defaultGuestNip05, defaultRelays, globalFeedCuratorPubkey, globalFeedHashtags, keywordsForInterests } from '$lib/nostr/config';
 import { appPath } from '$lib/paths';
 import { markRelaysOffline, markRelaysOnline, syncRelayStatus } from '$lib/stores/relayStatus';
@@ -83,6 +93,7 @@ const threadPrefetchReplyLimit = 10;
 const threadPrefetchCooldownMs = 5 * 60 * 1000;
 const maxThreadPrefetchConcurrent = 2;
 const deletionCheckCooldownMs = 5 * 60 * 1000;
+const maxNotificationItems = 160;
 
 const initialSession = browser ? readStoredSession() : null;
 const initialStoredContacts = browser && initialSession ? readStoredContactList(initialSession.pubkey) : undefined;
@@ -977,15 +988,28 @@ export async function refreshNotifications() {
     return;
   }
 
+  await hydrateCachedNotifications(currentSession);
   loadingNotifications.set(true);
   try {
-    const nextNotifications = (await fetchNotifications(currentSession.pubkey, currentRelays).catch(() => [])).filter((item) => !currentMutedPubkeys.has(item.event.pubkey));
-    notifications.set(nextNotifications);
-    const pubkeys = [...new Set(nextNotifications.map((item) => item.event.pubkey))];
+    const nextNotifications = (await fetchNotifications(currentSession.pubkey, currentRelays, maxNotificationItems).catch(() => [])).filter((item) => !currentMutedPubkeys.has(item.actor));
+    const merged = mergeNotifications(nextNotifications, getStoreSnapshot(notifications));
+    notifications.set(merged);
+    void cacheNotifications(currentSession.pubkey, merged);
+    const pubkeys = [...new Set(merged.map((item) => item.actor))];
     await hydrateMissingProfiles(pubkeys.map((pubkey) => ({ id: pubkey, pubkey, created_at: 0, kind: 0, tags: [], content: '' })), 80);
   } finally {
     loadingNotifications.set(false);
   }
+}
+
+async function hydrateCachedNotifications(currentSession: Session) {
+  if (getStoreSnapshot(notifications).length) return;
+  const cached = await getCachedNotifications(currentSession.pubkey, maxNotificationItems).catch(() => []);
+  if (!cached.length || currentSessionValue?.pubkey !== currentSession.pubkey) return;
+  const merged = mergeNotifications(cached, []);
+  notifications.set(merged);
+  const pubkeys = [...new Set(merged.map((item) => item.actor))];
+  void hydrateMissingProfiles(pubkeys.map((pubkey) => ({ id: pubkey, pubkey, created_at: 0, kind: 0, tags: [], content: '' })), 80);
 }
 
 export function markNotificationsSeen() {
@@ -1904,7 +1928,11 @@ function restartInboxSubscriptions() {
   const token = ++liveInboxToken;
   void subscribeNotifications(currentSession.pubkey, currentRelays, (items) => {
     if (token !== liveInboxToken || currentSessionValue?.pubkey !== currentSession.pubkey) return;
-    notifications.update((existing) => mergeNotifications(items, existing));
+    notifications.update((existing) => {
+      const merged = mergeNotifications(items, existing);
+      void cacheNotifications(currentSession.pubkey, merged);
+      return merged;
+    });
     void hydrateMissingProfiles(items.map((item) => item.event), 20);
   }).then((sub) => {
     if (token === liveInboxToken && currentSessionValue?.pubkey === currentSession.pubkey) liveNotificationsSub = sub;
@@ -1932,8 +1960,12 @@ function stopInboxSubscriptions() {
 
 function mergeNotifications(next: NotificationItem[], existing: NotificationItem[]) {
   const byId = new Map<string, NotificationItem>();
-  for (const item of [...next, ...existing]) byId.set(item.id, item);
-  return [...byId.values()].sort((a, b) => b.event.created_at - a.event.created_at).slice(0, 80);
+  for (const item of [...next, ...existing]) {
+    if (currentMutedPubkeys.has(item.actor)) continue;
+    const existingItem = byId.get(item.id);
+    if (!existingItem || item.event.created_at >= existingItem.event.created_at) byId.set(item.id, item);
+  }
+  return [...byId.values()].sort((a, b) => b.event.created_at - a.event.created_at).slice(0, maxNotificationItems);
 }
 
 async function hydrateGuestFeedContext() {

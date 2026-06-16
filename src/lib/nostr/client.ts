@@ -1009,9 +1009,7 @@ export function eventStatsFromEvents(ids: string[], events: NostrEvent[]) {
 export async function fetchNotifications(pubkey: string, relays = defaultRelays, limit = 80) {
   if (!/^[0-9a-f]{64}$/i.test(pubkey)) return [];
   const relayUrls = activeRelayUrls(relays, 'read');
-  const ownPosts = topLevelFeedEvents(
-    filterSpam(verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [1], authors: [pubkey], limit: Math.min(limit, 80) }, 4500)))
-  );
+  const ownPosts = filterSpam(verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [1], authors: [pubkey], limit: Math.min(240, limit * 3) }, 4500)));
   const ownPostIds = ownPosts.map((event) => event.id);
   const ownPostById = new Map(ownPosts.map((event) => [event.id, event]));
 
@@ -1038,9 +1036,7 @@ export async function subscribeNotifications(pubkey: string, relays = defaultRel
   if (!relayUrls.length) return undefined;
 
   const since = Math.floor(Date.now() / 1000) - 10;
-  const ownPosts = topLevelFeedEvents(
-    filterSpam(verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [1], authors: [pubkey], limit: Math.min(limit, 80) }, 4500)))
-  );
+  const ownPosts = filterSpam(verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [1], authors: [pubkey], limit: Math.min(240, limit * 3) }, 4500)));
   const ownPostById = new Map(ownPosts.map((event) => [event.id, event]));
   const filters: Filter[] = [
     { kinds: [1], '#p': [pubkey], since },
@@ -1073,22 +1069,22 @@ export function notificationForEvent(event: NostrEvent, pubkey: string, ownPostB
     if (!mentionsMe || !filterSpam([event]).length) return [];
     const type = isReplyEvent(event) ? 'reply' : 'mention';
     const targetId = type === 'reply' ? threadRootOrParentId(event) || event.id : event.id;
-    return [{ id: `${type}:${event.id}`, type, event, targetId, targetEvent: ownPostById.get(targetId), seen: false }];
+    return [{ id: `${type}:${event.id}`, type, actor: event.pubkey, event, targetId, targetEvent: ownPostById.get(targetId), seen: false }];
   }
   if (event.kind === 7) {
     const targetId = reactionTargetId(event);
     if (!targetId || (!ownPostById.has(targetId) && !eventTagsPubkey(event, pubkey))) return [];
     const reaction = event.content.trim();
     if (reaction && reaction !== '+') return [];
-    return [{ id: `like:${event.id}`, type: 'like', event, targetId, targetEvent: ownPostById.get(targetId), seen: false }];
+    return [{ id: `like:${targetId}:${event.pubkey}`, type: 'like', actor: event.pubkey, event, targetId, targetEvent: ownPostById.get(targetId), seen: false }];
   }
   if (event.kind === 6 || event.kind === 16) {
     const targetId = firstReferencedEventId(event, ownPostById) || (eventTagsPubkey(event, pubkey) ? firstReferencedEventId(event) : '');
     if (!targetId) return [];
-    return [{ id: `repost:${event.id}`, type: 'repost', event, targetId, targetEvent: ownPostById.get(targetId), seen: false }];
+    return [{ id: `repost:${targetId}:${event.pubkey}`, type: 'repost', actor: event.pubkey, event, targetId, targetEvent: ownPostById.get(targetId), seen: false }];
   }
   if (event.kind === 3 && extractContactListDetails(event).pubkeys.includes(pubkey)) {
-    return [{ id: `follow:${event.id}:${event.pubkey}`, type: 'follow', event, seen: false }];
+    return [{ id: `follow:${event.pubkey}`, type: 'follow', actor: event.pubkey, event, seen: false }];
   }
   return [];
 }
@@ -1113,7 +1109,10 @@ function threadRootOrParentId(event: NostrEvent) {
 
 function dedupeNotifications(items: NotificationItem[]) {
   const byId = new Map<string, NotificationItem>();
-  for (const item of items) byId.set(item.id, item);
+  for (const item of items) {
+    const existing = byId.get(item.id);
+    if (!existing || item.event.created_at >= existing.event.created_at) byId.set(item.id, item);
+  }
   return [...byId.values()].sort((a, b) => b.event.created_at - a.event.created_at);
 }
 

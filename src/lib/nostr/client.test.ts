@@ -199,8 +199,17 @@ describe('nostr client helpers', () => {
     const like = event({ id: '1'.repeat(64), kind: 7, pubkey: 'b'.repeat(64), content: '+', tags: [['e', target], ['p', pubkey]] });
     const repost = event({ id: '2'.repeat(64), kind: 6, pubkey: 'c'.repeat(64), tags: [['e', target], ['p', pubkey]] });
 
-    expect(notificationForEvent(like, pubkey, new Map())).toMatchObject([{ type: 'like', targetId: target }]);
-    expect(notificationForEvent(repost, pubkey, new Map())).toMatchObject([{ type: 'repost', targetId: target }]);
+    expect(notificationForEvent(like, pubkey, new Map())).toMatchObject([{ id: `like:${target}:${like.pubkey}`, type: 'like', actor: like.pubkey, targetId: target }]);
+    expect(notificationForEvent(repost, pubkey, new Map())).toMatchObject([{ id: `repost:${target}:${repost.pubkey}`, type: 'repost', actor: repost.pubkey, targetId: target }]);
+  });
+
+  it('uses stable notification ids for repeated follow events from the same actor', () => {
+    const follower = 'b'.repeat(64);
+    const first = event({ id: '1'.repeat(64), kind: 3, pubkey: follower, tags: [['p', pubkey]] });
+    const second = event({ id: '2'.repeat(64), kind: 3, pubkey: follower, tags: [['p', pubkey]] });
+
+    expect(notificationForEvent(first, pubkey, new Map())[0]).toMatchObject({ id: `follow:${follower}`, actor: follower, type: 'follow' });
+    expect(notificationForEvent(second, pubkey, new Map())[0]).toMatchObject({ id: `follow:${follower}`, actor: follower, type: 'follow' });
   });
 
 

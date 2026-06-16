@@ -37,7 +37,7 @@
   }
 
   function openNotification(item: NotificationItem) {
-    if (item.type === 'follow') void goto(appPath(`/profile/${item.event.pubkey}`));
+    if (item.type === 'follow') void goto(appPath(`/profile/${item.actor}`));
     else {
       events.update((existing) => mergeEvents([item.event, ...(item.targetEvent ? [item.targetEvent] : [])], existing));
       const targetId = item.targetId || item.event.id;
@@ -76,7 +76,7 @@
   {:else if $notifications.length}
     <div class="notification-list">
       {#each $notifications as item (item.id)}
-        {@const actor = $profiles[item.event.pubkey]}
+        {@const actor = $profiles[item.actor]}
         {@const Icon = iconFor(item.type)}
         <article class="notification-item">
           <button class="notification-summary" on:click={() => openNotification(item)}>
@@ -90,7 +90,7 @@
             </span>
             <span class="notification-copy">
               <span class="notification-line">
-                <strong>{actorName(actor, item.event.pubkey)}</strong>
+                <strong>{actorName(actor, item.actor)}</strong>
                 <span>{notificationLabel(item)}</span>
               </span>
               {#if previewText(item)}

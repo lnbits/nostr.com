@@ -1,11 +1,12 @@
-import type { DirectMessage, NostrEvent, Profile } from './types';
+import type { DirectMessage, NostrEvent, NotificationItem, Profile } from './types';
 
 const DB_NAME = 'nostr-social-cache';
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 const MAX_CACHED_EVENTS = 2400;
 const MAX_CACHED_PROFILE_EVENTS = 1200;
 const MAX_CACHED_HASHTAG_EVENTS = 1200;
 const MAX_CACHED_DIRECT_MESSAGES_PER_OWNER = 500;
+const MAX_CACHED_NOTIFICATIONS_PER_OWNER = 240;
 
 interface CachedProfileEvent {
   cacheKey: string;
@@ -26,6 +27,13 @@ interface CachedDirectMessage {
   owner: string;
   created_at: number;
   message: DirectMessage;
+}
+
+interface CachedNotification {
+  cacheKey: string;
+  owner: string;
+  created_at: number;
+  notification: NotificationItem;
 }
 
 let dbPromise: Promise<IDBDatabase> | undefined;
@@ -62,6 +70,10 @@ function openDb() {
       if (!db.objectStoreNames.contains('directMessages')) {
         const directMessages = db.createObjectStore('directMessages', { keyPath: 'cacheKey' });
         directMessages.createIndex('owner_created_at', ['owner', 'created_at']);
+      }
+      if (!db.objectStoreNames.contains('notifications')) {
+        const notifications = db.createObjectStore('notifications', { keyPath: 'cacheKey' });
+        notifications.createIndex('owner_created_at', ['owner', 'created_at']);
       }
     };
 
@@ -311,9 +323,51 @@ export async function getCachedDirectMessages(ownerPubkey: string, limit = 400) 
   }).catch(() => []);
 }
 
+export async function cacheNotifications(ownerPubkey: string, notifications: NotificationItem[]) {
+  const owner = normalizePubkey(ownerPubkey);
+  if (!owner || !notifications.length) return;
+  await withStore<void>('notifications', 'readwrite', (store) => {
+    notifications.forEach((notification) => {
+      const normalized = normalizeNotification(notification);
+      if (!normalized) return;
+      store.put({
+        cacheKey: `${owner}:${normalized.id}`,
+        owner,
+        created_at: normalized.event.created_at,
+        notification: normalized
+      } satisfies CachedNotification);
+    });
+    pruneOldNotifications(store, owner, MAX_CACHED_NOTIFICATIONS_PER_OWNER);
+  }).catch(() => undefined);
+}
+
+export async function getCachedNotifications(ownerPubkey: string, limit = 160) {
+  const owner = normalizePubkey(ownerPubkey);
+  if (!owner) return [];
+  return withStore<NotificationItem[]>('notifications', 'readonly', (store) => {
+    const range = IDBKeyRange.bound([owner, 0], [owner, Number.MAX_SAFE_INTEGER]);
+    const request = store.index('owner_created_at').openCursor(range, 'prev');
+    const notifications: NotificationItem[] = [];
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor || notifications.length >= limit) {
+        (store as IDBObjectStore & { __setResult(value: NotificationItem[]): void }).__setResult(notifications);
+        return;
+      }
+      notifications.push((cursor.value as CachedNotification).notification);
+      cursor.continue();
+    };
+  }).catch(() => []);
+}
+
 function pruneOldDirectMessages(store: IDBObjectStore, owner: string, maxMessages: number) {
   const range = IDBKeyRange.bound([owner, 0], [owner, Number.MAX_SAFE_INTEGER]);
   pruneOverflow(store.index('owner_created_at'), maxMessages, range);
+}
+
+function pruneOldNotifications(store: IDBObjectStore, owner: string, maxItems: number) {
+  const range = IDBKeyRange.bound([owner, 0], [owner, Number.MAX_SAFE_INTEGER]);
+  pruneOverflow(store.index('owner_created_at'), maxItems, range);
 }
 
 function normalizeDirectMessage(message: DirectMessage) {
@@ -328,6 +382,12 @@ function normalizeDirectMessage(message: DirectMessage) {
   return { ...message, peer, from, to };
 }
 
+function normalizeNotification(notification: NotificationItem) {
+  const actor = normalizePubkey(notification.actor || notification.event.pubkey);
+  if (!notification.id || !actor || !notification.event?.id || !notification.event.created_at) return null;
+  return { ...notification, actor, event: { ...notification.event, pubkey: actor } };
+}
+
 function normalizePubkey(value: string) {
   const clean = value.trim().toLowerCase();
   return /^[0-9a-f]{64}$/.test(clean) ? clean : '';
@@ -337,7 +397,8 @@ export async function clearEventCache() {
   await Promise.all([
     withStore<void>('events', 'readwrite', (store) => store.clear()),
     withStore<void>('profileEvents', 'readwrite', (store) => store.clear()),
-    withStore<void>('hashtagEvents', 'readwrite', (store) => store.clear())
+    withStore<void>('hashtagEvents', 'readwrite', (store) => store.clear()),
+    withStore<void>('notifications', 'readwrite', (store) => store.clear())
   ]).catch(() => undefined);
 }
 
