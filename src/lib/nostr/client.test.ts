@@ -19,6 +19,7 @@ import {
   limitConsecutiveAuthors,
   loginWithBunker,
   loginWithPrivateKey,
+  notificationForEvent,
   normalizeNip05Identifier,
   normalizePomegranateCentralUrl,
   parseProfileEvents,
@@ -191,6 +192,15 @@ describe('nostr client helpers', () => {
     expect(filters).toHaveLength(2);
     expect(filters.map((filter) => filter.limit)).toEqual([undefined, undefined]);
     expect(filters.flatMap((filter) => filter.authors ?? [])).toEqual(follows);
+  });
+
+  it('shows like and repost notifications for events that tag the user even before the target note is cached', () => {
+    const target = 'f'.repeat(64);
+    const like = event({ id: '1'.repeat(64), kind: 7, pubkey: 'b'.repeat(64), content: '+', tags: [['e', target], ['p', pubkey]] });
+    const repost = event({ id: '2'.repeat(64), kind: 6, pubkey: 'c'.repeat(64), tags: [['e', target], ['p', pubkey]] });
+
+    expect(notificationForEvent(like, pubkey, new Map())).toMatchObject([{ type: 'like', targetId: target }]);
+    expect(notificationForEvent(repost, pubkey, new Map())).toMatchObject([{ type: 'repost', targetId: target }]);
   });
 
 
