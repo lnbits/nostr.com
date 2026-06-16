@@ -1548,6 +1548,8 @@ async function activateSession(
   activeHashtag.set('');
   currentNotificationSeenAt = browser ? readLastSeen(notificationSeenStorageKey, next.pubkey) : 0;
   currentMessageSeenAt = browser ? readLastSeen(messageSeenStorageKey, next.pubkey) : 0;
+  clearFeedState();
+  hasMoreFeed.set(true);
   directMessages.set([]);
   notifications.set([]);
   loadingFeed.set(true);
