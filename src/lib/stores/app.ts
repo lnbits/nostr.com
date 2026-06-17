@@ -172,10 +172,12 @@ let liveFeedToken = 0;
 let liveStatsSub: { close: (reason?: string) => void } | undefined;
 let liveStatsTimer: ReturnType<typeof setTimeout> | undefined;
 let liveStatsKey = '';
+let visibleStatsRefreshTimer: ReturnType<typeof setTimeout> | undefined;
 let liveNotificationsSub: { close: (reason?: string) => void } | undefined;
 let liveMessagesSub: { close: (reason?: string) => void } | undefined;
 let liveInboxToken = 0;
 let cachedOlderEvents: NostrEvent[] = [];
+let cachedStatsEventsPromise: Promise<NostrEvent[]> | undefined;
 const visibleStatIds = new Set<string>();
 const seenLiveStatEvents = new Set<string>();
 const seenLiveReactionAuthors = new Set<string>();
@@ -477,11 +479,21 @@ export function watchVisibleNoteStats(id: string, visible: boolean) {
   if (!browser || !/^[0-9a-f]{64}$/i.test(id)) return;
   if (visible) {
     visibleStatIds.add(id);
-    void refreshEventStats([id]);
+    queueVisibleStatsRefresh(id);
   } else {
     visibleStatIds.delete(id);
   }
   scheduleVisibleStatsSubscription();
+}
+
+function queueVisibleStatsRefresh(id: string) {
+  visibleStatIds.add(id);
+  if (visibleStatsRefreshTimer) return;
+  visibleStatsRefreshTimer = setTimeout(() => {
+    visibleStatsRefreshTimer = undefined;
+    const ids = [...visibleStatIds].slice(0, 80);
+    if (ids.length) void refreshEventStats(ids);
+  }, 60);
 }
 
 function scheduleVisibleStatsSubscription() {
@@ -797,10 +809,20 @@ export async function refreshEventStats(ids: string[], force = false) {
   const nextIds = ids.filter((id) => force || checkedAt - (requestedStats.get(id) ?? 0) > statsRetryMs);
   nextIds.forEach((id) => requestedStats.set(id, checkedAt));
   if (!nextIds.length) return;
+  void hydrateCachedEventStats(nextIds);
   const currentSession = currentSessionValue;
   const stats = await fetchEventStats(nextIds, currentRelays).catch(() => ({}));
   eventStats.update((existing) => mergeStats(existing, stats));
   if (currentSession) void refreshOwnEventActions(nextIds, currentSession);
+}
+
+async function hydrateCachedEventStats(ids: string[]) {
+  if (!browser || !ids.length) return;
+  cachedStatsEventsPromise ??= getCachedEvents(2000).then((events) => events.filter((event) => [1, 6, 7, 16, 9735].includes(event.kind)));
+  const cachedEvents = await cachedStatsEventsPromise.catch(() => []);
+  if (!cachedEvents.length) return;
+  const cachedStats = eventStatsFromEvents(ids, cachedEvents);
+  eventStats.update((existing) => mergeStats(existing, cachedStats));
 }
 
 async function refreshOwnEventActions(ids: string[], currentSession: Session) {

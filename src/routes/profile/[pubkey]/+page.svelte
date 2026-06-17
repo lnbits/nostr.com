@@ -516,14 +516,15 @@
     }
     restoredProfileRouteKey = nextRouteKey;
 
-    for (let attempt = 0; attempt < 10; attempt += 1) {
+    for (let attempt = 0; attempt < 4; attempt += 1) {
       await tick();
       await nextAnimationFrame();
       const anchor = state.anchorId ? document.querySelector<HTMLElement>(`.profile-page [data-note-id="${state.anchorId}"]`) : null;
       if (anchor) {
         const top = window.scrollY + anchor.getBoundingClientRect().top - (state.anchorOffset ?? 0);
         window.scrollTo({ top: Math.max(0, top), left: 0, behavior: 'instant' });
-      } else {
+        break;
+      } else if (attempt === 3) {
         window.scrollTo({ top: state.scrollY, left: 0, behavior: 'instant' });
       }
     }

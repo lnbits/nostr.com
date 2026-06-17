@@ -925,14 +925,13 @@ export async function fetchEventStats(ids: string[], relays = defaultRelays) {
   await cacheEvents(activeEvents);
 
   const eventStats = eventStatsFromEvents(uniqueIds, activeEvents);
-  const reactionEventTargets = reactionTargetsByEventId(uniqueIds, activeEvents);
   for (const id of uniqueIds) {
     const fromEvents = eventStats[id] ?? emptyStats();
     const fromCount = countStats[id];
     stats[id] = {
       replies: Math.max(fromEvents.replies, fromCount?.replies ?? 0),
       reposts: Math.max(fromEvents.reposts, fromCount?.reposts ?? 0),
-      likes: reactionEventTargets.has(id) ? fromEvents.likes : (fromCount?.likes ?? 0),
+      likes: Math.max(fromEvents.likes, fromCount?.likes ?? 0),
       zaps: Math.max(fromEvents.zaps, fromCount?.zaps ?? 0),
       zapSats: fromEvents.zapSats,
       dislikes: fromEvents.dislikes,
@@ -941,15 +940,6 @@ export async function fetchEventStats(ids: string[], relays = defaultRelays) {
   }
 
   return stats;
-}
-
-function reactionTargetsByEventId(ids: string[], events: NostrEvent[]) {
-  const targets = new Set<string>();
-  for (const event of events) {
-    if (event.kind !== 7) continue;
-    statTargetIds(event, ids).forEach((id) => targets.add(id));
-  }
-  return targets;
 }
 
 export async function fetchUserEventActions(ids: string[], pubkey: string, relays = defaultRelays) {

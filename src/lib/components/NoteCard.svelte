@@ -67,6 +67,7 @@
   let repostMenuElement: HTMLElement;
   let noteObserver: IntersectionObserver | undefined;
   let prefetchTimer: ReturnType<typeof setTimeout> | undefined;
+  let floatingMenuListenerActive = false;
   let statsVisible = false;
   let statsEventId = event.id;
 
@@ -88,9 +89,12 @@
   onDestroy(() => {
     noteObserver?.disconnect();
     clearTimeout(prefetchTimer);
+    stopFloatingMenuListener();
     if (statsVisible) watchVisibleNoteStats(statsEventId, false);
     zapReceiptSub?.close('note destroyed');
   });
+
+  $: if (browser) syncFloatingMenuListener(menuOpen || repostMenuOpen);
 
   $: if (browser && !embedded && event.id !== statsEventId) {
     if (statsVisible) {
@@ -219,6 +223,22 @@
   function closeFloatingMenusFromOutside(pointerEvent: PointerEvent) {
     closeMenuFromOutside(pointerEvent);
     closeRepostMenuFromOutside(pointerEvent);
+  }
+
+  function syncFloatingMenuListener(shouldListen: boolean) {
+    if (shouldListen === floatingMenuListenerActive) return;
+    if (shouldListen) {
+      document.addEventListener('pointerdown', closeFloatingMenusFromOutside);
+      floatingMenuListenerActive = true;
+    } else {
+      stopFloatingMenuListener();
+    }
+  }
+
+  function stopFloatingMenuListener() {
+    if (!floatingMenuListenerActive) return;
+    document.removeEventListener('pointerdown', closeFloatingMenusFromOutside);
+    floatingMenuListenerActive = false;
   }
 
   function quoteNoteAction() {
@@ -473,8 +493,6 @@
     if (!copied) throw new Error('Copy failed.');
   }
 </script>
-
-<svelte:window on:pointerdown={closeFloatingMenusFromOutside} />
 
 <article class="note-card" class:featured class:embedded class:menu-open={menuOpen} data-note-id={event.id} bind:this={noteElement}>
   <a class="avatar" href={appPath(`/profile/${displayEvent.pubkey}`)} aria-label={`${name} profile`}>
