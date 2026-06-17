@@ -57,11 +57,30 @@ async function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       preload: path.join(__dirname, 'preload.cjs'),
+      nativeWindowOpen: true,
       sandbox: true
     }
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (isPomegranateLoginUrl(url)) {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          width: 560,
+          height: 720,
+          parent: mainWindow,
+          title: 'Pomegranate login',
+          backgroundColor: '#0f172a',
+          webPreferences: {
+            contextIsolation: true,
+            nodeIntegration: false,
+            nativeWindowOpen: true,
+            sandbox: true
+          }
+        }
+      };
+    }
     void shell.openExternal(url);
     return { action: 'deny' };
   });
@@ -86,6 +105,15 @@ function registerNostrProtocol() {
 
 function findNostrUrl(argv = process.argv) {
   return argv.find((argument) => /^nostr:/i.test(argument)) || '';
+}
+
+function isPomegranateLoginUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && url.hostname === 'auth.njump.me' && /^\/login\/(google|email)\/?$/i.test(url.pathname);
+  } catch {
+    return false;
+  }
 }
 
 function nostrIdentifierFromUrl(url = '') {
