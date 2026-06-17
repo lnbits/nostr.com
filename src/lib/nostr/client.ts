@@ -364,9 +364,10 @@ function pomegranateEmailFromToken(token: string) {
   }
 }
 
-export function filterSpam(events: NostrEvent[], mutedPubkeys = new Set<string>()) {
+export function filterSpam(events: NostrEvent[], mutedPubkeys = new Set<string>(), trustedPubkeys = new Set<string>()) {
   return events.filter((event) => {
     if (mutedPubkeys.has(event.pubkey)) return false;
+    if (trustedPubkeys.has(event.pubkey)) return true;
     if (event.kind === 6) return Boolean(parseRepostContent(event));
     if (event.kind === 1 && event.content.length > maxFeedPostContentLength) return false;
     if (isMachineGeneratedContent(event.content)) return false;
@@ -384,7 +385,11 @@ export function isReplyEvent(event: NostrEvent) {
   const eventTags = event.tags.filter((tag) => tag[0] === 'e' && tag[1]);
   if (!eventTags.length) return false;
 
-  return eventTags.some((tag) => tag[3] === 'root' || tag[3] === 'reply') || eventTags.length > 0;
+  if (eventTags.some((tag) => tag[3] === 'root' || tag[3] === 'reply')) return true;
+  if (eventTags.some((tag) => tag[3] === 'mention')) return false;
+  if (event.tags.some((tag) => tag[0] === 'q' && tag[1])) return false;
+  if (/\bnostr:(?:note|nevent)1[023456789acdefghjklmnpqrstuvwxyz]+/i.test(event.content)) return false;
+  return true;
 }
 
 export function isFamilySafeEvent(event: NostrEvent) {
@@ -609,14 +614,28 @@ export async function fetchFeed(
   if (options.until) base.until = options.until;
   const filters = await feedFiltersForMode(mode, base, follows, settings, since, relayUrls, options);
 
+  const trustedGlobalAuthors = mode === 'global' ? new Set(options.globalAuthors?.filter((pubkey) => /^[0-9a-f]{64}$/i.test(pubkey)) ?? []) : new Set<string>();
   const events = verifiedRelayEvents((await Promise.all(filters.map((filter) => queryShortLived(relayUrls, filter, 5000, { minEvents: feedIdleMinEvents(mode, filter.limit), idleAfterMs: 650 })))).flat()).filter((event) =>
     filters.some((filter) => eventMatchesTimeWindow(event, filter.since, filter.until))
   );
-  const clean = dedupeEvents(topLevelFeedEvents(filterSpam(events)));
-  const feedClean = mode === 'global' ? clean.filter((event) => !eventHasImgurUrl(event)) : clean;
-  const output = mode === 'global' ? limitCryptoTopicDensity(limitConsecutiveAuthors(feedClean, 2), 10) : feedClean;
+  const clean = dedupeEvents(topLevelFeedEvents(filterSpam(events, new Set<string>(), trustedGlobalAuthors)));
+  const feedClean = mode === 'global' ? clean.filter((event) => trustedGlobalAuthors.has(event.pubkey) || !eventHasImgurUrl(event)) : clean;
+  const output = mode === 'global' ? applyGlobalFeedLimits(feedClean, trustedGlobalAuthors) : feedClean;
   await cacheEvents(output);
   return output;
+}
+
+function applyGlobalFeedLimits(events: NostrEvent[], trustedAuthors = new Set<string>()) {
+  const trusted = events.filter((event) => trustedAuthors.has(event.pubkey));
+  const limited = limitCryptoTopicDensity(
+    limitConsecutiveAuthors(
+      events.filter((event) => !trustedAuthors.has(event.pubkey)),
+      2
+    ),
+    10
+  );
+  if (!trusted.length) return limited;
+  return dedupeEvents([...trusted, ...limited]);
 }
 
 function feedIdleMinEvents(mode: FeedMode, limit = 24) {
@@ -684,7 +703,8 @@ export async function subscribeFeed(
   return pool.subscribeMap(requests, {
     label: 'main-feed-live',
     onevent(event) {
-      const [clean] = topLevelFeedEvents(filterSpam(verifiedRelayEvents([event as NostrEvent])));
+      const trustedGlobalAuthors = mode === 'global' ? new Set(options.globalAuthors?.filter((pubkey) => /^[0-9a-f]{64}$/i.test(pubkey)) ?? []) : new Set<string>();
+      const [clean] = topLevelFeedEvents(filterSpam(verifiedRelayEvents([event as NostrEvent]), new Set<string>(), trustedGlobalAuthors));
       if (clean) {
         void cacheEvents([clean]);
         onEvent(clean);

@@ -12,7 +12,7 @@ import {
   getCachedProfileEvents,
   getCachedProfiles
 } from '$lib/nostr/cache';
-import { defaultCustomFeedSettings, defaultGuestNip05, defaultRelays, globalFeedCuratorPubkey, globalFeedHashtags, keywordsForInterests } from '$lib/nostr/config';
+import { defaultCustomFeedSettings, defaultGlobalFeedAuthors, defaultGuestNip05, defaultRelays, globalFeedCuratorPubkey, globalFeedHashtags, keywordsForInterests } from '$lib/nostr/config';
 import { appPath } from '$lib/paths';
 import { markRelaysOffline, markRelaysOnline, syncRelayStatus } from '$lib/stores/relayStatus';
 import { insertTimelineItems, timelineCursor, uniqueFreshItems } from '$lib/timeline/window';
@@ -83,7 +83,7 @@ const maxFeedEvents = 600;
 const maxPendingNewerEvents = 600;
 const maxCachedOlderEvents = 600;
 const cachedFeedBufferLimit = maxFeedEvents + maxPendingNewerEvents + maxCachedOlderEvents;
-const olderFetchBatchLimit = 80;
+const olderFetchBatchLimit = 160;
 const olderFetchTarget = pageFeedLimit;
 const olderFetchMaxAttempts = 5;
 const olderFetchEmptyAttemptLimit = 2;
@@ -153,7 +153,7 @@ let currentSettings = defaultCustomFeedSettings;
 let currentMode: FeedMode = initialFeedMode;
 let currentHashtag = '';
 let currentSessionValue: Session | null = initialSession;
-let currentGlobalFeedAuthors: string[] = [];
+let currentGlobalFeedAuthors: string[] = defaultGlobalFeedAuthors;
 let currentNotifications: NotificationItem[] = [];
 let currentDirectMessages: DirectMessage[] = [];
 let currentNotificationSeenAt = initialSession && browser ? readLastSeen(notificationSeenStorageKey, initialSession.pubkey) : 0;
@@ -239,7 +239,10 @@ export async function bootstrap() {
   }
 
   const [cachedEvents, cachedProfiles] = await Promise.all([getCachedEvents(cachedFeedBufferLimit), getCachedProfiles()]);
-  const cachedTopLevelEvents = recentFeedEventsForMode(currentMode, cachedEventsForMode(currentMode, topLevelFeedEvents(filterSpam(cachedEvents, currentMutedPubkeys)), cachedFeedBufferLimit));
+  const cachedTopLevelEvents = recentFeedEventsForMode(
+    currentMode,
+    cachedEventsForMode(currentMode, topLevelFeedEvents(filterSpam(cachedEvents, currentMutedPubkeys, trustedFeedPubkeys(currentMode))), cachedFeedBufferLimit)
+  );
   const visibleEvents = cachedTopLevelEvents.slice(0, Math.min(initialFeedLimit, maxFeedEvents));
   cachedOlderEvents = limitFeedBuffer(cachedTopLevelEvents.slice(visibleEvents.length), maxCachedOlderEvents);
   events.set(visibleEvents);
@@ -375,12 +378,16 @@ function eventsForFeedMode(mode: FeedMode, items: NostrEvent[], follows = curren
     );
   }
   if (currentHashtag) return items.filter((event) => !eventHasImgurUrl(event));
-  return items.filter((event) => globalFeedHashtags.some((tag) => eventHasHashtag(event, tag)) && !eventHasImgurUrl(event));
+  return items.filter((event) => isGlobalFeedEvent(event));
 }
 
 async function getCachedFeedCandidates(mode: FeedMode, limit = cachedFeedBufferLimit) {
   const cachedEvents = currentHashtag ? await getCachedHashtagEvents(currentHashtag, limit) : await getCachedEvents(limit);
-  return recentFeedEventsForMode(mode, topLevelFeedEvents(filterSpam(cachedEventsForMode(mode, topLevelFeedEvents(filterSpam(cachedEvents, currentMutedPubkeys)), limit), currentMutedPubkeys)));
+  const trustedPubkeys = trustedFeedPubkeys(mode);
+  return recentFeedEventsForMode(
+    mode,
+    topLevelFeedEvents(filterSpam(cachedEventsForMode(mode, topLevelFeedEvents(filterSpam(cachedEvents, currentMutedPubkeys, trustedPubkeys)), limit), currentMutedPubkeys, trustedPubkeys))
+  );
 }
 
 async function primeCachedFeedBuffers(mode: FeedMode, visibleEvents: NostrEvent[]) {
@@ -1401,8 +1408,8 @@ function mergeFeedEvents(incoming: NostrEvent[], existing: NostrEvent[]) {
   const byId = new Map<string, NostrEvent>();
   [...existing, ...incoming].forEach((event) => byId.set(event.id, event));
   const merged = [...byId.values()].filter((event) => !currentDeletedEventIds.has(event.id)).sort((a, b) => b.created_at - a.created_at);
-  const globalClean = currentMode === 'global' ? merged.filter((event) => !eventHasImgurUrl(event)) : merged;
-  const limited = currentMode === 'global' ? limitCryptoTopicDensity(limitConsecutiveAuthors(globalClean, 2), 10) : globalClean;
+  const globalClean = currentMode === 'global' ? merged.filter((event) => currentGlobalFeedAuthors.includes(event.pubkey) || !eventHasImgurUrl(event)) : merged;
+  const limited = currentMode === 'global' ? applyGlobalFeedLimits(globalClean) : globalClean;
   return limited;
 }
 
@@ -1421,6 +1428,28 @@ function eventHasHashtag(event: NostrEvent, tag: string) {
   if (!normalized) return true;
   if (event.tags.some((item) => item[0] === 't' && item[1]?.replace(/^#/, '').toLowerCase() === normalized)) return true;
   return new RegExp(`(^|\\s)#${normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(event.content);
+}
+
+function isGlobalFeedEvent(event: NostrEvent) {
+  if (currentGlobalFeedAuthors.includes(event.pubkey)) return true;
+  return globalFeedHashtags.some((tag) => eventHasHashtag(event, tag)) && !eventHasImgurUrl(event);
+}
+
+function trustedFeedPubkeys(mode: FeedMode) {
+  return mode === 'global' && !currentHashtag ? new Set(currentGlobalFeedAuthors) : new Set<string>();
+}
+
+function applyGlobalFeedLimits(items: NostrEvent[]) {
+  const trusted = items.filter((event) => currentGlobalFeedAuthors.includes(event.pubkey));
+  const limited = limitCryptoTopicDensity(
+    limitConsecutiveAuthors(
+      items.filter((event) => !currentGlobalFeedAuthors.includes(event.pubkey)),
+      2
+    ),
+    10
+  );
+  if (!trusted.length) return limited;
+  return [...trusted, ...limited].sort((a, b) => b.created_at - a.created_at);
 }
 
 function feedKeywordHashtags(settings: CustomFeedSettings) {
@@ -2014,9 +2043,9 @@ async function resolveDefaultGlobalFeedContext() {
     mergeRelayHints(relayList.map((relay) => relay.url), 90);
     const contacts = await fetchContactListDetails(profile.pubkey, currentRelays).catch(() => ({ pubkeys: [], relayHints: [], items: [] }));
     mergeRelayHints(contacts.relayHints, 74);
-    currentGlobalFeedAuthors = mergeGlobalFeedAuthors(contacts.pubkeys, curatorContacts.pubkeys);
+    currentGlobalFeedAuthors = mergeGlobalFeedAuthors(defaultGlobalFeedAuthors, contacts.pubkeys, curatorContacts.pubkeys);
   } else {
-    currentGlobalFeedAuthors = mergeGlobalFeedAuthors(curatorContacts.pubkeys);
+    currentGlobalFeedAuthors = mergeGlobalFeedAuthors(defaultGlobalFeedAuthors, curatorContacts.pubkeys);
   }
 }
 

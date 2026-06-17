@@ -40,6 +40,18 @@ describe('app store helpers', () => {
     expect(mergeEvents(items, []).map((item) => item.id)).toEqual(['a1', 'a2', 'b1', 'a3', 'a4']);
   });
 
+  it('does not de-flood explicit global authors from the global feed', () => {
+    const globalAuthor = '3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d';
+    const items = [
+      authorEvent('trusted-1', 60, globalAuthor),
+      authorEvent('trusted-2', 50, globalAuthor),
+      authorEvent('trusted-3', 40, globalAuthor),
+      authorEvent('trusted-4', 30, globalAuthor)
+    ];
+
+    expect(mergeEvents(items, []).map((item) => item.id)).toEqual(['trusted-1', 'trusted-2', 'trusted-3', 'trusted-4']);
+  });
+
   it('caps the in-memory feed after merging', () => {
     const authors = ['a'.repeat(64), 'b'.repeat(64), 'c'.repeat(64)];
     const items = Array.from({ length: 605 }, (_, index) => authorEvent(`event-${index}`, index, authors[index % authors.length]));
@@ -50,14 +62,16 @@ describe('app store helpers', () => {
     expect(merged.at(-1)?.id).toBe('event-5');
   });
 
-  it('limits global display to the default feed hashtags', () => {
+  it('limits global display to the default feed hashtags and explicit global authors', () => {
+    const globalAuthor = '3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d';
     const items = [
       { ...authorEvent('technology', 30, 'a'.repeat(64)), tags: [['t', 'technology']] },
       { ...authorEvent('food-content', 20, 'b'.repeat(64)), content: 'made lunch #foodstr' },
+      authorEvent('global-author', 15, globalAuthor),
       { ...authorEvent('other', 10, 'c'.repeat(64)), tags: [['t', 'nostr']] }
     ];
 
-    expect(displayEventsForFeedMode('global', items).map((item) => item.id)).toEqual(['technology', 'food-content']);
+    expect(displayEventsForFeedMode('global', items).map((item) => item.id)).toEqual(['technology', 'food-content', 'global-author']);
   });
 
   it('allows direct follows, friends of friends, hashtags, and keyword matches in custom display', () => {

@@ -131,6 +131,17 @@ describe('nostr client helpers', () => {
     ]);
   });
 
+  it('keeps trusted global authors through spam filtering unless muted', () => {
+    const trusted = 'a'.repeat(64);
+    const muted = new Set<string>();
+    const trustedSet = new Set([trusted]);
+    const noisy = event({ id: '1'.repeat(64), pubkey: trusted, content: `${'long '.repeat(300)} #adult` });
+    const regularNoisy = event({ id: '2'.repeat(64), pubkey: 'b'.repeat(64), content: `${'long '.repeat(300)} #adult` });
+
+    expect(filterSpam([noisy, regularNoisy], muted, trustedSet).map((item) => item.id)).toEqual([noisy.id]);
+    expect(filterSpam([noisy], new Set([trusted]), trustedSet)).toEqual([]);
+  });
+
   it('returns an empty follow or custom feed when there are no follows', async () => {
     await expect(fetchFeed('follow', [], [])).resolves.toEqual([]);
     await expect(fetchFeed('custom', [], [])).resolves.toEqual([]);
@@ -327,11 +338,20 @@ describe('nostr client helpers', () => {
     const root = event({ content: 'top-level note' });
     const markedReply = event({ content: 'reply', tags: [['e', root.id, 'wss://relay.example', 'reply', root.pubkey]] });
     const legacyReply = event({ content: 'legacy reply', tags: [['e', root.id]] });
+    const quoted = event({ content: 'quoted note', tags: [['e', root.id], ['q', root.id]] });
+    const mentioned = event({ content: 'mentioned note', tags: [['e', root.id, 'wss://relay.example', 'mention']] });
+    const embedded = event({
+      content: 'nostr:note1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqc8247j',
+      tags: [['e', root.id]]
+    });
 
     expect(isReplyEvent(root)).toBe(false);
     expect(isReplyEvent(markedReply)).toBe(true);
     expect(isReplyEvent(legacyReply)).toBe(true);
-    expect(topLevelFeedEvents([root, markedReply, legacyReply])).toEqual([root]);
+    expect(isReplyEvent(quoted)).toBe(false);
+    expect(isReplyEvent(mentioned)).toBe(false);
+    expect(isReplyEvent(embedded)).toBe(false);
+    expect(topLevelFeedEvents([root, markedReply, legacyReply, quoted, mentioned, embedded])).toEqual([root, quoted, mentioned, embedded]);
   });
 
   it('hides events only when deletion requests are signed by the original author', () => {
