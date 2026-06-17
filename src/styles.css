@@ -1512,6 +1512,44 @@ label span, label strong { color: var(--text); }
   margin-bottom: 10px;
 }
 .composer-actions { margin: 10px 0 0; color: var(--muted); }
+.composer-count {
+  margin-left: auto;
+}
+.composer-emoji-wrap {
+  position: relative;
+  display: inline-flex;
+  margin-left: 0 !important;
+}
+.composer-emoji-picker {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  z-index: 8;
+  width: min(320px, calc(100vw - 64px));
+  max-height: min(260px, 42svh);
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+  overflow: auto;
+  border: 1px solid color-mix(in srgb, var(--line) 66%, transparent);
+  border-radius: 8px;
+  padding: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.composer-emoji-picker button {
+  min-width: 0;
+  min-height: 34px;
+  border: 0;
+  border-radius: 7px;
+  padding: 0;
+  background: transparent;
+  font-size: 20px;
+  line-height: 1;
+}
+.composer-emoji-picker button:hover {
+  background: color-mix(in srgb, var(--text) 9%, transparent);
+}
 .reply-context {
   border: 1px solid color-mix(in srgb, var(--line) 35%, transparent);
   border-radius: 8px;

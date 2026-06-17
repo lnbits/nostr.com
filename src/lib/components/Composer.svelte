@@ -1,7 +1,8 @@
 <script lang="ts">
+  import { browser } from '$app/environment';
   import { tick, onDestroy } from 'svelte';
   import { nip19 } from 'nostr-tools';
-  import { ImagePlus, Loader2, Send, X } from '@lucide/svelte';
+  import { ImagePlus, Loader2, Send, Smile, X } from '@lucide/svelte';
   import { composerOpen, editNote, editTarget, mergeProfileRecords, postNote, profiles, quoteTarget, relays, replyTarget, session } from '$lib/stores/app';
   import { shouldSubmitTextareaOnEnter } from '$lib/keyboard';
   import { hasPublishedTextNote, searchProfiles } from '$lib/nostr/client';
@@ -12,10 +13,20 @@
 
   const introductionPrefix = '#nostr #introductions\n\n';
   const mentionSearchDelayMs = 220;
+  const emojiOptions = [
+    '😀', '😃', '😄', '😁', '😆', '😂', '🤣', '😊', '🙂', '🙃', '😉', '😍',
+    '😘', '😎', '🤩', '🥳', '😇', '🤔', '🫡', '🤝', '🙏', '👏', '🙌', '💪',
+    '👍', '👎', '👊', '✌️', '🤘', '👌', '👀', '🧡', '❤️', '💙', '💜', '💚',
+    '💛', '🖤', '🤍', '💔', '🔥', '⚡', '✨', '⭐', '🌟', '💥', '💯', '🎉',
+    '🚀', '🌈', '☀️', '🌙', '🍕', '☕', '🍺', '🍻', '🎵', '🎸', '🎧', '📸',
+    '💡', '📌', '📣', '🧠', '🛠️', '🔒', '🔑', '🛡️', '₿', '💸', '⚽', '🏆'
+  ];
   let content = '';
   let busy = false;
   let uploading = false;
   let error = '';
+  let emojiPickerOpen = false;
+  let emojiPickerElement: HTMLElement;
   let mediaInput: HTMLInputElement;
   let textarea: HTMLTextAreaElement;
   let loadedEditId = '';
@@ -58,6 +69,7 @@
     clearMentionSearch();
     selectedMentions = [];
     closeCropper();
+    emojiPickerOpen = false;
   }
   $: if ($composerOpen && $session && !$editTarget && !$replyTarget && !$quoteTarget && !content.trim()) {
     void maybePrefillIntroduction();
@@ -65,7 +77,10 @@
 
   onDestroy(() => {
     clearTimeout(mentionSearchTimer);
+    if (browser) document.removeEventListener('pointerdown', closeEmojiPickerFromOutside);
   });
+
+  $: if (browser && $composerOpen) syncEmojiPickerListener(emojiPickerOpen);
 
   async function submit() {
     if (busy || uploading || !$session || !content.trim()) return;
@@ -188,6 +203,29 @@
     const caret = mentionStart + label.length;
     textarea?.focus();
     textarea?.setSelectionRange(caret, caret);
+  }
+
+  async function insertEmoji(emoji: string) {
+    const start = textarea?.selectionStart ?? content.length;
+    const end = textarea?.selectionEnd ?? start;
+    content = `${content.slice(0, start)}${emoji}${content.slice(end)}`;
+    emojiPickerOpen = false;
+    clearMentionSearch();
+    await tick();
+    const caret = start + emoji.length;
+    textarea?.focus();
+    textarea?.setSelectionRange(caret, caret);
+  }
+
+  function syncEmojiPickerListener(open: boolean) {
+    if (!browser) return;
+    if (open) document.addEventListener('pointerdown', closeEmojiPickerFromOutside);
+    else document.removeEventListener('pointerdown', closeEmojiPickerFromOutside);
+  }
+
+  function closeEmojiPickerFromOutside(event: PointerEvent) {
+    if (!emojiPickerOpen || !emojiPickerElement || !(event.target instanceof Node) || emojiPickerElement.contains(event.target)) return;
+    emojiPickerOpen = false;
   }
 
   async function focusComposerStart() {
@@ -361,7 +399,19 @@
         <button class="icon-button" disabled={uploading || !$session} aria-label="Add media" on:click={() => mediaInput.click()}>
           {#if uploading}<Loader2 size={20} class="spin" />{:else}<ImagePlus size={20} />{/if}
         </button>
-        <span>{content.length}/2000</span>
+        <span class="composer-emoji-wrap" bind:this={emojiPickerElement}>
+          <button class="icon-button" type="button" disabled={!$session} aria-label="Add emoji" aria-expanded={emojiPickerOpen} on:click={() => (emojiPickerOpen = !emojiPickerOpen)}>
+            <Smile size={20} />
+          </button>
+          {#if emojiPickerOpen}
+            <span class="composer-emoji-picker" aria-label="Emoji picker">
+              {#each emojiOptions as emoji}
+                <button type="button" aria-label={`Insert ${emoji}`} on:click={() => insertEmoji(emoji)}>{emoji}</button>
+              {/each}
+            </span>
+          {/if}
+        </span>
+        <span class="composer-count">{content.length}/2000</span>
         <button class="primary" disabled={busy || uploading || !$session || !content.trim()} on:click={submit}><Send size={18} /> {$editTarget ? 'Save edit' : 'Post'}</button>
       </div>
       {#if error}<p class="error">{error}</p>{/if}
