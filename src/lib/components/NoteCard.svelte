@@ -9,7 +9,7 @@
   import { extractMediaAttachments, extractQuotedNoteReferences, extractSocialEmbeds, parseNoteText } from '$lib/nostr/media';
   import { activeRelayUrls, fetchLikeAuthors, fetchProfiles, subscribeZapReceipts } from '$lib/nostr/client';
   import { createZapInvoice, loadZapInfo, type ZapInfo } from '$lib/nostr/zap';
-  import { deleteNote, editedEvents, eventStats, filterByHashtag, likedEvents, mergeProfileRecords, muteAccount, prefetchThreadPreview, profiles, reactToNote, refreshEventStats, relays, reportNote, repostedEvents, repostNote, session, startEdit, startReply, watchVisibleNoteStats } from '$lib/stores/app';
+  import { deleteNote, editedEvents, eventStats, filterByHashtag, likedEvents, mergeProfileRecords, muteAccount, prefetchThreadPreview, profiles, reactToNote, refreshEventStats, relays, reportNote, repostedEvents, repostNote, session, startEdit, startQuote, startReply, watchVisibleNoteStats } from '$lib/stores/app';
   import { appPath } from '$lib/paths';
   import { pauseWhenHidden } from '$lib/actions/pauseWhenHidden';
   import { saveRouteScrollState } from '$lib/stores/routeScroll';
@@ -37,6 +37,7 @@
   let expanded = initialExpanded;
   let openImage: { url: string; alt?: string } | null = null;
   let menuOpen = false;
+  let repostMenuOpen = false;
   let copiedEmbed = false;
   let copiedEventId = false;
   let copiedShareLink = false;
@@ -63,6 +64,7 @@
   let zapReceiptSub: { close: (reason?: string) => void } | undefined;
   let noteElement: HTMLElement;
   let menuElement: HTMLElement;
+  let repostMenuElement: HTMLElement;
   let noteObserver: IntersectionObserver | undefined;
   let prefetchTimer: ReturnType<typeof setTimeout> | undefined;
   let statsVisible = false;
@@ -207,6 +209,26 @@
   function closeMenuFromOutside(pointerEvent: PointerEvent) {
     if (!menuOpen || !menuElement || !(pointerEvent.target instanceof Node) || menuElement.contains(pointerEvent.target)) return;
     menuOpen = false;
+  }
+
+  function closeRepostMenuFromOutside(pointerEvent: PointerEvent) {
+    if (!repostMenuOpen || !repostMenuElement || !(pointerEvent.target instanceof Node) || repostMenuElement.contains(pointerEvent.target)) return;
+    repostMenuOpen = false;
+  }
+
+  function closeFloatingMenusFromOutside(pointerEvent: PointerEvent) {
+    closeMenuFromOutside(pointerEvent);
+    closeRepostMenuFromOutside(pointerEvent);
+  }
+
+  function quoteNoteAction() {
+    repostMenuOpen = false;
+    startQuote(displayEvent);
+  }
+
+  async function repostNoteAction() {
+    repostMenuOpen = false;
+    await repostNote(displayEvent);
   }
 
   async function toggleLikePopover() {
@@ -452,7 +474,7 @@
   }
 </script>
 
-<svelte:window on:pointerdown={closeMenuFromOutside} />
+<svelte:window on:pointerdown={closeFloatingMenusFromOutside} />
 
 <article class="note-card" class:featured class:embedded class:menu-open={menuOpen} data-note-id={event.id} bind:this={noteElement}>
   <a class="avatar" href={appPath(`/profile/${displayEvent.pubkey}`)} aria-label={`${name} profile`}>
@@ -565,7 +587,15 @@
     {:else}
       <div class="note-actions">
         <button aria-label="Reply" on:click={() => startReply(displayEvent)}><MessageCircle size={18} /><span>{counts.replies}</span></button>
-        <button class:reposted aria-label={reposted ? 'Undo repost' : 'Repost'} aria-pressed={reposted} on:click={() => void repostNote(displayEvent)}><Repeat2 size={18} /><span>{counts.reposts}</span></button>
+        <span class="repost-action" bind:this={repostMenuElement}>
+          <button class:reposted aria-label={reposted ? 'Repost options' : 'Repost'} aria-pressed={reposted} aria-expanded={repostMenuOpen} on:click|stopPropagation={() => (repostMenuOpen = !repostMenuOpen)}><Repeat2 size={18} /><span>{counts.reposts}</span></button>
+          {#if repostMenuOpen}
+            <div class="repost-popover" role="menu">
+              <button type="button" role="menuitem" on:click|stopPropagation={quoteNoteAction}>Quote</button>
+              <button type="button" role="menuitem" on:click|stopPropagation={() => void repostNoteAction()}>{reposted ? 'Undo repost' : 'Repost'}</button>
+            </div>
+          {/if}
+        </span>
         <span class="like-action">
           <button class:liked aria-label={liked ? 'Unlike' : 'Like'} aria-pressed={liked} on:click={() => void reactToNote(displayEvent)}><Heart size={18} fill={liked ? 'currentColor' : 'none'} /></button>
           <button class="reaction-count" aria-label="Show likes" aria-expanded={likePopoverOpen} on:click={toggleLikePopover}>{counts.likes}</button>

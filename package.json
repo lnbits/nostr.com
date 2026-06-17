@@ -21,7 +21,8 @@
     "desktop:linux": "npm run icons && npm run build && electron-builder --linux AppImage --x64 --publish never",
     "cap:add:ios": "cap add ios",
     "cap:add:android": "cap add android",
-    "cap:sync": "npm run icons && npm run build && cap sync && npm run icons"
+    "cap:patch:links": "node scripts/patch-native-links.cjs",
+    "cap:sync": "npm run icons && npm run build && cap sync && npm run cap:patch:links && npm run icons"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.4",
@@ -56,6 +57,14 @@
       "output": "release"
     },
     "icon": "icon",
+    "protocols": [
+      {
+        "name": "Nostr URI",
+        "schemes": [
+          "nostr"
+        ]
+      }
+    ],
     "mac": {
       "target": "dmg",
       "artifactName": "Nostr-Social-macOS-${arch}.${ext}"

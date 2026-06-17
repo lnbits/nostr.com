@@ -134,6 +134,7 @@ export const loginDialogOpen = writable(false);
 export const onboardingDialogOpen = writable(false);
 export const replyTarget = writable<NostrEvent | null>(null);
 export const editTarget = writable<NostrEvent | null>(null);
+export const quoteTarget = writable<NostrEvent | null>(null);
 
 export function mergeProfileRecords(existing: Record<string, Profile>, nextProfiles: Profile[]) {
   const merged = { ...existing };
@@ -1126,21 +1127,23 @@ export async function signOut() {
   mutedPubkeys.set([]);
   replyTarget.set(null);
   editTarget.set(null);
+  quoteTarget.set(null);
 }
 
-export async function postNote(content: string, parent?: NostrEvent) {
+export async function postNote(content: string, parent?: NostrEvent, extraTags: string[][] = []) {
   let currentSession: Session | null = null;
   session.subscribe((value) => (currentSession = value))();
   if (!currentSession) throw new Error('Sign in before posting.');
-  const tags = parent ? replyTags(parent) : [];
+  const tags = mergePublishTags(parent ? replyTags(parent) : [], extraTags);
   const event = await publishNote(currentSession, content, currentRelays, tags);
   seenLiveStatEvents.add(event.id);
   events.update((existing) => mergeEvents([event], existing));
   if (parent) mergeLocalReplyStats(event);
   replyTarget.set(null);
+  quoteTarget.set(null);
 }
 
-export async function editNote(content: string, target: NostrEvent) {
+export async function editNote(content: string, target: NostrEvent, extraTags: string[][] = []) {
   const currentSession = requireSession('Sign in before editing.');
   if (target.pubkey !== currentSession.pubkey) throw new Error('You can only edit your own posts.');
   const optimisticEvent = { ...target, content, created_at: Math.floor(Date.now() / 1000) };
@@ -1150,7 +1153,8 @@ export async function editNote(content: string, target: NostrEvent) {
   cachedOlderEvents = cachedOlderEvents.map((item) => (item.id === target.id ? optimisticEvent : item));
   replyTarget.set(null);
   editTarget.set(null);
-  await publishNote(currentSession, content, currentRelays, target.tags);
+  quoteTarget.set(null);
+  await publishNote(currentSession, content, currentRelays, mergePublishTags(target.tags, extraTags));
   await publishDeletion(currentSession, target, currentRelays, 'Edited by author');
 }
 
@@ -1169,6 +1173,7 @@ export async function deleteNote(target: NostrEvent) {
   cachedOlderEvents = cachedOlderEvents.filter((item) => item.id !== target.id);
   if (getStoreSnapshot(replyTarget)?.id === target.id) replyTarget.set(null);
   if (getStoreSnapshot(editTarget)?.id === target.id) editTarget.set(null);
+  if (getStoreSnapshot(quoteTarget)?.id === target.id) quoteTarget.set(null);
 }
 
 export async function repostNote(target: NostrEvent) {
@@ -1523,6 +1528,7 @@ export function startReply(event: NostrEvent) {
   }
   replyTarget.set(event);
   editTarget.set(null);
+  quoteTarget.set(null);
   composerOpen.set(true);
 }
 
@@ -1535,6 +1541,7 @@ export function startEdit(event: NostrEvent) {
   if (event.pubkey !== currentSession.pubkey) return;
   replyTarget.set(null);
   editTarget.set(event);
+  quoteTarget.set(null);
   composerOpen.set(true);
 }
 
@@ -1547,8 +1554,21 @@ export function startCompose() {
   }
   replyTarget.set(null);
   editTarget.set(null);
+  quoteTarget.set(null);
   activeHashtag.set('');
   if (browser && (window.location.pathname !== appPath('/') || window.location.hash)) void goto(appPath('/'));
+  composerOpen.set(true);
+}
+
+export function startQuote(event: NostrEvent) {
+  const currentSession = getStoreSnapshot(session);
+  if (!currentSession) {
+    loginDialogOpen.set(true);
+    return;
+  }
+  replyTarget.set(null);
+  editTarget.set(null);
+  quoteTarget.set(event);
   composerOpen.set(true);
 }
 
@@ -2087,6 +2107,16 @@ function replyTags(parent: NostrEvent) {
   const pTags = new Set([parent.pubkey, ...parent.tags.filter((tag) => tag[0] === 'p' && tag[1]).map((tag) => tag[1])]);
   const tags = rootId === parent.id ? [['e', parent.id, '', 'root', parent.pubkey]] : [['e', rootId, '', 'root'], ['e', parent.id, '', 'reply', parent.pubkey]];
   return [...tags, ...[...pTags].map((pubkey) => ['p', pubkey])];
+}
+
+function mergePublishTags(baseTags: string[][], extraTags: string[][]) {
+  const seen = new Set<string>();
+  return [...baseTags, ...extraTags].filter((tag) => {
+    const key = `${tag[0] ?? ''}:${tag[1] ?? ''}:${tag[3] ?? ''}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function requireSession(message: string) {

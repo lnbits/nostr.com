@@ -1272,6 +1272,38 @@ label span, label strong { color: var(--text); }
 .note-actions .report-action {
   margin-left: auto;
 }
+.repost-action {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.repost-popover {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  z-index: 22;
+  display: grid;
+  gap: 4px;
+  width: 132px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  transform: translateX(-50%);
+}
+.repost-popover button {
+  width: 100%;
+  min-height: 34px;
+  justify-content: flex-start;
+  padding: 0 10px;
+  color: var(--text);
+  font-weight: 800;
+}
+.repost-popover button:hover {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
 .like-action {
   position: relative;
   display: inline-flex;
@@ -1484,6 +1516,130 @@ label span, label strong { color: var(--text); }
   color: var(--muted);
   margin: 0 0 10px;
   padding: 0 2px;
+}
+.composer-input-wrap {
+  position: relative;
+}
+.composer-mention-results {
+  display: grid;
+  gap: 4px;
+  max-height: min(260px, 36svh);
+  overflow: auto;
+  margin-top: 8px;
+  border: 1px solid color-mix(in srgb, var(--line) 58%, transparent);
+  border-radius: 8px;
+  padding: 6px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.composer-mention-results button,
+.composer-mention-empty {
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  border: 0;
+  border-radius: 8px;
+  padding: 6px 8px;
+  color: var(--text);
+  background: transparent;
+  text-align: left;
+}
+.composer-mention-results button:hover {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+.composer-mention-results strong,
+.composer-mention-results small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.composer-mention-results small,
+.composer-mention-empty {
+  color: var(--muted);
+  font-size: 13px;
+}
+.crop-dialog {
+  width: min(640px, calc(100vw - 24px));
+}
+.crop-frame {
+  position: relative;
+  width: 100%;
+  max-height: min(62svh, 640px);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #05070b;
+  touch-action: none;
+}
+.crop-frame img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  user-select: none;
+  pointer-events: none;
+}
+.crop-box {
+  position: absolute;
+  border: 2px solid #fff;
+  border-radius: 6px;
+  box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.48), 0 0 0 1px rgba(0, 0, 0, 0.4) inset;
+  cursor: move;
+  touch-action: none;
+}
+.crop-box::before,
+.crop-box::after {
+  content: '';
+  position: absolute;
+  inset: 33.333% 0 auto;
+  border-top: 1px solid rgba(255, 255, 255, 0.55);
+}
+.crop-box::after {
+  inset: 66.666% 0 auto;
+}
+.crop-handle {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  padding: 0;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.82);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  touch-action: none;
+}
+.crop-handle.nw,
+.crop-handle.ne,
+.crop-handle.se,
+.crop-handle.sw {
+  width: 20px;
+  height: 20px;
+}
+.crop-handle.nw { left: 0; top: 0; transform: translate(-50%, -50%); cursor: nwse-resize; }
+.crop-handle.n { left: 50%; top: 0; transform: translate(-50%, -50%); cursor: ns-resize; }
+.crop-handle.ne { right: 0; top: 0; transform: translate(50%, -50%); cursor: nesw-resize; }
+.crop-handle.e { right: 0; top: 50%; transform: translate(50%, -50%); cursor: ew-resize; }
+.crop-handle.se { right: 0; bottom: 0; transform: translate(50%, 50%); cursor: nwse-resize; }
+.crop-handle.s { left: 50%; bottom: 0; transform: translate(-50%, 50%); cursor: ns-resize; }
+.crop-handle.sw { left: 0; bottom: 0; transform: translate(-50%, 50%); cursor: nesw-resize; }
+.crop-handle.w { left: 0; top: 50%; transform: translate(-50%, -50%); cursor: ew-resize; }
+.crop-handle:hover,
+.crop-handle:focus-visible {
+  background: var(--accent);
+}
+.crop-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 13px;
 }
 .dialog-backdrop {
   position: fixed;

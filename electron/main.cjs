@@ -5,6 +5,9 @@ const http = require('http');
 const path = require('path');
 
 let server;
+let mainWindow;
+let appBaseUrl;
+let pendingNostrUrl = '';
 const secureSessionFile = 'secure-private-key-session.dat';
 
 function createStaticServer() {
@@ -41,8 +44,8 @@ function createStaticServer() {
 }
 
 async function createWindow() {
-  const baseUrl = await createStaticServer();
-  const window = new BrowserWindow({
+  appBaseUrl = appBaseUrl || (await createStaticServer());
+  mainWindow = new BrowserWindow({
     width: 1180,
     height: 840,
     minWidth: 420,
@@ -58,11 +61,53 @@ async function createWindow() {
     }
   });
 
-  window.webContents.setWindowOpenHandler(({ url }) => {
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url);
     return { action: 'deny' };
   });
-  await window.loadURL(baseUrl);
+  mainWindow.on('closed', () => {
+    mainWindow = undefined;
+  });
+  await mainWindow.loadURL(appBaseUrl);
+  if (pendingNostrUrl) {
+    const url = pendingNostrUrl;
+    pendingNostrUrl = '';
+    openNostrUrl(url);
+  }
+}
+
+function registerNostrProtocol() {
+  if (process.defaultApp) {
+    if (process.argv.length >= 2) app.setAsDefaultProtocolClient('nostr', process.execPath, [path.resolve(process.argv[1])]);
+  } else {
+    app.setAsDefaultProtocolClient('nostr');
+  }
+}
+
+function findNostrUrl(argv = process.argv) {
+  return argv.find((argument) => /^nostr:/i.test(argument)) || '';
+}
+
+function nostrIdentifierFromUrl(url = '') {
+  const clean = String(url).trim();
+  if (!/^nostr:/i.test(clean)) return '';
+  try {
+    return decodeURIComponent(clean.replace(/^nostr:(?:\/\/)?/i, '').replace(/^\/+/, '').split(/[?#]/, 1)[0] || '').trim();
+  } catch {
+    return clean.replace(/^nostr:(?:\/\/)?/i, '').replace(/^\/+/, '').split(/[?#]/, 1)[0] || '';
+  }
+}
+
+function openNostrUrl(url) {
+  const identifier = nostrIdentifierFromUrl(url);
+  if (!identifier) return;
+  pendingNostrUrl = url;
+  if (!mainWindow || !appBaseUrl) return;
+  pendingNostrUrl = '';
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+  void mainWindow.loadURL(`${appBaseUrl}/${encodeURIComponent(identifier)}`);
 }
 
 function contentType(filePath) {
@@ -122,10 +167,27 @@ function registerSecureSessionHandlers() {
   ipcMain.handle('secure-session:clear', () => clearSecureSession());
 }
 
-app.whenReady().then(() => {
-  registerSecureSessionHandlers();
-  return createWindow();
-});
+registerNostrProtocol();
+openNostrUrl(findNostrUrl());
+
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', (_event, argv) => {
+    openNostrUrl(findNostrUrl(argv));
+  });
+
+  app.on('open-url', (event, url) => {
+    event.preventDefault();
+    openNostrUrl(url);
+  });
+
+  app.whenReady().then(() => {
+    registerSecureSessionHandlers();
+    return createWindow();
+  });
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();

@@ -1,6 +1,7 @@
 <script lang="ts">
   import '../styles.css';
   import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { Bell, Home, Info, LogIn, Mail, Settings, SlidersHorizontal, UserRound, X } from '@lucide/svelte';
   import { bootstrap, directMessages, goHome, loginDialogOpen, markMessagesSeen, markNotificationsSeen, notifications, selectMessagePeer, session, unreadMessageCount, unreadNotificationCount } from '$lib/stores/app';
@@ -194,12 +195,17 @@
 
   onMount(() => {
     let stopNativeChrome: (() => void) | undefined;
+    let stopNostrDeepLinks: (() => void) | undefined;
     if (!embeddedPage) {
       void bootstrap();
       rightRailCollapsed = localStorage.getItem(rightRailStorageKey) === 'true';
       void configureNativeChrome().then((cleanup) => (stopNativeChrome = cleanup));
+      void configureNostrDeepLinks().then((cleanup) => (stopNostrDeepLinks = cleanup));
     }
-    return () => stopNativeChrome?.();
+    return () => {
+      stopNativeChrome?.();
+      stopNostrDeepLinks?.();
+    };
   });
 
   function toggleRightRail() {
@@ -226,6 +232,36 @@
         () => undefined
       );
     });
+  }
+
+  async function configureNostrDeepLinks() {
+    const [{ Capacitor }, { App }] = await Promise.all([import('@capacitor/core'), import('@capacitor/app')]);
+    if (!Capacitor.isNativePlatform()) return;
+
+    const openNostrUrl = (url = '') => {
+      const identifier = nostrIdentifierFromUrl(url);
+      if (!identifier) return;
+      void goto(appPath(`/${encodeURIComponent(identifier)}`));
+    };
+
+    const launch = await App.getLaunchUrl().catch(() => undefined);
+    if (launch?.url) openNostrUrl(launch.url);
+
+    const listener = await App.addListener('appUrlOpen', (event) => openNostrUrl(event.url)).catch(() => undefined);
+    return () => {
+      void listener?.remove();
+    };
+  }
+
+  function nostrIdentifierFromUrl(url: string) {
+    const clean = url.trim();
+    if (!/^nostr:/i.test(clean)) return '';
+    const identifier = clean.replace(/^nostr:(?:\/\/)?/i, '').replace(/^\/+/, '').split(/[?#]/, 1)[0] ?? '';
+    try {
+      return decodeURIComponent(identifier).trim();
+    } catch {
+      return identifier.trim();
+    }
   }
 </script>
 

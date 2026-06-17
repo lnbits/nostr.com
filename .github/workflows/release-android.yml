@@ -35,6 +35,7 @@ jobs:
       - run: npx cap add android
       - run: npm run icons
       - run: npx cap sync android
+      - run: npm run cap:patch:links
       - run: ./gradlew assembleDebug
         working-directory: android
       - run: mkdir -p release && cp android/app/build/outputs/apk/debug/app-debug.apk release/Nostr-Social-Android.apk
