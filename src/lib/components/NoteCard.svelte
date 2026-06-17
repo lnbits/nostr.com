@@ -16,6 +16,7 @@
   import { saveThreadReturnTarget, currentThreadReturnTarget } from '$lib/stores/threadNavigation';
   import { saveThreadSeed } from '$lib/stores/threadSeed';
   import QuotedNotePreview from './QuotedNotePreview.svelte';
+  import VideoAttachment from './VideoAttachment.svelte';
 
   export let event: NostrEvent;
   export let profile: Profile | undefined;
@@ -590,8 +591,7 @@
       <div class="media-grid" class:single={mediaAttachments.length === 1} class:double={mediaAttachments.length === 2} class:triple={mediaAttachments.length === 3} class:quad={mediaAttachments.length >= 4}>
         {#each mediaAttachments as media}
           {#if media.type === 'video'}
-            <!-- svelte-ignore a11y_media_has_caption -->
-            <video use:pauseWhenHidden src={media.url} poster={media.poster} controls preload="metadata" playsinline title={media.alt}></video>
+            <VideoAttachment src={media.url} poster={media.poster} title={media.alt} />
           {:else}
             <button class="media-image-button" on:click={() => (openImage = { url: media.url, alt: media.alt })} aria-label="Open image">
               <img src={media.url} alt={media.alt ?? ''} loading="lazy" referrerpolicy="no-referrer" />

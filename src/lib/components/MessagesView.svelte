@@ -22,10 +22,10 @@
   import { shouldSubmitTextareaOnEnter } from '$lib/keyboard';
   import { extractMediaAttachments, extractQuotedNoteReferences, parseNoteText } from '$lib/nostr/media';
   import { appPath } from '$lib/paths';
-  import { pauseWhenHidden } from '$lib/actions/pauseWhenHidden';
   import { findOrCreatePomegranateConnection } from '$lib/nostr/pomegranateAuth';
   import type { DirectMessage, MediaAttachment, NostrEvent, Profile } from '$lib/nostr/types';
   import QuotedNotePreview from './QuotedNotePreview.svelte';
+  import VideoAttachment from './VideoAttachment.svelte';
 
   const nostrChatUrl = 'https://chat.nostr.com';
   const nostrChatConnectionName = 'chat.nostr.com';
@@ -425,8 +425,7 @@
                     <div class="dm-media-grid">
                       {#each media as item}
                         {#if item.type === 'video'}
-                          <!-- svelte-ignore a11y_media_has_caption -->
-                          <video use:pauseWhenHidden src={item.url} poster={item.poster} controls preload="metadata" playsinline title={item.alt}></video>
+                          <VideoAttachment src={item.url} poster={item.poster} title={item.alt} />
                         {:else}
                           <button type="button" on:click={() => (openImage = { url: item.url, alt: item.alt })} aria-label="Open image">
                             <img src={item.url} alt={item.alt ?? ''} loading="lazy" referrerpolicy="no-referrer" />
