@@ -2458,17 +2458,17 @@ label span, label strong { color: var(--text); }
   min-width: 0;
   max-width: 100%;
 }
-.thread-reply.direct {
-  margin-left: 10px;
-}
 .thread-reply.nested {
-  margin-left: 0;
-  padding-left: 0;
-  border-left: 0;
+  margin-left: min(24px, calc(var(--thread-depth, 1) * 9px));
+  padding-left: 8px;
+  border-left: 2px solid color-mix(in srgb, var(--line) 74%, transparent);
 }
 .thread-reply .note-card {
   min-width: 0;
   max-width: 100%;
+}
+.thread-reply.nested .note-card {
+  padding-top: 8px;
 }
 .thread-back {
   width: fit-content;
@@ -3096,8 +3096,9 @@ label span, label strong { color: var(--text); }
   .thread-page {
     overflow-x: hidden;
   }
-  .thread-reply.direct {
-    margin-left: 6px;
+  .thread-reply.nested {
+    margin-left: min(18px, calc(var(--thread-depth, 1) * 7px));
+    padding-left: 6px;
   }
   .messages-view {
     height: calc(100svh - 64px - env(safe-area-inset-bottom));

@@ -19,6 +19,7 @@
 
   const initialThreadReplyLimit = 40;
   const nestedThreadReplyLimit = 80;
+  const nestedThreadReplyDepth = 2;
   const threadReplyPageLimit = 40;
   const maxThreadReplies = 160;
   const threadScrollStateMaxAgeMs = 30 * 60 * 1000;
@@ -58,10 +59,10 @@
   $: threadEvents = mergeThreadEvents(rootEvent ? [rootEvent, ...localThreadEvents] : localThreadEvents, []);
   $: root = rootEvent?.id === id ? rootEvent : threadEvents.find((event) => event.id === id);
   $: replies = id ? threadReplyEvents(threadEvents, id) : [];
-  $: sortedReplies = [...replies].sort((a, b) => a.created_at - b.created_at);
+  $: threadReplyItems = id ? threadReplyTreeItems(threadEvents, id) : [];
   $: hiddenThreadQuoteIds = id ? sameThreadQuotedNoteIds(id, threadEvents) : [];
   $: if (browser && routeKey && root && routeKey !== restoredThreadRouteKey) void restoreThreadScrollPosition(routeKey);
-  $: if (browser && routeKey && focusedReplyId && sortedReplies.some((reply) => reply.id === focusedReplyId) && `${routeKey}:${focusedReplyId}` !== focusedThreadRouteKey) {
+  $: if (browser && routeKey && focusedReplyId && threadReplyItems.some((item) => item.event.id === focusedReplyId) && `${routeKey}:${focusedReplyId}` !== focusedThreadRouteKey) {
     void scrollFocusedReplyIntoView(routeKey, focusedReplyId);
   }
   $: if (browser) syncThreadLiveSubscription(root?.id ?? '', [root?.id ?? '', ...replies.map((reply) => reply.id)]);
@@ -123,6 +124,34 @@
     const eTags = event.tags.filter((tag) => tag[0] === 'e' && tag[1]);
     const nonRoot = [...eTags].reverse().find((tag) => tag[1] !== rootId);
     return nonRoot?.[1] ?? (eTags.some((tag) => tag[1] === rootId) ? rootId : '');
+  }
+
+  function threadReplyTreeItems(items: NostrEvent[], rootId: string) {
+    const replyItems = threadReplyEvents(items, rootId);
+    const replyById = new Map(replyItems.map((event) => [event.id, event]));
+    const childrenByParent = new Map<string, NostrEvent[]>();
+    const sorted = [...replyItems].sort((a, b) => a.created_at - b.created_at);
+    for (const event of sorted) {
+      const parentId = replyParentId(event, rootId);
+      if (!parentId) continue;
+      if (parentId !== rootId && !replyById.has(parentId)) continue;
+      const children = childrenByParent.get(parentId) ?? [];
+      children.push(event);
+      childrenByParent.set(parentId, children);
+    }
+
+    const output: Array<{ event: NostrEvent; depth: number }> = [];
+    const visited = new Set<string>();
+    const appendChildren = (parentId: string, depth: number) => {
+      for (const child of childrenByParent.get(parentId) ?? []) {
+        if (visited.has(child.id)) continue;
+        visited.add(child.id);
+        output.push({ event: child, depth });
+        appendChildren(child.id, depth + 1);
+      }
+    };
+    appendChildren(rootId, 0);
+    return output;
   }
 
   async function hydrateThread() {
@@ -216,13 +245,23 @@
   }
 
   async function fetchNestedThreadReplies(parentReplies: NostrEvent[]) {
-    return parentReplies.length
-      ? fetchThreadReplies(
-          parentReplies.map((event) => event.id),
-          $relays,
-          nestedThreadReplyLimit
-        ).catch(() => [])
-      : [];
+    const nestedReplies: NostrEvent[] = [];
+    let parents = parentReplies;
+    const known = new Set(parentReplies.map((event) => event.id));
+    for (let depth = 0; depth < nestedThreadReplyDepth && parents.length && nestedReplies.length < nestedThreadReplyLimit; depth += 1) {
+      const remaining = nestedThreadReplyLimit - nestedReplies.length;
+      const next = await fetchThreadReplies(
+        parents.map((event) => event.id),
+        $relays,
+        remaining
+      ).catch(() => []);
+      if (!next.length) break;
+      const fresh = next.filter((event) => !known.has(event.id));
+      fresh.forEach((event) => known.add(event.id));
+      nestedReplies.push(...fresh);
+      parents = fresh;
+    }
+    return nestedReplies;
   }
 
   async function fetchThreadReplyWindow(options: { limit?: number; since?: number; until?: number } = {}) {
@@ -681,9 +720,11 @@
   {#if root}
     <div class="feed-list">
       <NoteCard event={root} profile={$profiles[root.pubkey]} hiddenQuotedNoteIds={hiddenThreadQuoteIds} initialExpanded onOpen={openThreadNote} />
-      {#if replies.length}
-        {#each sortedReplies as reply (reply.id)}
-          <NoteCard event={reply} profile={$profiles[reply.pubkey]} featured={reply.id === focusedReplyId} hiddenQuotedNoteIds={hiddenThreadQuoteIds} onOpen={openThreadNote} />
+      {#if threadReplyItems.length}
+        {#each threadReplyItems as item (item.event.id)}
+          <div class="thread-reply" class:nested={item.depth > 0} style={`--thread-depth: ${Math.min(item.depth, 3)}`}>
+            <NoteCard event={item.event} profile={$profiles[item.event.pubkey]} featured={item.event.id === focusedReplyId} hiddenQuotedNoteIds={hiddenThreadQuoteIds} onOpen={openThreadNote} />
+          </div>
         {/each}
       {:else if loading}
         <div class="empty-state"><span>Loading replies</span></div>
