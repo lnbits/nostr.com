@@ -24,6 +24,7 @@
 
   let newRelay = 'wss://';
   let copiedPublicKey = false;
+  let copiedPrivateKey = false;
   let connectionName = 'Connect another Nostr app';
   let connections: Array<PomegranateProfile & { bunker: string }> = [];
   let connectionError = '';
@@ -76,6 +77,21 @@
     await navigator.clipboard.writeText(sessionNpub);
     copiedPublicKey = true;
     setTimeout(() => (copiedPublicKey = false), 1400);
+  }
+
+  async function copyPrivateKey() {
+    if ($session?.mode !== 'private-key' || !$session.secret) return;
+    const nsec = nsecFromHex($session.secret);
+    if (!nsec) return;
+    await navigator.clipboard.writeText(nsec);
+    copiedPrivateKey = true;
+    setTimeout(() => (copiedPrivateKey = false), 1400);
+  }
+
+  function nsecFromHex(hex: string) {
+    if (!/^[0-9a-f]{64}$/i.test(hex)) return '';
+    const bytes = new Uint8Array(hex.match(/.{1,2}/g)?.map((byte) => parseInt(byte, 16)) ?? []);
+    return nip19.nsecEncode(bytes);
   }
 
   async function refreshConnections() {
@@ -182,7 +198,14 @@
       <div class="setting-grid">
         <div class="account-field">
           <span>Signed in with</span>
-          <strong>{sessionLabel($session.mode)}</strong>
+          <span class="session-label-row">
+            <strong>{sessionLabel($session.mode)}</strong>
+            {#if $session.mode === 'private-key' && $session.secret}
+              <button class="icon-button small local-key-copy" on:click={copyPrivateKey} aria-label="Copy private key">
+                {#if copiedPrivateKey}<Check size={15} />{:else}<Copy size={15} />{/if}
+              </button>
+            {/if}
+          </span>
         </div>
         <div class="account-field">
           <span>Public key</span>
