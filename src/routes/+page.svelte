@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
+  import { browser } from '$app/environment';
   import { page } from '$app/stores';
   import { beforeNavigate, goto } from '$app/navigation';
   import { ArrowUp, Plus } from '@lucide/svelte';
@@ -46,15 +47,20 @@
   let hideNewerBubbleTimeout: ReturnType<typeof setTimeout> | undefined;
   let restoredFeedPosition = false;
   let clickedFeedNoteSaved = false;
+  let autoFillRunning = false;
+  let autoFillQueued = false;
+  let autoFillTimer: ReturnType<typeof setTimeout> | undefined;
   const pullThreshold = 78;
   const newerBubbleCooldownMs = 5000;
   const feedScrollStateMaxAgeMs = 30 * 60 * 1000;
+  const autoFillMaxLoads = 5;
   $: hasReadRelays = $relays.some((relay) => relay.enabled && relay.read);
   $: feedEvents = hashtagFilteredEvents(displayEventsForFeedMode($feedMode, topLevelFeedEvents($events), $follows, $customFeedSettings), $activeHashtag);
   $: if (observer && loadMoreSentinel && feedEvents.length) {
     observer.unobserve(loadMoreSentinel);
     observer.observe(loadMoreSentinel);
   }
+  $: if (browser) scheduleFeedAutoFill();
   $: pullProgress = Math.min(1, pullDistance / pullThreshold);
   $: showNewerBubble = canLoadNewerForFeed() && $pendingNewerEvents.length && !pullingNewer && !hideNewerBubble && !pullStartedAtTop && pullDistance <= 0;
   $: emptyMessage = !hasReadRelays
@@ -114,6 +120,7 @@
       observer?.disconnect();
       clearTimeout(hideNewerBubbleTimeout);
       clearTimeout(wheelPullTimeout);
+      clearTimeout(autoFillTimer);
       removeEventListener('scroll', onScroll);
       removeEventListener('touchstart', startPullForNewer);
       removeEventListener('touchmove', updatePullForNewer);
@@ -215,6 +222,39 @@
     } finally {
       requestingOlder = false;
     }
+  }
+
+  function scheduleFeedAutoFill() {
+    if (!feedEvents.length || $loadingFeed || $loadingMoreFeed || !$hasMoreFeed || autoFillQueued || autoFillRunning) return;
+    autoFillQueued = true;
+    clearTimeout(autoFillTimer);
+    autoFillTimer = setTimeout(() => {
+      autoFillQueued = false;
+      void autoFillFeedViewport();
+    }, 80);
+  }
+
+  async function autoFillFeedViewport() {
+    if (autoFillRunning) return;
+    autoFillRunning = true;
+    try {
+      for (let attempt = 0; attempt < autoFillMaxLoads; attempt += 1) {
+        await tick();
+        if (!shouldAutoLoadOlderFeed()) return;
+        const beforeCount = feedEvents.length;
+        await requestOlderFeed();
+        await tick();
+        if (feedEvents.length <= beforeCount || !shouldAutoLoadOlderFeed()) return;
+      }
+    } finally {
+      autoFillRunning = false;
+    }
+  }
+
+  function shouldAutoLoadOlderFeed() {
+    if (!feedEvents.length || $loadingFeed || $loadingMoreFeed || !$hasMoreFeed || requestingOlder) return false;
+    const page = document.documentElement;
+    return page.scrollHeight <= window.innerHeight + 180 || isNearPageBottom();
   }
 
   function saveCurrentFeedScrollPosition() {

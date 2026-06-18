@@ -100,6 +100,7 @@
     profileEvents = profileEvents.filter((event) => !$deletedEventIds.has(event.id));
     profileSummaryEvents = profileSummaryEvents.filter((event) => !$deletedEventIds.has(event.id));
   }
+  $: if (browser && pubkey) mergeProfileEventsFromGlobalStore(pubkey, $events);
   $: if (browser && routeKey && userItems.length && routeKey !== restoredProfileRouteKey) void restoreProfileScrollPosition(routeKey);
 
   beforeNavigate(() => {
@@ -355,6 +356,20 @@
     const hasNewVisibleEvents = profileEvents.some((event) => !existingVisibleIds.has(event.id));
     if (!hasNewSummaryEvents && !hasNewVisibleEvents) return;
     void refreshProfileStats();
+  }
+
+  function mergeProfileEventsFromGlobalStore(targetPubkey: string, storeEvents: NostrEvent[]) {
+    if (!targetPubkey || !storeEvents.length) return;
+    const existingIds = new Set([...profileEvents, ...profileSummaryEvents].map((event) => event.id));
+    const freshProfileEvents = storeEvents.filter(
+      (event) =>
+        event.pubkey === targetPubkey &&
+        !existingIds.has(event.id) &&
+        eventInProfileWindow(event, profileRecentWindowLowerBound(), profileRecentWindowUpperBound()) &&
+        (event.kind === 1 || event.kind === 6 || event.kind === 30023)
+    );
+    if (!freshProfileEvents.length) return;
+    addProfileEvents(freshProfileEvents);
   }
 
   function refreshProfileStats() {

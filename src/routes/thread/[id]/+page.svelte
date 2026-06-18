@@ -25,6 +25,8 @@
   const threadScrollStateMaxAgeMs = 30 * 60 * 1000;
   const threadReplyWindowSeconds = 60 * 60 * 24 * 30;
   const threadReplyWindowScanLimit = 6;
+  const threadReplyRetryDelaysMs = [2500, 5000, 10000, 20000, 30000];
+  const threadReplyRetryMaxAttempts = threadReplyRetryDelaysMs.length;
 
   let loading = true;
   let loadingOlderReplies = false;
@@ -43,6 +45,9 @@
   let liveThreadSub: { close: (reason?: string) => void } | undefined;
   let liveThreadKey = '';
   let liveThreadToken = 0;
+  let threadReplyRetryKey = '';
+  let threadReplyRetryAttempts = 0;
+  let threadReplyRetryTimer: ReturnType<typeof setTimeout> | undefined;
   const seenLiveThreadEventIds = new Set<string>();
 
   $: routeId = decodeURIComponent($page.params.id ?? '');
@@ -65,7 +70,9 @@
   $: if (browser && routeKey && focusedReplyId && threadReplyItems.some((item) => item.event.id === focusedReplyId) && `${routeKey}:${focusedReplyId}` !== focusedThreadRouteKey) {
     void scrollFocusedReplyIntoView(routeKey, focusedReplyId);
   }
+  $: if (browser && root?.id) mergeThreadEventsFromGlobalStore(root.id, $events);
   $: if (browser) syncThreadLiveSubscription(root?.id ?? '', [root?.id ?? '', ...replies.map((reply) => reply.id)]);
+  $: if (browser) syncMissingReplyRetry(root?.id ?? '', $eventStats[root?.id ?? '']?.replies ?? 0, replies.length);
 
   beforeNavigate(() => {
     saveCurrentThreadState();
@@ -89,6 +96,7 @@
     saveCurrentThreadScrollPosition();
     bottomObserver?.disconnect();
     stopThreadLiveSubscription('leaving thread page');
+    clearThreadReplyRetry();
   });
 
   $: if (browser && id && id !== hydratedId) void hydrateThread();
@@ -332,6 +340,29 @@
     }
   }
 
+  function mergeThreadEventsFromGlobalStore(rootId: string, storeEvents: NostrEvent[]) {
+    if (!rootId || !storeEvents.length) return;
+    const existingItems = threadEventsForCache();
+    const existingIds = new Set(existingItems.map((event) => event.id));
+    const rootFromStore = storeEvents.find((event) => event.id === rootId);
+    const freshRoot = rootFromStore && !rootEvent ? rootFromStore : undefined;
+    const candidateThread = mergeThreadEvents([...(freshRoot ? [freshRoot] : []), ...storeEvents], existingItems);
+    const freshReplies = threadReplyEvents(candidateThread, rootId).filter((event) => !existingIds.has(event.id));
+
+    if (!freshRoot && !freshReplies.length) return;
+    if (freshRoot) rootEvent = freshRoot;
+    if (freshReplies.length) {
+      localThreadEvents = mergeThreadEvents(freshReplies, localThreadEvents);
+      trimThreadReplyWindow('bottom');
+    }
+
+    const freshItems = [...(freshRoot ? [freshRoot] : []), ...freshReplies];
+    hydrateThreadProfiles(freshItems);
+    refreshThreadStats(freshItems);
+    void pruneDeletedEvents(freshItems);
+    saveCurrentThreadState();
+  }
+
   function cachedThreadSeed(rootId: string, focusId: string) {
     const directSeed = readThreadSeed(rootId);
     const focusSeed = focusId && focusId !== rootId ? readThreadSeed(focusId) : null;
@@ -367,6 +398,7 @@
     loadingOlderReplies = false;
     hasOlderReplies = true;
     olderThreadReplyCursor = 0;
+    resetThreadReplyRetry();
     stopThreadLiveSubscription('thread changed');
     if (restoreHydratedThread(nextId)) {
       loading = false;
@@ -495,6 +527,71 @@
     liveThreadSub?.close(reason);
     liveThreadSub = undefined;
     liveThreadKey = '';
+  }
+
+  function syncMissingReplyRetry(rootId: string, expectedReplies: number, loadedReplies: number) {
+    if (!rootId) {
+      clearThreadReplyRetry();
+      return;
+    }
+    if (threadReplyRetryKey !== rootId) {
+      clearThreadReplyRetry();
+      threadReplyRetryKey = rootId;
+      threadReplyRetryAttempts = 0;
+    }
+    if (loading || loadingOlderReplies || threadReplyRetryTimer) return;
+    if (loadedReplies >= expectedReplies || expectedReplies <= 0) {
+      clearThreadReplyRetry();
+      threadReplyRetryKey = rootId;
+      threadReplyRetryAttempts = 0;
+      return;
+    }
+    if (threadReplyRetryAttempts >= threadReplyRetryMaxAttempts) return;
+
+    const delay = threadReplyRetryDelaysMs[Math.min(threadReplyRetryAttempts, threadReplyRetryDelaysMs.length - 1)];
+    threadReplyRetryTimer = setTimeout(() => {
+      threadReplyRetryTimer = undefined;
+      void retryMissingThreadReplies(rootId);
+    }, delay);
+  }
+
+  async function retryMissingThreadReplies(rootId: string) {
+    if (id !== rootId || loading || loadingOlderReplies) return;
+    threadReplyRetryAttempts += 1;
+    loading = true;
+    const loadedBefore = threadReplyEvents(threadEventsForCache(), rootId).length;
+    try {
+      const replyBatch = await fetchThreadReplyWindow({ limit: initialThreadReplyLimit });
+      if (id !== rootId) return;
+      if (!replyBatch.events.length) return;
+
+      localThreadEvents = mergeThreadEvents(replyBatch.events, localThreadEvents);
+      trimThreadReplyWindow('bottom');
+      hydrateThreadProfiles(replyBatch.events);
+      refreshThreadStats(replyBatch.events);
+      void pruneDeletedEvents(replyBatch.events);
+
+      const loadedAfter = threadReplyEvents(threadEventsForCache(), rootId).length;
+      if (loadedAfter > loadedBefore) {
+        threadReplyRetryAttempts = 0;
+        olderThreadReplyCursor = nextThreadForwardCursor(replyBatch.events, olderThreadReplyCursor || rootEvent?.created_at || 0);
+        hasOlderReplies = hasOlderReplies || replyBatch.directCount >= initialThreadReplyLimit;
+      }
+      saveCurrentThreadState();
+    } finally {
+      if (id === rootId) loading = false;
+    }
+  }
+
+  function resetThreadReplyRetry() {
+    clearThreadReplyRetry();
+    threadReplyRetryKey = '';
+    threadReplyRetryAttempts = 0;
+  }
+
+  function clearThreadReplyRetry() {
+    if (threadReplyRetryTimer) clearTimeout(threadReplyRetryTimer);
+    threadReplyRetryTimer = undefined;
   }
 
   function handleLiveThreadEvent(rootId: string, statIds: string[], event: NostrEvent, token: number) {

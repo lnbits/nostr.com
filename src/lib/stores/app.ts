@@ -2,6 +2,7 @@ import { browser } from '$app/environment';
 import { goto } from '$app/navigation';
 import { writable } from 'svelte/store';
 import {
+  cacheEvents,
   cacheDirectMessages,
   cacheNotifications,
   clearEventCache,
@@ -1160,6 +1161,7 @@ export async function postNote(content: string, parent?: NostrEvent, extraTags: 
   const event = await publishNote(currentSession, content, currentRelays, tags);
   seenLiveStatEvents.add(event.id);
   events.update((existing) => mergeEvents([event], existing));
+  void cacheEvents([event]);
   if (parent) mergeLocalReplyStats(event);
   replyTarget.set(null);
   quoteTarget.set(null);
@@ -1242,6 +1244,7 @@ export async function repostNote(target: NostrEvent) {
   try {
     const event = await publishRepost(currentSession, target, currentRelays);
     events.update((existing) => mergeEvents([event], existing));
+    void cacheEvents([event]);
   } catch (err) {
     repostedEvents.update((existing) => {
       const next = new Set(existing);
@@ -1625,7 +1628,7 @@ async function activateSession(
   notifications.set([]);
   loadingFeed.set(true);
   if (!hasExplicitFeedModeSelection && previousFeedMode === 'global') feedMode.set('global');
-  void finishSignedInBootstrap(next);
+  await finishSignedInBootstrap(next);
 }
 
 function restoreSession(next: Session) {
@@ -1901,16 +1904,27 @@ async function hydrateDefaultFeedContext() {
 
 async function finishSignedInBootstrap(next: Session) {
   try {
-    await hydrateSignedInFeedContext(next);
+    await hydrateSignedInFeedContext(next).catch(() => undefined);
     if (!isCurrentSession(next)) return;
     selectPreferredSignedInFeed(true);
-    await refreshFeed(currentMode);
+    await refreshSignedInFeedWithFallback();
     void warmSignedInSession(next, { refreshFeed: false });
     restartInboxSubscriptions();
     if (pendingGoogleOnboardingPubkey === next.pubkey && shouldOfferGoogleOnboarding(next, 'google')) onboardingDialogOpen.set(true);
   } finally {
     if (isCurrentSession(next)) loadingFeed.set(false);
   }
+}
+
+async function refreshSignedInFeedWithFallback() {
+  await refreshFeed(currentMode).catch(() => undefined);
+  if (getStoreSnapshot(events).length || currentMode === 'global') return;
+  activeHashtag.set('');
+  cachedOlderEvents = [];
+  olderFeedEmptyAttempts = 0;
+  hasMoreFeed.set(true);
+  feedMode.set('global');
+  await refreshFeed('global').catch(() => undefined);
 }
 
 async function warmSignedInSession(currentSession: Session, options: { refreshFeed?: boolean } = {}) {

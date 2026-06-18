@@ -27,6 +27,8 @@ type SearchFilter = Filter & { search?: string };
 const bunkerSigners = new Map<string, nip46.BunkerSigner>();
 const connectedBunkerSignerKeys = new Set<string>();
 const bunkerConnectionPromises = new Map<string, Promise<void>>();
+const nip07DetectionTimeoutMs = 3000;
+const nip07DetectionIntervalMs = 100;
 type SubCloser = { close: (reason?: string) => void };
 type PomegranateProfile = { name: string; handler_pubkey: string; email?: string };
 type PomegranateAccount = { pubkey: string; email?: string };
@@ -164,10 +166,22 @@ export function createGuestSession(): Session {
 }
 
 export async function loginWithNip07(): Promise<Session> {
-  if (!window.nostr) throw new Error('No NIP-07 extension was found.');
-  const pubkey = await withTimeout(window.nostr.getPublicKey(), 30_000, 'The NIP-07 extension did not respond.');
+  const signer = await waitForNip07();
+  if (!signer) throw new Error('No NIP-07 extension was found. In Chrome, check the extension is enabled for nostr.com, then reload the page.');
+  const pubkey = await withTimeout(signer.getPublicKey(), 30_000, 'The NIP-07 extension did not respond.');
   if (!/^[0-9a-f]{64}$/i.test(pubkey)) throw new Error('The NIP-07 extension returned an invalid public key.');
   return { pubkey: pubkey.toLowerCase(), mode: 'nip07' };
+}
+
+async function waitForNip07() {
+  if (typeof window === 'undefined') return undefined;
+  if (window.nostr) return window.nostr;
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < nip07DetectionTimeoutMs) {
+    await sleep(nip07DetectionIntervalMs);
+    if (window.nostr) return window.nostr;
+  }
+  return undefined;
 }
 
 export function loginWithPrivateKey(secret: string): Session {
@@ -188,6 +202,10 @@ async function withTimeout<T>(promise: Promise<T>, ms: number, message: string) 
   } finally {
     if (timeout) clearTimeout(timeout);
   }
+}
+
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 
 async function mapWithConcurrency<T, R>(items: T[], concurrency: number, mapper: (item: T) => Promise<R>) {
