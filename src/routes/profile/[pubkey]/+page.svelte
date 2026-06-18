@@ -429,6 +429,17 @@
     editorOpen = true;
   }
 
+  function sanitizeNip05LocalPart(value: string | undefined) {
+    return (value ?? '').trim().split('@')[0].toLowerCase().replace(/[^a-z0-9_.-]/g, '');
+  }
+
+  function openNostrNameClaim() {
+    const url = new URL('https://my.nostr.com/');
+    const localPart = sanitizeNip05LocalPart(draft.nip05);
+    if (localPart) url.searchParams.set('q', localPart);
+    window.open(url.toString(), '_blank', 'noopener');
+  }
+
   function profileTimelineItem(event: NostrEvent): ProfileTimelineItem[] {
     if (event.kind === 1 && topLevelFeedEvents([event]).length) return [{ id: event.id, event }];
     const reposted = parseRepostContent(event);
@@ -647,7 +658,7 @@
             <span>NIP-05</span>
             <div class="nip05-row">
               <input bind:value={draft.nip05} placeholder="name@example.com" />
-              <button class="primary" type="button">Get @nostr.com</button>
+              <button class="primary" type="button" on:click={openNostrNameClaim}>Get @nostr.com</button>
             </div>
           </label>
           <label class="wide">
