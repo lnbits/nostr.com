@@ -54,12 +54,7 @@
 }
 
 * { box-sizing: border-box; }
-html {
-  background: var(--bg);
-  overflow-x: hidden;
-  text-size-adjust: 100%;
-  -webkit-text-size-adjust: 100%;
-}
+html { background: var(--bg); overflow-x: hidden; }
 body {
   margin: 0;
   background: var(--bg);
@@ -3340,27 +3335,6 @@ label span, label strong { color: var(--text); }
   }
   .timeline-toolbar { top: calc(54px + var(--app-top-safe)); }
   .note-card { grid-template-columns: 40px minmax(0, 1fr); }
-  .note-meta {
-    font-size: 15px;
-  }
-  .note-meta strong {
-    font-size: 16px;
-  }
-  .note-content {
-    font-size: 17px;
-    line-height: 1.42;
-  }
-  .show-more {
-    font-size: 16px;
-  }
-  .note-actions button,
-  .note-actions .reaction-count {
-    font-size: 15px;
-  }
-  .quoted-note-body strong,
-  .quoted-note-body span {
-    font-size: 15px;
-  }
   .note-body,
   .note-content,
   .media-grid {
