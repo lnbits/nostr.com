@@ -9,6 +9,16 @@ declare global {
       write(value: string): Promise<boolean>;
       clear(): Promise<void>;
     };
+    nostrDesktopUpload?: {
+      uploadToNostrBuild(payload: {
+        name: string;
+        type: string;
+        size: number;
+        mediaType: 'avatar' | 'banner' | 'media';
+        authorization: string;
+        bytes: ArrayBuffer;
+      }): Promise<{ ok: boolean; status: number; data?: unknown; location?: string; error?: string }>;
+    };
     nostr?: {
       getPublicKey(): Promise<string>;
       signEvent(event: Record<string, unknown>): Promise<Record<string, unknown>>;

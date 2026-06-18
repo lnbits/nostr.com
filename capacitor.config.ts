@@ -13,6 +13,9 @@ const config: CapacitorConfig = {
     androidScheme: 'https'
   },
   plugins: {
+    CapacitorHttp: {
+      enabled: true
+    },
     StatusBar: {
       overlaysWebView: false
     },

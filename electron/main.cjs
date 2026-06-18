@@ -195,6 +195,63 @@ function registerSecureSessionHandlers() {
   ipcMain.handle('secure-session:clear', () => clearSecureSession());
 }
 
+function registerUploadHandlers() {
+  ipcMain.handle('upload:nostr-build', async (_event, payload) => {
+    try {
+      return await uploadToNostrBuild(payload);
+    } catch (error) {
+      return {
+        ok: false,
+        status: 0,
+        data: { message: error?.message || 'Could not reach nostr.build for upload.' },
+        error: error?.message || 'Could not reach nostr.build for upload.'
+      };
+    }
+  });
+}
+
+async function uploadToNostrBuild(payload) {
+  const authorization = typeof payload?.authorization === 'string' ? payload.authorization : '';
+  const mediaType = ['avatar', 'banner', 'media'].includes(payload?.mediaType) ? payload.mediaType : 'media';
+  const name = safeUploadName(typeof payload?.name === 'string' && payload.name ? payload.name : 'upload');
+  const type = typeof payload?.type === 'string' && payload.type ? payload.type : 'application/octet-stream';
+  const size = Number.isFinite(payload?.size) ? String(payload.size) : '';
+  const bytes = Buffer.isBuffer(payload?.bytes) ? payload.bytes : Buffer.from(payload?.bytes ?? []);
+  if (!authorization.startsWith('Nostr ') || !bytes.length) return { ok: false, status: 400, data: { message: 'Missing upload data.' } };
+
+  const form = new FormData();
+  form.set('file', new Blob([bytes], { type }), name);
+  form.set('media_type', mediaType);
+  form.set('content_type', type);
+  form.set('size', size || String(bytes.length));
+
+  const response = await fetch('https://nostr.build/api/v2/upload/files', {
+    method: 'POST',
+    headers: { Authorization: authorization },
+    body: form
+  });
+  const text = await response.text().catch(() => '');
+  return {
+    ok: response.ok,
+    status: response.status,
+    location: response.headers.get('location') || '',
+    data: parseJsonOrText(text)
+  };
+}
+
+function safeUploadName(name) {
+  return name.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').slice(0, 180) || 'upload';
+}
+
+function parseJsonOrText(text) {
+  if (!text) return '';
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
 registerNostrProtocol();
 openNostrUrl(findNostrUrl());
 
@@ -213,6 +270,7 @@ if (!gotSingleInstanceLock) {
 
   app.whenReady().then(() => {
     registerSecureSessionHandlers();
+    registerUploadHandlers();
     return createWindow();
   });
 }

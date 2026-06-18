@@ -13,6 +13,9 @@ export async function uploadToNostrBuild(session: Session, file: File, mediaType
   form.set('size', String(file.size));
 
   const authorization = await getNip98AuthorizationHeader(session, nostrBuildUploadUrl, 'POST');
+  const desktopUploadUrl = await uploadWithDesktopBridge(file, mediaType, authorization);
+  if (desktopUploadUrl) return desktopUploadUrl;
+
   const response = await fetch(nostrBuildUploadUrl, {
     method: 'POST',
     headers: { Authorization: authorization },
@@ -24,6 +27,30 @@ export async function uploadToNostrBuild(session: Session, file: File, mediaType
   if (!response.ok) throw new Error(uploadErrorMessage(data) || `Upload failed with ${response.status}.`);
 
   const url = uploadResponseUrl(data) || response.headers.get('location') || '';
+  if (!url) throw new Error('Upload finished but no media URL was returned.');
+  return url;
+}
+
+async function uploadWithDesktopBridge(file: File, mediaType: NostrBuildMediaType, authorization: string) {
+  if (typeof window === 'undefined') return '';
+  const bridge = window.nostrDesktopUpload;
+  if (!bridge?.uploadToNostrBuild) return '';
+
+  const result = await bridge
+    .uploadToNostrBuild({
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      mediaType,
+      authorization,
+      bytes: await file.arrayBuffer()
+    })
+    .catch((err) => {
+      throw new Error(uploadNetworkErrorMessage(err));
+    });
+
+  if (!result.ok) throw new Error(result.error || uploadErrorMessage(result.data) || `Upload failed with ${result.status}.`);
+  const url = uploadResponseUrl(result.data) || result.location || '';
   if (!url) throw new Error('Upload finished but no media URL was returned.');
   return url;
 }

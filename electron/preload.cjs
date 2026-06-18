@@ -6,3 +6,7 @@ contextBridge.exposeInMainWorld('nostrDesktopSecureStorage', {
   write: (value) => ipcRenderer.invoke('secure-session:write', value),
   clear: () => ipcRenderer.invoke('secure-session:clear')
 });
+
+contextBridge.exposeInMainWorld('nostrDesktopUpload', {
+  uploadToNostrBuild: (payload) => ipcRenderer.invoke('upload:nostr-build', payload)
+});
