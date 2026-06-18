@@ -3178,13 +3178,21 @@ label span, label strong { color: var(--text); }
 .profile-edit-grid .wide {
   grid-column: 1 / -1;
 }
-.upload-url-row {
+.upload-url-row,
+.nip05-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) 144px;
   gap: 8px;
   align-items: center;
 }
-.upload-url-row button {
+.upload-url-row input,
+.nip05-row input {
+  min-width: 0;
+}
+.upload-url-row button,
+.nip05-row button {
+  width: 100%;
+  min-width: 0;
   white-space: nowrap;
 }
 .visually-hidden {
@@ -3430,7 +3438,10 @@ label span, label strong { color: var(--text); }
     min-height: 38px;
     border-radius: 8px;
   }
-  .upload-url-row { grid-template-columns: 1fr; }
+  .upload-url-row,
+  .nip05-row {
+    grid-template-columns: 1fr;
+  }
   .profile-card { margin-top: -44px; }
   .profile-card { grid-template-columns: minmax(0, 1fr) auto; }
   .profile-banner-actions { margin-top: 44px; }

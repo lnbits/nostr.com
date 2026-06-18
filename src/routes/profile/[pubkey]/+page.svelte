@@ -644,8 +644,11 @@
             <input bind:value={draft.name} placeholder="benarc" />
           </label>
           <label class="wide">
-            <span>About</span>
-            <textarea bind:value={draft.about} placeholder="What should people know about you?"></textarea>
+            <span>NIP-05</span>
+            <div class="nip05-row">
+              <input bind:value={draft.nip05} placeholder="name@example.com" />
+              <button class="primary" type="button">Get @nostr.com</button>
+            </div>
           </label>
           <label class="wide">
             <span>Profile image URL</span>
@@ -663,9 +666,9 @@
               <button type="button" disabled={uploading !== ''} on:click={() => bannerInput.click()}><Upload size={17} /> {uploading === 'banner' ? 'Uploading' : 'Upload'}</button>
             </div>
           </label>
-          <label>
-            <span>NIP-05</span>
-            <input bind:value={draft.nip05} placeholder="name@example.com" />
+          <label class="wide">
+            <span>About</span>
+            <textarea bind:value={draft.about} placeholder="What should people know about you?"></textarea>
           </label>
           <label>
             <span>Website</span>
