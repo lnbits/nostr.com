@@ -2611,6 +2611,12 @@ label span, label strong { color: var(--text); }
 }
 .empty-state strong { color: var(--text); }
 .error { color: var(--danger); margin: 0; }
+.field-error {
+  color: var(--danger);
+  font-size: 13px;
+  line-height: 1.35;
+  margin: 0;
+}
 .success { color: #49c983; font-weight: 700; margin: 0; }
 .spin { animation: spin 1s linear infinite; }
 .settings-page, .thread-page, .profile-hero, .feed-list.narrow {
@@ -3161,6 +3167,18 @@ label span, label strong { color: var(--text); }
 .profile-editor-dialog {
   width: min(620px, calc(100vw - 28px));
 }
+.profile-editor input,
+.profile-editor textarea {
+  color: var(--text);
+}
+.profile-editor input[aria-invalid='true'] {
+  border-color: color-mix(in srgb, var(--danger) 76%, var(--line));
+}
+.profile-editor input::placeholder,
+.profile-editor textarea::placeholder {
+  color: color-mix(in srgb, var(--muted) 78%, var(--surface));
+  opacity: 1;
+}
 .editor-head {
   display: flex;
   align-items: center;
@@ -3178,13 +3196,21 @@ label span, label strong { color: var(--text); }
 .profile-edit-grid .wide {
   grid-column: 1 / -1;
 }
-.upload-url-row {
+.upload-url-row,
+.nip05-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) 144px;
   gap: 8px;
   align-items: center;
 }
-.upload-url-row button {
+.upload-url-row input,
+.nip05-row input {
+  min-width: 0;
+}
+.upload-url-row button,
+.nip05-row button {
+  width: 100%;
+  min-width: 0;
   white-space: nowrap;
 }
 .visually-hidden {
@@ -3430,7 +3456,10 @@ label span, label strong { color: var(--text); }
     min-height: 38px;
     border-radius: 8px;
   }
-  .upload-url-row { grid-template-columns: 1fr; }
+  .upload-url-row,
+  .nip05-row {
+    grid-template-columns: 1fr;
+  }
   .profile-card { margin-top: -44px; }
   .profile-card { grid-template-columns: minmax(0, 1fr) auto; }
   .profile-banner-actions { margin-top: 44px; }
