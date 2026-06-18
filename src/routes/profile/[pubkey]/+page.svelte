@@ -61,6 +61,7 @@
   let saving = false;
   let copied = false;
   let error = '';
+  let nip05Error = '';
   let uploadMessage = '';
   let uploading: 'picture' | 'banner' | '' = '';
   let updatingFollow = false;
@@ -164,11 +165,17 @@
   }
 
   async function submitProfile() {
-    saving = true;
+    const nextNip05 = normalizeProfileNip05(draft.nip05);
+    nip05Error = nextNip05.error;
     error = '';
+    if (nip05Error) return;
+
+    const nextDraft = { ...draft, nip05: nextNip05.value };
+    draft = nextDraft;
+    saving = true;
     try {
-      profiles.update((existing) => mergeProfileRecords(existing, [{ ...draft, pubkey, updated_at: Math.floor(Date.now() / 1000) }]));
-      await saveProfile(draft);
+      profiles.update((existing) => mergeProfileRecords(existing, [{ ...nextDraft, pubkey, updated_at: Math.floor(Date.now() / 1000) }]));
+      await saveProfile(nextDraft);
       editorOpen = false;
     } catch (err) {
       error = err instanceof Error ? err.message : 'Could not update profile.';
@@ -426,7 +433,19 @@
   function openEditor() {
     editingProfilePubkey = pubkey;
     draft = { ...emptyProfile(), ...profile, pubkey };
+    nip05Error = '';
+    error = '';
     editorOpen = true;
+  }
+
+  function normalizeProfileNip05(value: string | undefined) {
+    const clean = (value ?? '').trim().toLowerCase();
+    if (!clean) return { value: '', error: '' };
+    if (/^[a-z0-9_.-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(clean)) return { value: clean, error: '' };
+    return {
+      value: clean,
+      error: 'Enter a valid NIP-05 address, like name@example.com. The part before @ can only use a-z, 0-9, _, ., or -.'
+    };
   }
 
   function sanitizeNip05LocalPart(value: string | undefined) {
@@ -657,9 +676,16 @@
           <label class="wide">
             <span>NIP-05</span>
             <div class="nip05-row">
-              <input bind:value={draft.nip05} placeholder="name@example.com" />
+              <input
+                bind:value={draft.nip05}
+                placeholder="name@example.com"
+                aria-invalid={nip05Error ? 'true' : undefined}
+                aria-describedby={nip05Error ? 'profile-nip05-error' : undefined}
+                on:input={() => (nip05Error = '')}
+              />
               <button class="primary" type="button" on:click={openNostrNameClaim}>Get @nostr.com</button>
             </div>
+            {#if nip05Error}<p id="profile-nip05-error" class="field-error">{nip05Error}</p>{/if}
           </label>
           <label class="wide">
             <span>Profile image URL</span>

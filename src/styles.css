@@ -2611,6 +2611,12 @@ label span, label strong { color: var(--text); }
 }
 .empty-state strong { color: var(--text); }
 .error { color: var(--danger); margin: 0; }
+.field-error {
+  color: var(--danger);
+  font-size: 13px;
+  line-height: 1.35;
+  margin: 0;
+}
 .success { color: #49c983; font-weight: 700; margin: 0; }
 .spin { animation: spin 1s linear infinite; }
 .settings-page, .thread-page, .profile-hero, .feed-list.narrow {
@@ -3164,6 +3170,9 @@ label span, label strong { color: var(--text); }
 .profile-editor input,
 .profile-editor textarea {
   color: var(--text);
+}
+.profile-editor input[aria-invalid='true'] {
+  border-color: color-mix(in srgb, var(--danger) 76%, var(--line));
 }
 .profile-editor input::placeholder,
 .profile-editor textarea::placeholder {
