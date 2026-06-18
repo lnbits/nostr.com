@@ -3161,6 +3161,15 @@ label span, label strong { color: var(--text); }
 .profile-editor-dialog {
   width: min(620px, calc(100vw - 28px));
 }
+.profile-editor input,
+.profile-editor textarea {
+  color: var(--text);
+}
+.profile-editor input::placeholder,
+.profile-editor textarea::placeholder {
+  color: color-mix(in srgb, var(--muted) 78%, var(--surface));
+  opacity: 1;
+}
 .editor-head {
   display: flex;
   align-items: center;
