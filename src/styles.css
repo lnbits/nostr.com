@@ -54,7 +54,12 @@
 }
 
 * { box-sizing: border-box; }
-html { background: var(--bg); overflow-x: hidden; }
+html {
+  background: var(--bg);
+  overflow-x: hidden;
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+}
 body {
   margin: 0;
   background: var(--bg);
@@ -1236,6 +1241,13 @@ label span, label strong { color: var(--text); }
   place-items: center;
   width: min(1100px, calc(100vw - 28px));
   max-height: calc(100svh - 28px);
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  cursor: zoom-in;
+}
+.image-viewer.zoomed {
+  cursor: grab;
 }
 .image-viewer img {
   max-width: 100%;
@@ -1243,6 +1255,11 @@ label span, label strong { color: var(--text); }
   object-fit: contain;
   border-radius: 8px;
   background: #050505;
+  transform-origin: center;
+  will-change: transform;
+  user-select: none;
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
 }
 .note-actions {
   display: flex;
@@ -2228,6 +2245,13 @@ label span, label strong { color: var(--text); }
 .nip-row span {
   color: var(--muted);
   line-height: 1.42;
+}
+:root:not([data-theme='light']) .info-head p,
+:root:not([data-theme='light']) .article-section p,
+:root:not([data-theme='light']) .article-section ul,
+:root:not([data-theme='light']) .article-section ol,
+:root:not([data-theme='light']) .nip-row span {
+  color: var(--text);
 }
 .dm-shell {
   height: 100%;
@@ -3316,6 +3340,27 @@ label span, label strong { color: var(--text); }
   }
   .timeline-toolbar { top: calc(54px + var(--app-top-safe)); }
   .note-card { grid-template-columns: 40px minmax(0, 1fr); }
+  .note-meta {
+    font-size: 15px;
+  }
+  .note-meta strong {
+    font-size: 16px;
+  }
+  .note-content {
+    font-size: 17px;
+    line-height: 1.42;
+  }
+  .show-more {
+    font-size: 16px;
+  }
+  .note-actions button,
+  .note-actions .reaction-count {
+    font-size: 15px;
+  }
+  .quoted-note-body strong,
+  .quoted-note-body span {
+    font-size: 15px;
+  }
   .note-body,
   .note-content,
   .media-grid {

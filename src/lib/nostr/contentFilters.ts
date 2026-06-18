@@ -34,6 +34,31 @@ export const hateSpeechTerms = [
   'retard'
 ];
 
+export const profanityTerms = [
+  'fuck',
+  'fucks',
+  'fucked',
+  'fucking',
+  'fucker',
+  'fuckers',
+  'shit',
+  'shits',
+  'shitty',
+  'bullshit',
+  'bitch',
+  'bitches',
+  'bitching',
+  'asshole',
+  'assholes',
+  'cunt',
+  'cunts',
+  'dickhead',
+  'dickheads',
+  'motherfucker',
+  'motherfuckers',
+  'motherfucking'
+];
+
 export const mutedWords = [
   'airdrop',
   'giveaway',

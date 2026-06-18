@@ -15,6 +15,7 @@
   import { saveRouteScrollState } from '$lib/stores/routeScroll';
   import { saveThreadReturnTarget, currentThreadReturnTarget } from '$lib/stores/threadNavigation';
   import { saveThreadSeed } from '$lib/stores/threadSeed';
+  import ImageViewer from './ImageViewer.svelte';
   import QuotedNotePreview from './QuotedNotePreview.svelte';
   import VideoAttachment from './VideoAttachment.svelte';
 
@@ -699,17 +700,5 @@
 {/if}
 
 {#if openImage}
-  <div class="dialog-backdrop image-viewer-backdrop" role="presentation" tabindex="-1" on:click={(event) => event.target === event.currentTarget && (openImage = null)}>
-    <div
-      class="image-viewer"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Image preview"
-      tabindex="0"
-      on:click={() => (openImage = null)}
-      on:keydown={(event) => ['Enter', ' ', 'Escape'].includes(event.key) && (openImage = null)}
-    >
-      <img src={openImage.url} alt={openImage.alt ?? ''} referrerpolicy="no-referrer" />
-    </div>
-  </div>
+  <ImageViewer url={openImage.url} alt={openImage.alt ?? ''} referrerpolicy="no-referrer" on:close={() => (openImage = null)} />
 {/if}

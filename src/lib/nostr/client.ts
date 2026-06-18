@@ -3,7 +3,7 @@ import type { Event as NostrToolsEvent, Filter } from 'nostr-tools';
 import * as nip46 from 'nostr-tools/nip46';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { cacheEvents, cacheProfile, cacheProfileEvents } from './cache';
-import { adultDomains, adultHashtags, mutedWords } from './contentFilters';
+import { adultDomains, adultHashtags, mutedWords, profanityTerms } from './contentFilters';
 import { defaultGuestNip05, defaultPomegranateCentral, defaultRelays, globalFeedHashtags } from './config';
 import { eventHasImgurUrl } from './media';
 import type { ContactListDetails, ContactListItem, CustomFeedSettings, DirectMessage, EventStats, FeedMode, FeedQueryOptions, Nip05Profile, NostrEvent, NotificationItem, Profile, RelayState, Session } from './types';
@@ -382,7 +382,7 @@ function pomegranateEmailFromToken(token: string) {
   }
 }
 
-export function filterSpam(events: NostrEvent[], mutedPubkeys = new Set<string>(), trustedPubkeys = new Set<string>()) {
+export function filterSpam(events: NostrEvent[], mutedPubkeys = new Set<string>(), trustedPubkeys = new Set<string>(), options: { blockProfanity?: boolean } = {}) {
   return events.filter((event) => {
     if (mutedPubkeys.has(event.pubkey)) return false;
     if (trustedPubkeys.has(event.pubkey)) return true;
@@ -391,6 +391,7 @@ export function filterSpam(events: NostrEvent[], mutedPubkeys = new Set<string>(
     if (isMachineGeneratedContent(event.content)) return false;
     if (!isFamilySafeEvent(event)) return false;
     const lower = event.content.toLowerCase();
+    if (options.blockProfanity && profanityTerms.some((word) => containsBlockedPhrase(lower, word))) return false;
     return !mutedWords.some((word) => containsBlockedPhrase(lower, word));
   });
 }
@@ -636,7 +637,7 @@ export async function fetchFeed(
   const events = verifiedRelayEvents((await Promise.all(filters.map((filter) => queryShortLived(relayUrls, filter, 5000, { minEvents: feedIdleMinEvents(mode, filter.limit), idleAfterMs: 650 })))).flat()).filter((event) =>
     filters.some((filter) => eventMatchesTimeWindow(event, filter.since, filter.until))
   );
-  const clean = dedupeEvents(topLevelFeedEvents(filterSpam(events, new Set<string>(), trustedGlobalAuthors)));
+  const clean = dedupeEvents(topLevelFeedEvents(filterSpam(events, new Set<string>(), trustedGlobalAuthors, { blockProfanity: mode === 'global' })));
   const feedClean = mode === 'global' ? clean.filter((event) => trustedGlobalAuthors.has(event.pubkey) || !eventHasImgurUrl(event)) : clean;
   const output = mode === 'global' ? applyGlobalFeedLimits(feedClean, trustedGlobalAuthors) : feedClean;
   await cacheEvents(output);
@@ -722,7 +723,7 @@ export async function subscribeFeed(
     label: 'main-feed-live',
     onevent(event) {
       const trustedGlobalAuthors = mode === 'global' ? new Set(options.globalAuthors?.filter((pubkey) => /^[0-9a-f]{64}$/i.test(pubkey)) ?? []) : new Set<string>();
-      const [clean] = topLevelFeedEvents(filterSpam(verifiedRelayEvents([event as NostrEvent]), new Set<string>(), trustedGlobalAuthors));
+      const [clean] = topLevelFeedEvents(filterSpam(verifiedRelayEvents([event as NostrEvent]), new Set<string>(), trustedGlobalAuthors, { blockProfanity: mode === 'global' }));
       if (clean) {
         void cacheEvents([clean]);
         onEvent(clean);

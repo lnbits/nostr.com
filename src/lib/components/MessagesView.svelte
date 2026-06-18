@@ -24,6 +24,7 @@
   import { appPath } from '$lib/paths';
   import { findOrCreatePomegranateConnection } from '$lib/nostr/pomegranateAuth';
   import type { DirectMessage, MediaAttachment, NostrEvent, Profile } from '$lib/nostr/types';
+  import ImageViewer from './ImageViewer.svelte';
   import QuotedNotePreview from './QuotedNotePreview.svelte';
   import VideoAttachment from './VideoAttachment.svelte';
 
@@ -519,11 +520,7 @@
 {/if}
 
 {#if openImage}
-  <div class="dialog-backdrop image-viewer-backdrop" role="presentation" tabindex="-1" on:click={(event) => event.target === event.currentTarget && (openImage = null)}>
-    <button class="image-viewer" on:click={() => (openImage = null)} aria-label="Close image">
-      <img src={openImage.url} alt={openImage.alt ?? ''} />
-    </button>
-  </div>
+  <ImageViewer url={openImage.url} alt={openImage.alt ?? ''} referrerpolicy="no-referrer" on:close={() => (openImage = null)} />
 {/if}
 
 {#if chatLoginDialogOpen}

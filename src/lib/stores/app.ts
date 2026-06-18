@@ -3,11 +3,13 @@ import { goto } from '$app/navigation';
 import { writable } from 'svelte/store';
 import {
   cacheEvents,
+  cacheEventStats,
   cacheDirectMessages,
   cacheNotifications,
   clearEventCache,
   getCachedDirectMessages,
   getCachedEvents,
+  getCachedEventStats,
   getCachedHashtagEvents,
   getCachedNotifications,
   getCachedProfileEvents,
@@ -390,7 +392,11 @@ async function getCachedFeedCandidates(mode: FeedMode, limit = cachedFeedBufferL
   const trustedPubkeys = trustedFeedPubkeys(mode);
   return recentFeedEventsForMode(
     mode,
-    topLevelFeedEvents(filterSpam(cachedEventsForMode(mode, topLevelFeedEvents(filterSpam(cachedEvents, currentMutedPubkeys, trustedPubkeys)), limit), currentMutedPubkeys, trustedPubkeys))
+    topLevelFeedEvents(
+      filterSpam(cachedEventsForMode(mode, topLevelFeedEvents(filterSpam(cachedEvents, currentMutedPubkeys, trustedPubkeys, { blockProfanity: mode === 'global' })), limit), currentMutedPubkeys, trustedPubkeys, {
+        blockProfanity: mode === 'global'
+      })
+    )
   );
 }
 
@@ -546,6 +552,7 @@ function mergeLiveStatEvent(ids: string[], event: NostrEvent) {
         emoji: previous.emoji + stat.emoji
       };
     }
+    void cacheEventStats(pickStats(next, ids));
     return next;
   });
 }
@@ -813,17 +820,29 @@ export async function refreshEventStats(ids: string[], force = false) {
   void hydrateCachedEventStats(nextIds);
   const currentSession = currentSessionValue;
   const stats = await fetchEventStats(nextIds, currentRelays).catch(() => ({}));
-  eventStats.update((existing) => mergeStats(existing, stats));
+  if (Object.keys(stats).length) {
+    eventStats.update((existing) => {
+      const merged = mergeStats(existing, stats);
+      void cacheEventStats(pickStats(merged, Object.keys(stats)));
+      return merged;
+    });
+  }
   if (currentSession) void refreshOwnEventActions(nextIds, currentSession);
 }
 
 async function hydrateCachedEventStats(ids: string[]) {
   if (!browser || !ids.length) return;
+  const cachedSnapshots = await getCachedEventStats(ids);
+  if (Object.keys(cachedSnapshots).length) eventStats.update((existing) => mergeStats(existing, cachedSnapshots));
   cachedStatsEventsPromise ??= getCachedEvents(2000).then((events) => events.filter((event) => [1, 6, 7, 16, 9735].includes(event.kind)));
   const cachedEvents = await cachedStatsEventsPromise.catch(() => []);
   if (!cachedEvents.length) return;
   const cachedStats = eventStatsFromEvents(ids, cachedEvents);
-  eventStats.update((existing) => mergeStats(existing, cachedStats));
+  eventStats.update((existing) => {
+    const merged = mergeStats(existing, cachedStats);
+    void cacheEventStats(pickStats(merged, ids));
+    return merged;
+  });
 }
 
 async function refreshOwnEventActions(ids: string[], currentSession: Session) {
@@ -901,6 +920,15 @@ function mergeStats(existing: Record<string, EventStats>, incoming: Record<strin
     };
   }
   return next;
+}
+
+function pickStats(stats: Record<string, EventStats>, ids: string[]) {
+  const picked: Record<string, EventStats> = {};
+  for (const id of ids) {
+    const stat = stats[id];
+    if (stat) picked[id] = stat;
+  }
+  return picked;
 }
 
 function filterMutedEvents(items: NostrEvent[]) {
@@ -1437,7 +1465,12 @@ export function mergeEvents(incoming: NostrEvent[], existing: NostrEvent[]) {
 function mergeFeedEvents(incoming: NostrEvent[], existing: NostrEvent[]) {
   const byId = new Map<string, NostrEvent>();
   [...existing, ...incoming].forEach((event) => byId.set(event.id, event));
-  const merged = [...byId.values()].filter((event) => !currentDeletedEventIds.has(event.id)).sort((a, b) => b.created_at - a.created_at);
+  const merged = filterSpam(
+    [...byId.values()].filter((event) => !currentDeletedEventIds.has(event.id)),
+    currentMutedPubkeys,
+    trustedFeedPubkeys(currentMode),
+    { blockProfanity: currentMode === 'global' }
+  ).sort((a, b) => b.created_at - a.created_at);
   const globalClean = currentMode === 'global' ? merged.filter((event) => currentGlobalFeedAuthors.includes(event.pubkey) || !eventHasImgurUrl(event)) : merged;
   const limited = currentMode === 'global' ? applyGlobalFeedLimits(globalClean) : globalClean;
   return limited;

@@ -1,16 +1,18 @@
 import {
   cacheDirectMessages,
   cacheEvents,
+  cacheEventStats,
   cacheProfile,
   cacheProfileEvents,
   getCachedDirectMessages,
   getCachedEvents,
+  getCachedEventStats,
   getCachedHashtagEvents,
   getCachedProfileEvents,
   getCachedProfiles,
   resetCacheConnectionForTests
 } from './cache';
-import type { DirectMessage, NostrEvent } from './types';
+import type { DirectMessage, EventStats, NostrEvent } from './types';
 
 function event(id: string, created_at: number, pubkey = 'a'.repeat(64), content = `event ${id}`, tags: string[][] = []): NostrEvent {
   return {
@@ -34,6 +36,19 @@ function dm(id: string, created_at: number, peer = 'b'.repeat(64)): DirectMessag
     created_at,
     encrypted: `encrypted ${id}`,
     content: `message ${id}`
+  };
+}
+
+function stats(overrides: Partial<EventStats> = {}): EventStats {
+  return {
+    replies: 0,
+    reposts: 0,
+    likes: 0,
+    zaps: 0,
+    zapSats: 0,
+    dislikes: 0,
+    emoji: 0,
+    ...overrides
   };
 }
 
@@ -117,6 +132,31 @@ describe('IndexedDB cache', () => {
     expect((await getCachedHashtagEvents('topic1204')).map((item) => item.id)).toEqual(['tagged-1204']);
     expect((await getCachedHashtagEvents('topic5')).map((item) => item.id)).toEqual(['tagged-5']);
   });
+
+  it('stores event stats snapshots by event id', async () => {
+    await cacheEventStats({
+      ['a'.repeat(64)]: stats({ replies: 2, likes: 5 }),
+      ['b'.repeat(64)]: stats({ reposts: 3, zapSats: 21 })
+    });
+
+    expect(await getCachedEventStats(['b'.repeat(64), 'a'.repeat(64), 'c'.repeat(64)])).toEqual({
+      ['a'.repeat(64)]: stats({ replies: 2, likes: 5 }),
+      ['b'.repeat(64)]: stats({ reposts: 3, zapSats: 21 })
+    });
+  });
+
+  it('caps event stats snapshots independently of cached events', async () => {
+    const nextStats: Record<string, EventStats> = {};
+    Array.from({ length: 3005 }, (_, index) => {
+      nextStats[index.toString(16).padStart(64, '0')] = stats({ likes: index });
+    });
+
+    await cacheEventStats(nextStats);
+
+    const cached = await getCachedEventStats(Object.keys(nextStats));
+    expect(Object.keys(cached)).toHaveLength(3000);
+    expect(cached['0'.repeat(63) + '0']).toBeUndefined();
+  }, 10_000);
 
   it('caches direct messages per account and returns newest first', async () => {
     const alice = 'a'.repeat(64);

@@ -327,6 +327,14 @@ describe('nostr client helpers', () => {
     expect(filterSpam([muted, spam, good], new Set([muted.pubkey]))).toEqual([good]);
   });
 
+  it('can filter profanity for broad global feeds without changing the default spam filter', () => {
+    const profane = event({ content: 'fuck you maga #introductions' });
+    const good = event({ content: 'welcome to nostr #introductions' });
+
+    expect(filterSpam([profane, good]).map((item) => item.id)).toEqual([profane.id, good.id]);
+    expect(filterSpam([profane, good], new Set(), new Set(), { blockProfanity: true }).map((item) => item.id)).toEqual([good.id]);
+  });
+
   it('filters article-length feed posts', () => {
     const longPost = event({ content: 'a'.repeat(901) });
     const normalPost = event({ content: 'a'.repeat(900) });

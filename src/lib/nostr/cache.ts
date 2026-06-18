@@ -1,10 +1,11 @@
-import type { DirectMessage, NostrEvent, NotificationItem, Profile } from './types';
+import type { DirectMessage, EventStats, NostrEvent, NotificationItem, Profile } from './types';
 
 const DB_NAME = 'nostr-social-cache';
-const DB_VERSION = 6;
+const DB_VERSION = 7;
 const MAX_CACHED_EVENTS = 2400;
 const MAX_CACHED_PROFILE_EVENTS = 1200;
 const MAX_CACHED_HASHTAG_EVENTS = 1200;
+const MAX_CACHED_EVENT_STATS = 3000;
 const MAX_CACHED_DIRECT_MESSAGES_PER_OWNER = 500;
 const MAX_CACHED_NOTIFICATIONS_PER_OWNER = 240;
 
@@ -36,6 +37,12 @@ interface CachedNotification {
   notification: NotificationItem;
 }
 
+interface CachedEventStats {
+  id: string;
+  updated_at: number;
+  stats: EventStats;
+}
+
 let dbPromise: Promise<IDBDatabase> | undefined;
 
 function openDb() {
@@ -64,6 +71,10 @@ function openDb() {
       }
       if (!db.objectStoreNames.contains('hashtagEvents')) {
         createHashtagEventsStore(db);
+      }
+      if (!db.objectStoreNames.contains('eventStats')) {
+        const eventStats = db.createObjectStore('eventStats', { keyPath: 'id' });
+        eventStats.createIndex('updated_at', 'updated_at');
       }
       if (!db.objectStoreNames.contains('contacts')) db.createObjectStore('contacts', { keyPath: 'pubkey' });
       if (!db.objectStoreNames.contains('settings')) db.createObjectStore('settings', { keyPath: 'key' });
@@ -127,8 +138,51 @@ export async function cacheProfileEvents(events: NostrEvent[]) {
   }).catch(() => undefined);
 }
 
+export async function cacheEventStats(statsById: Record<string, EventStats>) {
+  const entries = Object.entries(statsById).filter(([id]) => /^[0-9a-f]{64}$/i.test(id));
+  if (!entries.length) return;
+  const updated_at = Date.now();
+  await withStore<void>('eventStats', 'readwrite', (store) => {
+    entries.forEach(([id, stats]) =>
+      store.put({
+        id,
+        updated_at,
+        stats
+      } satisfies CachedEventStats)
+    );
+    pruneOldEventStats(store, MAX_CACHED_EVENT_STATS);
+  }).catch(() => undefined);
+}
+
+export async function getCachedEventStats(ids: string[]) {
+  const uniqueIds = [...new Set(ids)].filter((id) => /^[0-9a-f]{64}$/i.test(id));
+  if (!uniqueIds.length) return {};
+  return withStore<Record<string, EventStats>>('eventStats', 'readonly', (store) => {
+    const stats: Record<string, EventStats> = {};
+    let remaining = uniqueIds.length;
+    const finish = () => {
+      remaining -= 1;
+      if (remaining <= 0) (store as IDBObjectStore & { __setResult(value: Record<string, EventStats>): void }).__setResult(stats);
+    };
+
+    uniqueIds.forEach((id) => {
+      const request = store.get(id);
+      request.onsuccess = () => {
+        const cached = request.result as CachedEventStats | undefined;
+        if (cached?.stats) stats[id] = cached.stats;
+        finish();
+      };
+      request.onerror = () => finish();
+    });
+  }).catch(() => ({}));
+}
+
 function pruneOldEvents(store: IDBObjectStore, maxEvents: number) {
   pruneOverflow(store.index('created_at'), maxEvents);
+}
+
+function pruneOldEventStats(store: IDBObjectStore, maxStats: number) {
+  pruneOverflow(store.index('updated_at'), maxStats);
 }
 
 function pruneOldProfileEvents(store: IDBObjectStore, pubkey: string, maxEvents: number) {
@@ -398,6 +452,7 @@ export async function clearEventCache() {
     withStore<void>('events', 'readwrite', (store) => store.clear()),
     withStore<void>('profileEvents', 'readwrite', (store) => store.clear()),
     withStore<void>('hashtagEvents', 'readwrite', (store) => store.clear()),
+    withStore<void>('eventStats', 'readwrite', (store) => store.clear()),
     withStore<void>('notifications', 'readwrite', (store) => store.clear())
   ]).catch(() => undefined);
 }
