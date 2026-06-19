@@ -12,9 +12,13 @@
   let algorithmDialogOpen = false;
   let remoteProfiles: Profile[] = [];
   let searchingProfiles = false;
+  let searchFocused = false;
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
+  const defaultHashtags = ['foodstr', 'musicstr', 'grownstr', 'nostr', 'introductions', 'bitcoin', 'gardening'];
 
   $: cleanQuery = query.trim();
+  $: isHashtagSearch = cleanQuery.startsWith('#');
+  $: isProfileSearch = cleanQuery.startsWith('@');
   $: localProfiles = profileSuggestions(cleanQuery, Object.values($profiles));
   $: suggestions = mergeProfiles(localProfiles, remoteProfiles).slice(0, 6);
 
@@ -25,6 +29,7 @@
   function scheduleProfileSearch() {
     clearTimeout(searchTimer);
     remoteProfiles = [];
+    if (isHashtagSearch) return;
     if (cleanQuery.replace(/^@/, '').length < 2) return;
     searchTimer = setTimeout(() => void runProfileSearch(cleanQuery), 260);
   }
@@ -68,7 +73,15 @@
     await goto(appPath(`/profile/${pubkey}`));
   }
 
+  async function openHashtag(tag: string) {
+    query = '';
+    searchFocused = false;
+    filterByHashtag(tag.replace(/^#/, ''));
+    await goto(appPath('/'));
+  }
+
   function profileSuggestions(value: string, items: Profile[]) {
+    if (value.startsWith('#')) return [];
     const needle = value.trim().replace(/^@/, '').toLowerCase();
     if (needle.length < 2) return [];
     return items
@@ -107,37 +120,60 @@
   <div class="feed-search-row">
     <form class="feed-search-form" on:submit|preventDefault={submitSearch}>
       <Search size={18} />
-      <input bind:value={query} on:input={scheduleProfileSearch} placeholder="Search keyword, profile, npub, or NIP-05" autocomplete="off" />
+      <input
+        bind:value={query}
+        on:focus={() => (searchFocused = true)}
+        on:blur={() => setTimeout(() => (searchFocused = false), 120)}
+        on:input={scheduleProfileSearch}
+        placeholder="Search keyword, profile, npub, or NIP-05"
+        autocomplete="off"
+      />
       {#if searchingProfiles}<Loader2 size={17} class="spin" />{/if}
     </form>
     <button class="mobile-algo-button" type="button" on:click={() => (algorithmDialogOpen = true)} aria-label="Open algorithm settings"><SlidersHorizontal size={17} /> Algo</button>
   </div>
 
-  {#if cleanQuery.length >= 2}
+  {#if searchFocused && !cleanQuery}
     <div class="feed-search-results">
-      {#each suggestions as profile (profile.pubkey)}
-        <button type="button" on:click={() => openProfile(profile.pubkey)}>
-          <span class="avatar mini">
-            {#if profile.picture}
-              <img src={profile.picture} alt="" loading="lazy" referrerpolicy="no-referrer" />
-            {:else}
-              <span>{profileLabel(profile).slice(0, 1).toUpperCase()}</span>
-            {/if}
-          </span>
+      {#each defaultHashtags as tag}
+        <button type="button" on:mousedown|preventDefault on:click={() => openHashtag(tag)}>
+          <span class="avatar mini search-kind"><Hash size={15} /></span>
           <span>
-            <strong>{profileLabel(profile)}</strong>
-            <small>{profile.nip05 || `npub ${profile.pubkey.slice(0, 10)}...`}</small>
+            <strong>#{tag}</strong>
+            <small>Search global posts</small>
           </span>
         </button>
       {/each}
-      <button type="button" on:click={submitSearch}>
-        <span class="avatar mini search-kind"><Hash size={15} /></span>
-        <span>
-          <strong>Search global posts</strong>
-          <small>#{cleanQuery.replace(/^#/, '')}</small>
-        </span>
-      </button>
-      {#if !suggestions.length && !searchingProfiles}
+    </div>
+  {:else if cleanQuery.length >= 2}
+    <div class="feed-search-results">
+      {#if !isHashtagSearch}
+        {#each suggestions as profile (profile.pubkey)}
+          <button type="button" on:click={() => openProfile(profile.pubkey)}>
+            <span class="avatar mini">
+              {#if profile.picture}
+                <img src={profile.picture} alt="" loading="lazy" referrerpolicy="no-referrer" />
+              {:else}
+                <span>{profileLabel(profile).slice(0, 1).toUpperCase()}</span>
+              {/if}
+            </span>
+            <span>
+              <strong>{profileLabel(profile)}</strong>
+              <small>{profile.nip05 || `npub ${profile.pubkey.slice(0, 10)}...`}</small>
+            </span>
+          </button>
+        {/each}
+      {/if}
+      {#if !isProfileSearch}
+        <button type="button" on:click={submitSearch}>
+          <span class="avatar mini search-kind"><Hash size={15} /></span>
+          <span>
+            <strong>Search global posts</strong>
+            <small>#{cleanQuery.replace(/^#/, '')}</small>
+          </span>
+        </button>
+      {/if}
+      {#if !isHashtagSearch && !suggestions.length && !searchingProfiles}
         <div class="feed-search-empty"><UserRound size={16} /> No profile suggestions yet</div>
       {/if}
     </div>
