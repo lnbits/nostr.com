@@ -96,6 +96,7 @@
   let cropFile: File | undefined;
 
   $: mentionSuggestions = mergeMentionProfiles(localMentionSuggestions(mentionQuery), remoteMentionProfiles).slice(0, 6);
+  $: orangeCultTag = content.match(/(^|[\s([{])#(600bn|600000000000)\b/i)?.[2];
 
   $: if ($composerOpen && $editTarget && loadedEditId !== $editTarget.id) {
     content = $editTarget.content;
@@ -432,7 +433,7 @@
 
 {#if $composerOpen}
   <div class="composer-backdrop" role="presentation" tabindex="-1" on:click={(event) => event.target === event.currentTarget && closeComposer()}>
-    <div class="composer-dock" role="dialog" aria-modal="true" aria-label="New note">
+    <div class:composer-orange-cult={orangeCultTag} class="composer-dock" role="dialog" aria-modal="true" aria-label="New note">
       <div class="composer-head">
         <strong>{$editTarget ? 'Edit note' : 'New note'}</strong>
         <button class="icon-button" on:click={closeComposer} aria-label="Close composer"><X size={20} /></button>
@@ -464,6 +465,9 @@
           <MentionSuggestions profiles={mentionSuggestions} searching={searchingMentions} on:select={(event) => selectMention(event.detail)} />
         {/if}
       </div>
+      {#if orangeCultTag}
+        <div class="composer-orange-cult-chip">#{orangeCultTag} <span>(not a cult)</span></div>
+      {/if}
       {#if emojiPickerOpen}
         <div class="composer-emoji-picker" bind:this={emojiPickerElement} aria-label="Emoji picker">
           {#each emojiOptions as emoji}

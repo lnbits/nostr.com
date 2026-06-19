@@ -1516,6 +1516,13 @@ label span, label strong { color: var(--text); }
   padding: 14px;
   box-shadow: var(--shadow);
 }
+.composer-dock.composer-orange-cult {
+  border-color: color-mix(in srgb, #f97316 72%, var(--line));
+  background:
+    linear-gradient(135deg, color-mix(in srgb, #f97316 16%, transparent), transparent 46%),
+    var(--panel);
+  box-shadow: 0 0 0 1px color-mix(in srgb, #f97316 22%, transparent), var(--shadow);
+}
 .composer-head, .composer-actions {
   display: flex;
   align-items: center;
@@ -1526,6 +1533,23 @@ label span, label strong { color: var(--text); }
 .composer-actions { margin: 10px 0 0; color: var(--muted); }
 .composer-count {
   margin-left: auto;
+}
+.composer-orange-cult-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  margin-top: 10px;
+  border: 1px solid color-mix(in srgb, #f97316 58%, transparent);
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: color-mix(in srgb, #f97316 18%, transparent);
+  color: color-mix(in srgb, #f97316 82%, var(--text));
+  font-weight: 800;
+}
+.composer-orange-cult-chip span {
+  color: var(--text);
+  font-weight: 700;
 }
 .composer-emoji-picker {
   width: 100%;
