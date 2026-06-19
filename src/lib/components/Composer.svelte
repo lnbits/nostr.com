@@ -13,19 +13,71 @@
 
   const introductionPrefix = '#nostr #introductions\n\n';
   const mentionSearchDelayMs = 220;
+  const croppableImageTypes = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/avif']);
   const emojiOptions = [
     '😀', '😃', '😄', '😁', '😆', '😂', '🤣', '😊', '🙂', '🙃', '😉', '😍',
-    '😘', '😎', '🤩', '🥳', '😇', '🤔', '🫡', '🤝', '🙏', '👏', '🙌', '💪',
-    '👍', '👎', '👊', '✌️', '🤘', '👌', '👀', '🧡', '❤️', '💙', '💜', '💚',
-    '💛', '🖤', '🤍', '💔', '🔥', '⚡', '✨', '⭐', '🌟', '💥', '💯', '🎉',
-    '🚀', '🌈', '☀️', '🌙', '🍕', '☕', '🍺', '🍻', '🎵', '🎸', '🎧', '📸',
-    '💡', '📌', '📣', '🧠', '🛠️', '🔒', '🔑', '🛡️', '₿', '💸', '⚽', '🏆'
+    '😘', '😗', '😙', '😚', '😋', '😛', '😜', '🤪', '😝', '🤑', '🤗', '🤭',
+    '🫢', '🫣', '🤫', '🤔', '🫡', '🤐', '🤨', '😐', '😑', '😶', '🫥', '😏',
+    '😒', '🙄', '😬', '😮‍💨', '🤥', '😌', '😔', '😪', '🤤', '😴', '😷', '🤒',
+    '🤕', '🤢', '🤮', '🤧', '🥵', '🥶', '🥴', '😵', '🤯', '🤠', '🥳', '🥸',
+    '😎', '🤓', '🧐', '😕', '🫤', '😟', '🙁', '☹️', '😮', '😯', '😲', '😳',
+    '🥺', '🥹', '😦', '😧', '😨', '😰', '😥', '😢', '😭', '😱', '😖', '😣',
+    '😞', '😓', '😩', '😫', '😤', '😡', '😠', '🤬', '😈', '👿', '💀', '☠️',
+    '💩', '🤡', '👻', '👽', '🤖', '😺', '😸', '😹', '😻', '😼', '😽', '🙀',
+    '😿', '😾', '🙈', '🙉', '🙊', '💋', '💌', '💘', '💝', '💖', '💗', '💓',
+    '💞', '💕', '💟', '❣️', '💔', '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤',
+    '🤍', '🤎', '💯', '💢', '💥', '💫', '💦', '💨', '🕳️', '💣', '💬', '👁️‍🗨️',
+    '🗨️', '🗯️', '💭', '💤', '👋', '🤚', '🖐️', '✋', '🖖', '👌', '🤌', '🤏',
+    '✌️', '🤞', '🫰', '🤟', '🤘', '🤙', '👈', '👉', '👆', '🖕', '👇', '☝️',
+    '🫵', '👍', '👎', '✊', '👊', '🤛', '🤜', '👏', '🙌', '🫶', '👐', '🤲',
+    '🤝', '🙏', '✍️', '💅', '🤳', '💪', '🦾', '🧠', '🫀', '🫁', '🦷', '🦴',
+    '👀', '👁️', '👅', '👄', '🧑', '👨', '👩', '🧔', '👴', '👵', '🙍', '🙎',
+    '🙅', '🙆', '💁', '🙋', '🧏', '🙇', '🤦', '🤷', '👨‍💻', '👩‍💻', '🧙', '🧚',
+    '🧛', '🧜', '🧝', '🧞', '🧟', '🏃', '🚶', '🧘', '🛌', '🌍', '🌎', '🌏',
+    '🌐', '🗺️', '🧭', '🏔️', '⛰️', '🌋', '🏕️', '🏖️', '🏜️', '🏝️', '🏞️', '🏟️',
+    '🏛️', '🏗️', '🏘️', '🏠', '🏡', '🏢', '🏬', '🏥', '🏦', '🏨', '🏫', '🏭',
+    '🌁', '🌃', '🌆', '🌇', '🌉', '🌌', '🎠', '🎡', '🎢', '🚂', '🚀', '🛸',
+    '☀️', '🌤️', '⛅', '🌥️', '☁️', '🌦️', '🌧️', '⛈️', '🌩️', '🌨️', '❄️', '☃️',
+    '⛄', '🌬️', '💨', '🌪️', '🌈', '🌂', '☂️', '⚡', '🔥', '💧', '🌊', '🎄',
+    '✨', '🎋', '🎍', '🌱', '🌿', '☘️', '🍀', '🎍', '🌵', '🌲', '🌳', '🌴',
+    '🪵', '🌾', '🌺', '🌻', '🌹', '🥀', '🌷', '🌼', '🌸', '🍄', '🌰', '🪨',
+    '🍇', '🍈', '🍉', '🍊', '🍋', '🍌', '🍍', '🥭', '🍎', '🍏', '🍐', '🍑',
+    '🍒', '🍓', '🫐', '🥝', '🍅', '🫒', '🥥', '🥑', '🍆', '🥔', '🥕', '🌽',
+    '🌶️', '🫑', '🥒', '🥬', '🥦', '🧄', '🧅', '🥜', '🫘', '🌰', '🍞', '🥐',
+    '🥖', '🥨', '🥯', '🥞', '🧇', '🧀', '🍖', '🍗', '🥩', '🥓', '🍔', '🍟',
+    '🍕', '🌭', '🥪', '🌮', '🌯', '🫔', '🥙', '🧆', '🥚', '🍳', '🥘', '🍲',
+    '🫕', '🥣', '🥗', '🍿', '🧈', '🧂', '🥫', '🍱', '🍘', '🍙', '🍚', '🍛',
+    '🍜', '🍝', '🍠', '🍢', '🍣', '🍤', '🍥', '🥮', '🍡', '🥟', '🥠', '🥡',
+    '🦪', '🍦', '🍧', '🍨', '🍩', '🍪', '🎂', '🍰', '🧁', '🥧', '🍫', '🍬',
+    '🍭', '🍮', '🍯', '🍼', '🥛', '☕', '🫖', '🍵', '🍶', '🍾', '🍷', '🍸',
+    '🍹', '🍺', '🍻', '🥂', '🥃', '🧃', '🧉', '🧊', '🥢', '🍽️', '⚽', '🏀',
+    '🏈', '⚾', '🥎', '🎾', '🏐', '🏉', '🥏', '🎱', '🪀', '🏓', '🏸', '🏒',
+    '🏑', '🥍', '🏏', '🪃', '🥅', '⛳', '🪁', '🏹', '🎣', '🤿', '🥊', '🥋',
+    '🎽', '🛹', '🛼', '🛷', '⛸️', '🥌', '🎿', '⛷️', '🏂', '🪂', '🏋️', '🤼',
+    '🤸', '⛹️', '🤺', '🤾', '🏌️', '🏇', '🧗', '🏊', '🚣', '🏄', '🎪', '🎭',
+    '🎨', '🎬', '🎤', '🎧', '🎼', '🎹', '🥁', '🪘', '🎷', '🎺', '🪗', '🎸',
+    '🪕', '🎻', '🎲', '♟️', '🎯', '🎳', '🎮', '🎰', '🧩', '⌚', '📱', '💻',
+    '⌨️', '🖥️', '🖨️', '🖱️', '💽', '💾', '💿', '📀', '📷', '📸', '🎥', '📺',
+    '📻', '🎙️', '⏰', '⌛', '⏳', '📡', '🔋', '🪫', '🔌', '💡', '🔦', '🕯️',
+    '🧯', '🛢️', '💸', '💵', '💴', '💶', '💷', '🪙', '💰', '💳', '🧾', '💎',
+    '⚖️', '🧰', '🔧', '🔨', '⚒️', '🛠️', '⛏️', '🪚', '🔩', '⚙️', '🪤', '🧱',
+    '⛓️', '🧲', '🔫', '💣', '🧨', '🪓', '🔪', '🗡️', '🛡️', '🚬', '⚰️', '🪦',
+    '⚱️', '🏺', '🔮', '📿', '🧿', '💈', '⚗️', '🔭', '🔬', '🕳️', '🩹', '🩺',
+    '💊', '💉', '🩸', '🧬', '🦠', '🧫', '🧪', '🌡️', '🧹', '🪠', '🧽', '🧼',
+    '🪥', '🪒', '🧴', '🛎️', '🔑', '🗝️', '🚪', '🪑', '🛋️', '🛏️', '🧸', '🪆',
+    '🖼️', '🛍️', '🛒', '🎁', '🎈', '🎏', '🎀', '🎊', '🎉', '🪩', '🪅', '📩',
+    '📨', '📧', '💌', '📥', '📤', '📦', '🏷️', '🪧', '📪', '📫', '📬', '📭',
+    '📮', '📯', '📜', '📃', '📄', '📑', '🧾', '📊', '📈', '📉', '🗒️', '🗓️',
+    '📆', '📅', '🗑️', '📌', '📍', '✂️', '🖊️', '🖋️', '✒️', '🖌️', '🖍️', '📝',
+    '🔍', '🔎', '🔏', '🔐', '🔒', '🔓', '❤️‍🔥', '❤️‍🩹', '🏆', '🥇', '🥈', '🥉',
+    '₿', '🧡', '⚡', '🤙'
   ];
   let content = '';
   let busy = false;
   let uploading = false;
   let error = '';
   let emojiPickerOpen = false;
+  let emojiButtonElement: HTMLElement;
   let emojiPickerElement: HTMLElement;
   let mediaInput: HTMLInputElement;
   let textarea: HTMLTextAreaElement;
@@ -77,10 +129,10 @@
 
   onDestroy(() => {
     clearTimeout(mentionSearchTimer);
-    if (browser) document.removeEventListener('pointerdown', closeEmojiPickerFromOutside);
+    if (browser) document.removeEventListener('pointerdown', closeComposerPopupsFromOutside);
   });
 
-  $: if (browser && $composerOpen) syncEmojiPickerListener(emojiPickerOpen);
+  $: if (browser && $composerOpen) syncComposerPopupListener(emojiPickerOpen);
 
   async function submit() {
     if (busy || uploading || !$session || !content.trim()) return;
@@ -124,7 +176,12 @@
       return;
     }
 
-    openCropper(file);
+    if (shouldCropImage(file)) {
+      openCropper(file);
+      return;
+    }
+
+    await uploadCroppedMedia(file);
   }
 
   async function uploadCroppedMedia(file: File) {
@@ -146,6 +203,11 @@
   function openCropper(file: File) {
     cropFile = file;
     error = '';
+  }
+
+  function shouldCropImage(file: File) {
+    if (croppableImageTypes.has(file.type.toLowerCase())) return true;
+    return /\.(jpe?g|png|webp|avif)$/i.test(file.name);
   }
 
   function closeCropper() {
@@ -217,15 +279,23 @@
     textarea?.setSelectionRange(caret, caret);
   }
 
-  function syncEmojiPickerListener(open: boolean) {
+  function syncComposerPopupListener(open: boolean) {
     if (!browser) return;
-    if (open) document.addEventListener('pointerdown', closeEmojiPickerFromOutside);
-    else document.removeEventListener('pointerdown', closeEmojiPickerFromOutside);
+    if (open) document.addEventListener('pointerdown', closeComposerPopupsFromOutside);
+    else document.removeEventListener('pointerdown', closeComposerPopupsFromOutside);
   }
 
-  function closeEmojiPickerFromOutside(event: PointerEvent) {
-    if (!emojiPickerOpen || !emojiPickerElement || !(event.target instanceof Node) || emojiPickerElement.contains(event.target)) return;
-    emojiPickerOpen = false;
+  function closeComposerPopupsFromOutside(event: PointerEvent) {
+    if (!(event.target instanceof Node)) return;
+    if (
+      emojiPickerOpen &&
+      emojiPickerElement &&
+      emojiButtonElement &&
+      !emojiPickerElement.contains(event.target) &&
+      !emojiButtonElement.contains(event.target)
+    ) {
+      emojiPickerOpen = false;
+    }
   }
 
   async function focusComposerStart() {
@@ -394,23 +464,21 @@
           <MentionSuggestions profiles={mentionSuggestions} searching={searchingMentions} on:select={(event) => selectMention(event.detail)} />
         {/if}
       </div>
+      {#if emojiPickerOpen}
+        <div class="composer-emoji-picker" bind:this={emojiPickerElement} aria-label="Emoji picker">
+          {#each emojiOptions as emoji}
+            <button type="button" aria-label={`Insert ${emoji}`} on:click={() => insertEmoji(emoji)}>{emoji}</button>
+          {/each}
+        </div>
+      {/if}
       <div class="composer-actions">
         <input class="visually-hidden" type="file" accept="image/*" bind:this={mediaInput} on:change={(event) => uploadMedia(event.currentTarget.files?.[0])} />
         <button class="icon-button" disabled={uploading || !$session} aria-label="Add media" on:click={() => mediaInput.click()}>
           {#if uploading}<Loader2 size={20} class="spin" />{:else}<ImagePlus size={20} />{/if}
         </button>
-        <span class="composer-emoji-wrap" bind:this={emojiPickerElement}>
-          <button class="icon-button" type="button" disabled={!$session} aria-label="Add emoji" aria-expanded={emojiPickerOpen} on:click={() => (emojiPickerOpen = !emojiPickerOpen)}>
-            <Smile size={20} />
-          </button>
-          {#if emojiPickerOpen}
-            <span class="composer-emoji-picker" aria-label="Emoji picker">
-              {#each emojiOptions as emoji}
-                <button type="button" aria-label={`Insert ${emoji}`} on:click={() => insertEmoji(emoji)}>{emoji}</button>
-              {/each}
-            </span>
-          {/if}
-        </span>
+        <button bind:this={emojiButtonElement} class="icon-button" type="button" disabled={!$session} aria-label="Add emoji" aria-expanded={emojiPickerOpen} on:click={() => (emojiPickerOpen = !emojiPickerOpen)}>
+          <Smile size={20} />
+        </button>
         <span class="composer-count">{content.length}/2000</span>
         <button class="primary" disabled={busy || uploading || !$session || !content.trim()} on:click={submit}><Send size={18} /> {$editTarget ? 'Save edit' : 'Post'}</button>
       </div>

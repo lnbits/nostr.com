@@ -1527,27 +1527,18 @@ label span, label strong { color: var(--text); }
 .composer-count {
   margin-left: auto;
 }
-.composer-emoji-wrap {
-  position: relative;
-  display: inline-flex;
-  margin-left: 0 !important;
-}
 .composer-emoji-picker {
-  position: absolute;
-  left: 0;
-  bottom: calc(100% + 8px);
-  z-index: 8;
-  width: min(320px, calc(100vw - 64px));
-  max-height: min(260px, 42svh);
+  width: 100%;
+  max-height: min(220px, 34svh);
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(34px, 1fr));
   gap: 4px;
   overflow: auto;
+  margin-top: 10px;
   border: 1px solid color-mix(in srgb, var(--line) 66%, transparent);
   border-radius: 8px;
   padding: 8px;
-  background: var(--panel);
-  box-shadow: var(--shadow);
+  background: var(--surface);
 }
 .composer-emoji-picker button {
   min-width: 0;
