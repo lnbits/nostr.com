@@ -5,6 +5,7 @@
   import { page } from '$app/stores';
   import { ArrowLeft, Check, Copy, Globe2, MessageCircle, Pencil, QrCode, Save, UserMinus, UserX, Upload, UserPlus, X } from '@lucide/svelte';
   import { nip19 } from 'nostr-tools';
+  import ProfileRelaysDialog from '$lib/components/ProfileRelaysDialog.svelte';
   import NoteCard from '$lib/components/NoteCard.svelte';
   import { deletedEventIds, events, follows, mergeEvents, mergeProfileRecords, mutedPubkeys, muteAccount, profiles, pruneDeletedEvents, refreshEventStats, relays, saveFollowList, saveProfile, selectMessagePeer, session, unmuteAccount } from '$lib/stores/app';
   import { getCachedProfileEvents } from '$lib/nostr/cache';
@@ -67,6 +68,7 @@
   let updatingFollow = false;
   let updatingMute = false;
   let qrDialogOpen = false;
+  let relayDialogOpen = false;
   let qrGenerating = false;
   let qrCopied = false;
   let profileQr = '';
@@ -597,14 +599,20 @@
       </div>
 
       <div class="profile-banner-actions">
-        <button class="profile-action-icon" disabled={!npub} on:click={openProfileQr} aria-label="Show profile QR code">
-          <QrCode size={14} />
-        </button>
         {#if isOwnProfile}
+          <button class="profile-action-pill profile-edit-inline" on:click={() => (relayDialogOpen = true)} aria-label="Edit relays">
+            <Globe2 size={14} /> Edit relays
+          </button>
           <button class="profile-action-pill profile-edit-inline" on:click={openEditor} aria-label="Edit profile">
             <Pencil size={14} /> Edit profile
           </button>
+          <button class="profile-action-icon" disabled={!npub} on:click={openProfileQr} aria-label="Show profile QR code">
+            <QrCode size={14} />
+          </button>
         {:else}
+          <button class="profile-action-icon" disabled={!npub} on:click={openProfileQr} aria-label="Show profile QR code">
+            <QrCode size={14} />
+          </button>
           <button class="profile-action-icon" disabled={!$session || updatingMute} on:click={toggleMute} aria-label={isMuted ? 'Unmute' : 'Mute'} title={isMuted ? 'Unmute' : 'Mute'}>
             {#if isMuted}<UserMinus size={14} />{:else}<UserX size={14} />{/if}
           </button>
@@ -744,6 +752,10 @@
         </div>
       </form>
       </div>
+    {/if}
+
+    {#if isOwnProfile && relayDialogOpen}
+      <ProfileRelaysDialog on:close={() => (relayDialogOpen = false)} />
     {/if}
 
     {#if qrDialogOpen}

@@ -15,7 +15,7 @@ import {
   getCachedProfileEvents,
   getCachedProfiles
 } from '$lib/nostr/cache';
-import { defaultCustomFeedSettings, defaultGlobalFeedAuthors, defaultGuestNip05, defaultRelays, globalFeedCuratorPubkey, globalFeedHashtags, keywordsForInterests } from '$lib/nostr/config';
+import { defaultCustomFeedSettings, defaultGlobalFeedAuthors, defaultGuestNip05, defaultProfileRelays, defaultRelays, globalFeedCuratorPubkey, globalFeedHashtags, keywordsForInterests } from '$lib/nostr/config';
 import { appPath } from '$lib/paths';
 import { markRelaysOffline, markRelaysOnline, syncRelayStatus } from '$lib/stores/relayStatus';
 import { insertTimelineItems, timelineCursor, uniqueFreshItems } from '$lib/timeline/window';
@@ -1458,6 +1458,19 @@ export async function saveRelayListMetadata() {
   await publishRelayListMetadata(currentSession, currentRelays);
 }
 
+export async function loadPublishedRelayList() {
+  const currentSession = requireSession('Sign in before loading your relay list.');
+  return relayMetadataToStates(await fetchRelayListMetadata(currentSession.pubkey, currentRelays).catch(() => []));
+}
+
+export async function savePublishedRelayList(nextRelays: RelayState[], options: { addToAppRelays?: boolean } = {}) {
+  const currentSession = requireSession('Sign in before publishing your relay list.');
+  const cleanRelays = normalizeRelayStates(nextRelays);
+  await publishRelayListMetadata(currentSession, cleanRelays, mergeRelayStates(currentRelays, cleanRelays));
+  if (options.addToAppRelays) relays.set(mergeRelayStates(currentRelays, cleanRelays));
+  return cleanRelays;
+}
+
 export function mergeEvents(incoming: NostrEvent[], existing: NostrEvent[]) {
   return mergeFeedEvents(incoming, existing).slice(0, maxFeedEvents);
 }
@@ -2013,6 +2026,7 @@ async function prefetchFollowFeed(currentSession: Session) {
 async function hydrateSignedInFeedContext(currentSession: Session) {
   restoreStoredContactListForSession(currentSession);
   const relayList = await fetchRelayListMetadata(currentSession.pubkey, currentRelays).catch(() => []);
+  if (!relayList.length && shouldPublishDefaultProfileRelays(currentSession)) void publishDefaultProfileRelays(currentSession);
   mergeRelayHints(relayList.map((relay) => relay.url), 90);
   const [contacts, muted] = await Promise.all([
     fetchContactListDetails(currentSession.pubkey, currentRelays).catch(emptyContactListDetails),
@@ -2027,6 +2041,72 @@ async function hydrateSignedInFeedContext(currentSession: Session) {
   mergeRelayHints(contacts.relayHints, 74);
   mutedPubkeys.set(muted);
   dropMutedEvents();
+}
+
+function shouldPublishDefaultProfileRelays(currentSession: Session) {
+  return pendingGoogleOnboardingPubkey === currentSession.pubkey && shouldOfferGoogleOnboarding(currentSession, 'google');
+}
+
+async function publishDefaultProfileRelays(currentSession: Session) {
+  const cleanRelays = normalizeRelayStates(defaultProfileRelays);
+  await publishRelayListMetadata(currentSession, cleanRelays, mergeRelayStates(currentRelays, cleanRelays)).catch((err) => {
+    console.warn('Could not publish default profile relays.', err);
+  });
+}
+
+function relayMetadataToStates(items: Array<{ url: string; marker?: string }>) {
+  const byUrl = new Map<string, RelayState>();
+  for (const item of items) {
+    const url = normalizeRelayUrl(item.url);
+    if (!url) continue;
+    const existing = byUrl.get(url) ?? { url, enabled: true, read: false, write: false, score: 75 };
+    if (item.marker === 'read') existing.read = true;
+    else if (item.marker === 'write') existing.write = true;
+    else {
+      existing.read = true;
+      existing.write = true;
+    }
+    byUrl.set(url, existing);
+  }
+  return normalizeRelayStates([...byUrl.values()]);
+}
+
+function normalizeRelayStates(items: RelayState[]) {
+  const byUrl = new Map<string, RelayState>();
+  for (const item of items) {
+    const url = normalizeRelayUrl(item.url);
+    if (!url) continue;
+    const existing = byUrl.get(url);
+    byUrl.set(url, {
+      ...item,
+      ...(existing ?? {}),
+      url,
+      enabled: item.enabled !== false,
+      read: Boolean(item.read || existing?.read),
+      write: Boolean(item.write || existing?.write),
+      score: Number.isFinite(item.score) ? item.score : existing?.score ?? 75
+    });
+  }
+  return [...byUrl.values()].filter((relay) => relay.read || relay.write || relay.enabled);
+}
+
+function mergeRelayStates(base: RelayState[], incoming: RelayState[]) {
+  const byUrl = new Map<string, RelayState>();
+  for (const relay of [...base, ...incoming]) {
+    const url = normalizeRelayUrl(relay.url);
+    if (!url) continue;
+    const previous = byUrl.get(url);
+    byUrl.set(url, {
+      ...relay,
+      ...(previous ?? {}),
+      url,
+      enabled: relay.enabled !== false || previous?.enabled === true,
+      read: Boolean(relay.read || previous?.read),
+      write: Boolean(relay.write || previous?.write),
+      score: Math.max(relay.score ?? 0, previous?.score ?? 0, 50)
+    });
+  }
+  return [...byUrl.values()];
 }
 
 function emptyContactListDetails(): ContactListDetails {

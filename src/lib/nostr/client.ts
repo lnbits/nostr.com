@@ -1350,11 +1350,11 @@ export async function publishMuteList(session: Session, pubkeys: string[], relay
   return publishEventTemplate(session, { kind: 10000, content: '', tags, created_at: now() }, relays);
 }
 
-export async function publishRelayListMetadata(session: Session, relays = defaultRelays) {
+export async function publishRelayListMetadata(session: Session, relays = defaultRelays, publishRelays = relays) {
   const tags = relays
     .filter((relay) => relay.enabled)
     .flatMap((relay) => (relay.read && relay.write ? [['r', relay.url]] : relay.read ? [['r', relay.url, 'read']] : relay.write ? [['r', relay.url, 'write']] : []));
-  return publishEventTemplate(session, { kind: 10002, content: '', tags, created_at: now() }, relays);
+  return publishEventTemplate(session, { kind: 10002, content: '', tags, created_at: now() }, publishRelays);
 }
 
 export async function publishNip17DirectMessage(session: Session, recipientPubkey: string, content: string, relays = defaultRelays, subject = '') {

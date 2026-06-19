@@ -13,6 +13,12 @@ export const defaultRelays: RelayState[] = [
   { url: 'wss://relay.wellorder.net', enabled: true, read: true, write: false, score: 78 }
 ];
 
+export const defaultProfileRelays: RelayState[] = [
+  { url: 'wss://nos.lol', enabled: true, read: true, write: true, score: 92 },
+  { url: 'wss://relay.damus.io', enabled: true, read: true, write: true, score: 94 },
+  { url: 'wss://relay.primal.net', enabled: true, read: true, write: true, score: 90 }
+];
+
 export const defaultCustomFeedSettings: CustomFeedSettings = {
   friendsOfFriends: false,
   keywords: [],

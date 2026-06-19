@@ -1720,6 +1720,9 @@ label span, label strong { color: var(--text); }
 .dialog-panel.compact {
   width: min(420px, 100%);
 }
+.profile-relays-dialog {
+  width: min(640px, 100%);
+}
 .dialog-head {
   display: flex;
   align-items: center;
@@ -1732,6 +1735,11 @@ label span, label strong { color: var(--text); }
   margin-bottom: 10px;
 }
 .dialog-head h2 { margin: 0; }
+.dialog-head p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  line-height: 1.35;
+}
 .dialog-actions {
   display: flex;
   justify-content: flex-end;
@@ -2729,6 +2737,52 @@ label span, label strong { color: var(--text); }
 }
 .relay-editor label { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 .add-row { grid-template-columns: 1fr auto; }
+.profile-relay-list {
+  display: grid;
+  gap: 8px;
+}
+.relay-add-wrap {
+  position: relative;
+  margin-top: 12px;
+}
+.relay-suggestions {
+  position: absolute;
+  z-index: 4;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  display: grid;
+  gap: 4px;
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.relay-suggestions button {
+  min-height: 38px;
+  justify-content: flex-start;
+  border: 0;
+  padding: 0 10px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+}
+.relay-suggestions button:hover {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+.relay-sync-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 14px;
+}
 .setting-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
