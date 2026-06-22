@@ -9,9 +9,19 @@ function patchAndroidManifest() {
   if (!fs.existsSync(manifestPath)) return;
 
   const source = fs.readFileSync(manifestPath, 'utf8');
-  if (source.includes('android:scheme="nostr"')) return;
+  let next = source;
 
-  const intentFilter = `
+  if (!next.includes('android.permission.POST_NOTIFICATIONS')) {
+    const withNotificationPermission = next.replace(
+      /(<manifest\b[^>]*>\s*)/,
+      '$1\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n'
+    );
+    if (withNotificationPermission === next) throw new Error(`Could not patch notification permission in ${manifestPath}`);
+    next = withNotificationPermission;
+  }
+
+  if (!next.includes('android:scheme="nostr"')) {
+    const intentFilter = `
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
 
@@ -22,12 +32,15 @@ function patchAndroidManifest() {
             </intent-filter>
 `;
 
-  const activityPattern = /(<activity\b[^>]*android:name="[^"]*MainActivity"[\s\S]*?)(\n\s*<\/activity>)/;
-  const next = source.replace(activityPattern, `$1${intentFilter}$2`);
-  if (next === source) throw new Error(`Could not find MainActivity in ${manifestPath}`);
+    const activityPattern = /(<activity\b[^>]*android:name="[^"]*MainActivity"[\s\S]*?)(\n\s*<\/activity>)/;
+    const withIntentFilter = next.replace(activityPattern, `$1${intentFilter}$2`);
+    if (withIntentFilter === next) throw new Error(`Could not find MainActivity in ${manifestPath}`);
+    next = withIntentFilter;
+  }
 
+  if (next === source) return;
   fs.writeFileSync(manifestPath, next);
-  console.log(`Patched ${manifestPath} for nostr: links`);
+  console.log(`Patched ${manifestPath} for native permissions and nostr: links`);
 }
 
 function patchIosInfoPlist() {

@@ -10,3 +10,8 @@ contextBridge.exposeInMainWorld('nostrDesktopSecureStorage', {
 contextBridge.exposeInMainWorld('nostrDesktopUpload', {
   uploadToNostrBuild: (payload) => ipcRenderer.invoke('upload:nostr-build', payload)
 });
+
+contextBridge.exposeInMainWorld('nostrDesktopNotifications', {
+  isAvailable: () => ipcRenderer.invoke('notification:available'),
+  show: (payload) => ipcRenderer.invoke('notification:show', payload)
+});

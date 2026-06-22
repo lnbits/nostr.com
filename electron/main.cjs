@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, safeStorage, shell } = require('electron');
+const { app, BrowserWindow, Notification, ipcMain, safeStorage, shell } = require('electron');
 const fs = require('fs');
 const fsp = require('fs/promises');
 const http = require('http');
@@ -9,6 +9,7 @@ let mainWindow;
 let appBaseUrl;
 let pendingNostrUrl = '';
 const secureSessionFile = 'secure-private-key-session.dat';
+const appUserModelId = 'com.lnbits.nostr.social';
 
 function createStaticServer() {
   const root = path.join(__dirname, '..', 'build');
@@ -210,6 +211,40 @@ function registerUploadHandlers() {
   });
 }
 
+function registerNotificationHandlers() {
+  ipcMain.handle('notification:available', () => Notification.isSupported());
+  ipcMain.handle('notification:show', (_event, payload) => {
+    if (!Notification.isSupported()) return false;
+    const title = typeof payload?.title === 'string' ? payload.title.slice(0, 120) : '';
+    const body = typeof payload?.body === 'string' ? payload.body.slice(0, 500) : '';
+    const route = typeof payload?.route === 'string' && payload.route.startsWith('/') ? payload.route : '';
+    if (!title) return false;
+
+    const notification = new Notification({
+      title,
+      body,
+      icon: path.join(__dirname, '..', 'build', 'icon-512.png')
+    });
+    notification.on('click', () => {
+      if (!mainWindow) {
+        pendingNostrUrl = '';
+        void createWindow().then(() => {
+          if (route) openAppRoute(route);
+        });
+        return;
+      }
+      if (route) openAppRoute(route);
+      else {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    });
+    notification.show();
+    return true;
+  });
+}
+
 async function uploadToNostrBuild(payload) {
   const authorization = typeof payload?.authorization === 'string' ? payload.authorization : '';
   const mediaType = ['avatar', 'banner', 'media'].includes(payload?.mediaType) ? payload.mediaType : 'media';
@@ -252,6 +287,15 @@ function parseJsonOrText(text) {
   }
 }
 
+function openAppRoute(route = '/') {
+  if (!mainWindow || !appBaseUrl || !route.startsWith('/')) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+  void mainWindow.loadURL(`${appBaseUrl}${route}`);
+}
+
+if (process.platform === 'win32') app.setAppUserModelId(appUserModelId);
 registerNostrProtocol();
 openNostrUrl(findNostrUrl());
 
@@ -271,6 +315,7 @@ if (!gotSingleInstanceLock) {
   app.whenReady().then(() => {
     registerSecureSessionHandlers();
     registerUploadHandlers();
+    registerNotificationHandlers();
     return createWindow();
   });
 }

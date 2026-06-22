@@ -9,13 +9,19 @@ const recentNotificationIds = new Map<string, number>();
 let listenersReady = false;
 let permissionReady = false;
 let nativeNotificationsAvailable: boolean | undefined;
+let desktopNotificationsAvailable: boolean | undefined;
 
 export async function setupNativeLocalNotifications(openRoute: (route: string) => void) {
-  if (!browser || listenersReady || !(await nativePlatform())) return;
+  if (!browser || listenersReady) return;
+
+  const platform = await nativePlatform();
+  if (!platform && !(await desktopNotificationsSupported())) return;
   listenersReady = true;
 
+  if (!platform) return;
   const { LocalNotifications } = await import('@capacitor/local-notifications');
   await ensureNotificationChannel();
+  await ensureNotificationPermission();
   await LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
     const route = routeFromNotificationExtra(action.notification.extra);
     if (route) openRoute(route);
@@ -23,9 +29,15 @@ export async function setupNativeLocalNotifications(openRoute: (route: string) =
 }
 
 export async function showNativeNotificationForItem(item: NotificationItem, profile?: Profile) {
-  if (!browser || !(await nativePlatform())) return;
-  if (document.visibilityState === 'visible') return;
+  if (!browser) return;
+  if (document.visibilityState === 'visible' && document.hasFocus()) return;
   if (recentlyDisplayed(item.id)) return;
+
+  if (!(await nativePlatform())) {
+    await showDesktopNotificationForItem(item, profile);
+    return;
+  }
+
   if (!(await ensureNotificationPermission())) return;
 
   const { LocalNotifications } = await import('@capacitor/local-notifications');
@@ -101,6 +113,21 @@ function notificationBody(item: NotificationItem) {
   if (!firstLine) return 'Open Nostr to view the activity.';
   const compact = firstLine.replace(/\s+/g, ' ');
   return compact.length > 110 ? `${compact.slice(0, 110).trimEnd()}...` : compact;
+}
+
+async function showDesktopNotificationForItem(item: NotificationItem, profile?: Profile) {
+  if (!(await desktopNotificationsSupported())) return;
+  await window.nostrDesktopNotifications?.show({
+    title: notificationTitle(item, profile),
+    body: notificationBody(item),
+    route: notificationRoute(item)
+  });
+}
+
+async function desktopNotificationsSupported() {
+  if (desktopNotificationsAvailable !== undefined) return desktopNotificationsAvailable;
+  desktopNotificationsAvailable = Boolean(await window.nostrDesktopNotifications?.isAvailable().catch(() => false));
+  return desktopNotificationsAvailable;
 }
 
 function notificationRoute(item: NotificationItem) {

@@ -604,7 +604,20 @@ function eventAuthorForLocalUse(id: string) {
 
 function statTargetIdsForLocalUse(event: NostrEvent, ids: string[]) {
   const wanted = new Set(ids);
-  return event.tags.filter((tag) => tag[0] === 'e' && wanted.has(tag[1])).map((tag) => tag[1]);
+  if (event.kind === 7) {
+    const targetId = reactionTargetIdForLocalUse(event);
+    return targetId && wanted.has(targetId) ? [targetId] : [];
+  }
+  if (event.kind === 6 || event.kind === 16) {
+    const targetId = event.tags.find((tag) => tag[0] === 'e' && wanted.has(tag[1]))?.[1] ?? '';
+    return targetId ? [targetId] : [];
+  }
+  return [...new Set(event.tags.filter((tag) => tag[0] === 'e' && wanted.has(tag[1])).map((tag) => tag[1]))];
+}
+
+function reactionTargetIdForLocalUse(event: NostrEvent) {
+  const eTags = event.tags.filter((tag) => tag[0] === 'e' && tag[1]);
+  return eTags.at(-1)?.[1] ?? '';
 }
 
 function mergeOwnActionEvent(event: NostrEvent, targetIds: string[]) {
@@ -1366,6 +1379,7 @@ export async function reactToNote(target: NostrEvent, content = '+') {
 
   try {
     const event = await publishReaction(currentSession, target, currentRelays, content);
+    seenLiveStatEvents.add(event.id);
     if (content === '+' || !content) ownLikeEvents.set(target.id, event);
   } catch (err) {
     likedEvents.update((existing) => {

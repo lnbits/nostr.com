@@ -139,13 +139,18 @@
   }
 
   function startPullForNewer(event: TouchEvent) {
-    if (!canPullForNewer()) return;
+    if (isComposerGesture(event) || !canPullForNewer()) return;
     pullStartedAtTop = true;
     pullStartY = event.touches[0]?.clientY ?? 0;
     pullDistance = 0;
   }
 
   function updatePullForNewer(event: TouchEvent) {
+    if (isComposerGesture(event)) {
+      pullStartedAtTop = false;
+      pullDistance = 0;
+      return;
+    }
     if (!pullStartedAtTop) return;
     const touch = event.touches[0];
     if (!touch) return;
@@ -159,13 +164,17 @@
   }
 
   function wheelPullForNewer(event: WheelEvent) {
-    if (!canPullForNewer() || event.deltaY >= 0) return;
+    if (isComposerGesture(event) || !canPullForNewer() || event.deltaY >= 0) return;
     event.preventDefault();
     pullStartedAtTop = true;
     wheelPullRaw = Math.min(190, wheelPullRaw + Math.abs(event.deltaY));
     pullDistance = elasticPullDistance(wheelPullRaw);
     clearTimeout(wheelPullTimeout);
     wheelPullTimeout = setTimeout(() => void finishPullForNewer(), 150);
+  }
+
+  function isComposerGesture(event: Event) {
+    return event.target instanceof Element && Boolean(event.target.closest('.composer-backdrop'));
   }
 
   async function finishPullForNewer() {

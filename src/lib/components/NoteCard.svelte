@@ -63,6 +63,7 @@
   let zapError = '';
   let zapCopied = false;
   let zapPaid = false;
+  let liking = false;
   let zapReceiptSub: { close: (reason?: string) => void } | undefined;
   let noteElement: HTMLElement;
   let menuElement: HTMLElement;
@@ -251,6 +252,16 @@
   async function repostNoteAction() {
     repostMenuOpen = false;
     await repostNote(displayEvent);
+  }
+
+  async function likeNoteAction() {
+    if (liking) return;
+    liking = true;
+    try {
+      await reactToNote(displayEvent);
+    } finally {
+      liking = false;
+    }
   }
 
   async function toggleLikePopover() {
@@ -616,7 +627,7 @@
           {/if}
         </span>
         <span class="like-action">
-          <button class:liked aria-label={liked ? 'Unlike' : 'Like'} aria-pressed={liked} on:click={() => void reactToNote(displayEvent)}><Heart size={18} fill={liked ? 'currentColor' : 'none'} /></button>
+          <button class:liked disabled={liking} aria-label={liked ? 'Unlike' : 'Like'} aria-pressed={liked} on:click={() => void likeNoteAction()}><Heart size={18} fill={liked ? 'currentColor' : 'none'} /></button>
           <button class="reaction-count" aria-label="Show likes" aria-expanded={likePopoverOpen} on:click={toggleLikePopover}>{counts.likes}</button>
           {#if likePopoverOpen}
             <div class="reaction-popover">

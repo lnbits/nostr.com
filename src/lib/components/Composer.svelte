@@ -94,6 +94,7 @@
   let mentionSearchTimer: ReturnType<typeof setTimeout> | undefined;
   let selectedMentions: Array<{ pubkey: string; label: string; profile?: Profile }> = [];
   let cropFile: File | undefined;
+  let textareaTouchY = 0;
 
   $: mentionSuggestions = mergeMentionProfiles(localMentionSuggestions(mentionQuery), remoteMentionProfiles).slice(0, 6);
   $: orangeCultTag = content.match(/(^|[\s([{])#(600bn|600000000000)\b/i)?.[2];
@@ -424,6 +425,26 @@
     quoteTarget.set(null);
   }
 
+  function keepComposerScroll(event: Event) {
+    event.stopPropagation();
+  }
+
+  function startTextareaScroll(event: TouchEvent) {
+    textareaTouchY = event.touches[0]?.clientY ?? 0;
+    event.stopPropagation();
+  }
+
+  function moveTextareaScroll(event: TouchEvent) {
+    event.stopPropagation();
+    if (!textarea) return;
+    const y = event.touches[0]?.clientY ?? textareaTouchY;
+    const delta = textareaTouchY - y;
+    textareaTouchY = y;
+    if (textarea.scrollHeight <= textarea.clientHeight || !delta) return;
+    textarea.scrollTop += delta;
+    event.preventDefault();
+  }
+
   function friendlyPublishError(err: unknown) {
     const message = err instanceof Error ? err.message : typeof err === 'string' ? err : '';
     if (/sign|signer|bunker|nip-?46|acknowledge|connect/i.test(message)) return 'Could not sign this event, please try again.';
@@ -458,6 +479,9 @@
           on:click={updateMentionSearch}
           on:keyup={updateMentionSearch}
           on:keydown={submitOnEnter}
+          on:touchstart={startTextareaScroll}
+          on:touchmove={moveTextareaScroll}
+          on:wheel={keepComposerScroll}
           placeholder={$session ? "What's happening on Nostr?" : 'Sign in before posting'}
           maxlength="2000"
         ></textarea>

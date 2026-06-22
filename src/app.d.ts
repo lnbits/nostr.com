@@ -19,6 +19,10 @@ declare global {
         bytes: ArrayBuffer;
       }): Promise<{ ok: boolean; status: number; data?: unknown; location?: string; error?: string }>;
     };
+    nostrDesktopNotifications?: {
+      isAvailable(): Promise<boolean>;
+      show(payload: { title: string; body: string; route: string }): Promise<boolean>;
+    };
     nostr?: {
       getPublicKey(): Promise<string>;
       signEvent(event: Record<string, unknown>): Promise<Record<string, unknown>>;
