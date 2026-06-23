@@ -1,6 +1,6 @@
 {
   "name": "nostr-social",
-  "version": "0.1.0",
+  "version": "0.6.8",
   "description": "A mobile-ready Nostr social client.",
   "author": "LNbits",
   "private": true,
