@@ -64,6 +64,7 @@
   let zapCopied = false;
   let zapPaid = false;
   let liking = false;
+  let reposting = false;
   let zapReceiptSub: { close: (reason?: string) => void } | undefined;
   let noteElement: HTMLElement;
   let menuElement: HTMLElement;
@@ -250,8 +251,14 @@
   }
 
   async function repostNoteAction() {
+    if (reposting) return;
+    reposting = true;
     repostMenuOpen = false;
-    await repostNote(displayEvent);
+    try {
+      await repostNote(displayEvent);
+    } finally {
+      reposting = false;
+    }
   }
 
   async function likeNoteAction() {

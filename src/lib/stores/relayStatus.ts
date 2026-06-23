@@ -5,6 +5,12 @@ export type RelayConnectionStatus = 'checking' | 'online' | 'offline';
 
 export const relayStatus = writable<Record<string, RelayConnectionStatus>>({});
 
+export function loginRelaysReady(relays: RelayState[], statuses: Record<string, RelayConnectionStatus>) {
+  const enabled = relays.filter((relay) => relay.enabled);
+  const relayOnline = (relay: RelayState) => statuses[relay.url] === 'online';
+  return enabled.some((relay) => relay.read && relayOnline(relay)) && enabled.some((relay) => relay.write && relayOnline(relay));
+}
+
 export function syncRelayStatus(relays: RelayState[]) {
   const enabledUrls = relays.filter((relay) => relay.enabled).map((relay) => relay.url);
   relayStatus.update((existing) =>

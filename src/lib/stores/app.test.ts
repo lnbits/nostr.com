@@ -1,4 +1,4 @@
-import { displayEventsForFeedMode, mergeEvents } from './app';
+import { displayEventsForFeedMode, mergeEvents, reconcileStatsWithOwnActions } from './app';
 import type { NostrEvent } from '$lib/nostr/types';
 
 function event(id: string, created_at: number, content = id): NostrEvent {
@@ -15,6 +15,21 @@ function event(id: string, created_at: number, content = id): NostrEvent {
 
 function authorEvent(id: string, created_at: number, pubkey: string): NostrEvent {
   return { ...event(id, created_at), pubkey };
+}
+
+function repostEvent(id: string, created_at: number, pubkey: string, reposted: NostrEvent): NostrEvent {
+  return {
+    id,
+    pubkey,
+    created_at,
+    kind: 6,
+    tags: [
+      ['e', reposted.id],
+      ['p', reposted.pubkey]
+    ],
+    content: JSON.stringify(reposted),
+    sig: 'b'.repeat(128)
+  };
 }
 
 describe('app store helpers', () => {
@@ -91,6 +106,31 @@ describe('app store helpers', () => {
     ).toEqual(['follow', 'friend', 'hashtag', 'keyword']);
   });
 
+  it('renders followed reposts as the reposted note in feed display', () => {
+    const followed = 'a'.repeat(64);
+    const originalAuthor = 'b'.repeat(64);
+    const original = authorEvent('1'.repeat(64), 30, originalAuthor);
+    const repost = repostEvent('2'.repeat(64), 40, followed, original);
+
+    expect(displayEventsForFeedMode('follow', [repost], [followed]).map((item) => item.id)).toEqual([original.id]);
+  });
+
+  it('orders displayed reposts by the repost event time', () => {
+    const followed = 'a'.repeat(64);
+    const original = authorEvent('1'.repeat(64), 10, 'b'.repeat(64));
+    const newer = authorEvent('3'.repeat(64), 30, followed);
+    const repost = repostEvent('2'.repeat(64), 40, followed, original);
+
+    expect(displayEventsForFeedMode('follow', [original, newer, repost], [followed]).map((item) => item.id)).toEqual([original.id, newer.id]);
+  });
+
+  it('matches custom feed keywords against reposted note content', () => {
+    const original = { ...authorEvent('1'.repeat(64), 30, 'b'.repeat(64)), tags: [['t', 'coffee']] };
+    const repost = repostEvent('2'.repeat(64), 40, 'c'.repeat(64), original);
+
+    expect(displayEventsForFeedMode('custom', [repost], [], { friendsOfFriends: false, keywords: ['#coffee'], interests: [] }).map((item) => item.id)).toEqual([original.id]);
+  });
+
   it('does not fall back to unrelated global notes for custom display without follows', () => {
     expect(displayEventsForFeedMode('custom', [authorEvent('global', 10, 'c'.repeat(64))], [], { friendsOfFriends: true, keywords: ['#nostr'], interests: [] })).toEqual([]);
   });
@@ -101,5 +141,30 @@ describe('app store helpers', () => {
     const unrelated = authorEvent('other', 5, 'd'.repeat(64));
 
     expect(displayEventsForFeedMode('custom', [matching, tagged, unrelated], [], { friendsOfFriends: true, keywords: ['nostr'], interests: [] }).map((item) => item.id)).toEqual(['keyword', 'tagged']);
+  });
+
+  it('reconciles cached stats with local own actions without lowering larger counts', () => {
+    const liked = '1'.repeat(64);
+    const reposted = '2'.repeat(64);
+    const popular = '3'.repeat(64);
+
+    expect(
+      reconcileStatsWithOwnActions(
+        {
+          [liked]: { replies: 0, reposts: 0, likes: 0, zaps: 0, zapSats: 0, dislikes: 0, emoji: 0 },
+          [popular]: { replies: 0, reposts: 4, likes: 9, zaps: 0, zapSats: 0, dislikes: 0, emoji: 0 }
+        },
+        [
+          { targetId: liked, type: 'like' },
+          { targetId: reposted, type: 'repost' },
+          { targetId: popular, type: 'like' },
+          { targetId: popular, type: 'repost' }
+        ]
+      )
+    ).toEqual({
+      [liked]: { replies: 0, reposts: 0, likes: 1, zaps: 0, zapSats: 0, dislikes: 0, emoji: 0 },
+      [reposted]: { replies: 0, reposts: 1, likes: 0, zaps: 0, zapSats: 0, dislikes: 0, emoji: 0 },
+      [popular]: { replies: 0, reposts: 4, likes: 9, zaps: 0, zapSats: 0, dislikes: 0, emoji: 0 }
+    });
   });
 });

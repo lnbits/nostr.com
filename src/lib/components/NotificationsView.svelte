@@ -2,9 +2,12 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { Heart, MessageCircle, RefreshCw, Repeat2, UserRound } from '@lucide/svelte';
-  import { events, loadingNotifications, loginDialogOpen, markNotificationsSeen, mergeEvents, notifications, profiles, refreshNotifications, session } from '$lib/stores/app';
+  import { events, loadingNotifications, loginDialogOpen, markNotificationsSeen, mergeEvents, notifications, profiles, refreshNotifications, relays, session } from '$lib/stores/app';
   import { appPath } from '$lib/paths';
+  import { loginRelaysReady, relayStatus } from '$lib/stores/relayStatus';
   import type { NotificationItem, Profile } from '$lib/nostr/types';
+
+  $: canLogin = loginRelaysReady($relays, $relayStatus);
 
   function actorName(profile?: Profile, pubkey = '') {
     return profile?.display_name || profile?.name || `${pubkey.slice(0, 10)}...`;
@@ -94,7 +97,7 @@
       <UserRound size={26} />
       <strong>Sign in to see notifications</strong>
       <span>Notifications are built from relay events for your public key.</span>
-      <button class="primary" on:click={() => loginDialogOpen.set(true)}>Sign in</button>
+      <button class="primary" disabled={!canLogin} on:click={() => loginDialogOpen.set(true)}>Sign in</button>
     </section>
   {:else if $loadingNotifications && !$notifications.length}
     <div class="empty-state"><span>Checking relays for notifications</span></div>

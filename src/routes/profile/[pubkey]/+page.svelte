@@ -380,11 +380,11 @@
   }
 
   function cleanProfileEvents(nextEvents: NostrEvent[]) {
-    return dedupeEvents(nextEvents).filter((event) => event.kind === 6 || (event.kind === 1 && topLevelFeedEvents([event]).length));
+    return dedupeEvents(nextEvents).filter((event) => !$deletedEventIds.has(event.id) && (event.kind === 6 || (event.kind === 1 && topLevelFeedEvents([event]).length)));
   }
 
   function cleanProfileSummaryEvents(nextEvents: NostrEvent[]) {
-    return dedupeEvents(nextEvents).filter((event) => event.kind === 1 || event.kind === 30023);
+    return dedupeEvents(nextEvents).filter((event) => !$deletedEventIds.has(event.id) && (event.kind === 1 || event.kind === 30023));
   }
 
   function profileSummaryForEvents(nextEvents: NostrEvent[]) {

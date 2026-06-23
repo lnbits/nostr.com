@@ -1012,8 +1012,8 @@ export function eventStatsFromEvents(ids: string[], events: NostrEvent[]) {
       if (event.kind === 1 && !seen.replies.has(`${id}:${event.id}`)) {
         seen.replies.add(`${id}:${event.id}`);
         stats[id].replies += 1;
-      } else if ((event.kind === 6 || event.kind === 16) && !seen.reposts.has(`${id}:${event.id}`)) {
-        seen.reposts.add(`${id}:${event.id}`);
+      } else if ((event.kind === 6 || event.kind === 16) && !seen.reposts.has(`${id}:${event.pubkey}`)) {
+        seen.reposts.add(`${id}:${event.pubkey}`);
         stats[id].reposts += 1;
       } else if (event.kind === 7 && !seen.likes.has(`${id}:${event.pubkey}`)) {
         seen.likes.add(`${id}:${event.pubkey}`);

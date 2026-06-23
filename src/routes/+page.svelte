@@ -25,7 +25,6 @@
     customFeedSettings,
     displayEventsForFeedMode
   } from '$lib/stores/app';
-  import { topLevelFeedEvents } from '$lib/nostr/client';
   import { appPath } from '$lib/paths';
   import { readFeedScrollState, saveFeedScrollState } from '$lib/stores/feedScroll';
   import { currentThreadReturnTarget, saveThreadReturnTarget } from '$lib/stores/threadNavigation';
@@ -55,7 +54,7 @@
   const feedScrollStateMaxAgeMs = 30 * 60 * 1000;
   const autoFillMaxLoads = 5;
   $: hasReadRelays = $relays.some((relay) => relay.enabled && relay.read);
-  $: feedEvents = hashtagFilteredEvents(displayEventsForFeedMode($feedMode, topLevelFeedEvents($events), $follows, $customFeedSettings), $activeHashtag);
+  $: feedEvents = hashtagFilteredEvents(displayEventsForFeedMode($feedMode, $events, $follows, $customFeedSettings), $activeHashtag);
   $: if (observer && loadMoreSentinel && feedEvents.length) {
     observer.unobserve(loadMoreSentinel);
     observer.observe(loadMoreSentinel);

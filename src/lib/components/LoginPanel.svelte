@@ -1,10 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { Info, KeyRound, ShieldCheck } from '@lucide/svelte';
-  import { loginDialogOpen, signIn, signInWithImportedNsec } from '$lib/stores/app';
+  import { loginDialogOpen, relays, signIn, signInWithImportedNsec } from '$lib/stores/app';
   import { validateImportedNsec, type PomegranateLoginProvider } from '$lib/nostr/pomegranateAuth';
   import { appPath } from '$lib/paths';
   import { canUseNativeSecureSessionStorage } from '$lib/nativeSecureSession';
+  import { loginRelaysReady, relayStatus } from '$lib/stores/relayStatus';
 
   let privateKey = '';
   let bunkerUri = '';
@@ -16,13 +17,14 @@
   let nativeSecureKeyAvailable = false;
   let rememberPrivateKeyOnDevice = true;
   $: busy = loggingIn || importing;
+  $: canLogin = loginRelaysReady($relays, $relayStatus);
 
   onMount(() => {
     void canUseNativeSecureSessionStorage().then((available) => (nativeSecureKeyAvailable = available));
   });
 
   async function login(provider: PomegranateLoginProvider) {
-    if (loggingIn) return;
+    if (loggingIn || !ensureRelaysReady()) return;
     error = '';
     loggingIn = true;
     try {
@@ -36,7 +38,7 @@
   }
 
   async function loginWithPrivateKey() {
-    if (loggingIn) return;
+    if (loggingIn || !ensureRelaysReady()) return;
     error = '';
     loggingIn = true;
     try {
@@ -52,7 +54,7 @@
   }
 
   async function loginWithNip07() {
-    if (loggingIn) return;
+    if (loggingIn || !ensureRelaysReady()) return;
     error = '';
     loggingIn = true;
     try {
@@ -66,7 +68,7 @@
   }
 
   async function loginWithBunker() {
-    if (loggingIn) return;
+    if (loggingIn || !ensureRelaysReady()) return;
     error = '';
     loggingIn = true;
     try {
@@ -81,7 +83,7 @@
   }
 
   async function importKey(value: string) {
-    if (importing) return;
+    if (importing || !ensureRelaysReady()) return;
     error = '';
     importing = true;
     try {
@@ -106,6 +108,12 @@
     }
   }
 
+  function ensureRelaysReady() {
+    if (canLogin) return true;
+    error = 'Connecting to relays. Try again in a moment.';
+    return false;
+  }
+
   function promptForGoogleNsec() {
     error = '';
     showGoogleNsecPrompt = true;
@@ -126,26 +134,26 @@
     <div class="login-section">
       <input aria-label="optional nsec to import" type="password" bind:value={googleNsec} on:input={handleGoogleNsecInput} autocomplete="off" spellcheck="false" placeholder="nsec (optional)" />
       <div class="login-method-row">
-        <button class="primary google-login-button" disabled={busy} on:click={() => login('google')}><ShieldCheck size={18} /> {loggingIn ? 'Connecting' : 'Login/Signup'}</button>
+        <button class="primary google-login-button" disabled={busy || !canLogin} on:click={() => login('google')}><ShieldCheck size={18} /> {loggingIn ? 'Connecting' : 'Login/Signup'}</button>
         <a class="login-info-link" href={appPath('/pomegranate')} aria-label="Learn about Pomegranate" on:click={closeForInfoLink}><Info size={17} /></a>
       </div>
     </div>
   {:else}
     <div class="login-method-row">
-      <button class="primary google-login-button" disabled={busy} on:click={promptForGoogleNsec}><ShieldCheck size={18} /> Continue with Google</button>
+      <button class="primary google-login-button" disabled={busy || !canLogin} on:click={promptForGoogleNsec}><ShieldCheck size={18} /> Continue with Google</button>
       <a class="login-info-link" href={appPath('/pomegranate')} aria-label="Learn about Pomegranate" on:click={closeForInfoLink}><Info size={17} /></a>
     </div>
 
     <div class="login-section">
       <div class="login-method-row">
-        <button class="nip07-login-button" disabled={busy} on:click={() => void loginWithNip07()}><KeyRound size={18} /> Connect with NIP-07</button>
+        <button class="nip07-login-button" disabled={busy || !canLogin} on:click={() => void loginWithNip07()}><KeyRound size={18} /> Connect with NIP-07</button>
         <a class="login-info-link" href={appPath('/nip07')} aria-label="Learn about NIP-07" on:click={closeForInfoLink}><Info size={17} /></a>
       </div>
 
       <div class="login-method-row">
         <div class="login-input-action">
           <input aria-label="Bunker URI" bind:value={bunkerUri} autocomplete="off" spellcheck="false" placeholder="bunker://..." />
-          <button class="login-compact-action" disabled={busy || !bunkerUri.trim()} on:click={() => void loginWithBunker()}><KeyRound size={18} /> Connect</button>
+          <button class="login-compact-action" disabled={busy || !canLogin || !bunkerUri.trim()} on:click={() => void loginWithBunker()}><KeyRound size={18} /> Connect</button>
         </div>
         <a class="login-info-link" href={appPath('/nip46')} aria-label="Learn about NIP-46" on:click={closeForInfoLink}><Info size={17} /></a>
       </div>
@@ -154,7 +162,7 @@
         <div class="login-method-stack">
           <div class="login-input-action">
             <input aria-label="nsec or hex key" type="password" bind:value={privateKey} autocomplete="off" spellcheck="false" placeholder="nsec1..." />
-            <button class="login-compact-action" disabled={busy || !privateKey.trim()} on:click={() => void loginWithPrivateKey()}><KeyRound size={18} /> Sign in</button>
+            <button class="login-compact-action" disabled={busy || !canLogin || !privateKey.trim()} on:click={() => void loginWithPrivateKey()}><KeyRound size={18} /> Sign in</button>
           </div>
           {#if nativeSecureKeyAvailable}
             <label class="login-remember-option">

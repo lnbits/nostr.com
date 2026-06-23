@@ -407,6 +407,15 @@ describe('nostr client helpers', () => {
     expect(eventStatsFromEvents([root.id], [oldLike, newLike])[root.id].likes).toBe(1);
   });
 
+  it('deduplicates repeat reposts from the same pubkey', () => {
+    const root = event({ id: '1'.repeat(64), content: 'root' });
+    const reposter = 'c'.repeat(64);
+    const oldRepost = event({ id: '6'.repeat(64), kind: 6, pubkey: reposter, tags: [['e', root.id]] });
+    const newRepost = event({ id: '7'.repeat(64), kind: 6, pubkey: reposter, tags: [['e', root.id]] });
+
+    expect(eventStatsFromEvents([root.id], [oldRepost, newRepost])[root.id].reposts).toBe(1);
+  });
+
   it('filters obvious adult content by keyword, hashtag, domain, and warning tags', () => {
     const keyword = event({ content: 'this is nsfw content' });
     const hashtag = event({ content: 'look at this #porn account' });

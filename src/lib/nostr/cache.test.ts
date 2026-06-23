@@ -2,14 +2,18 @@ import {
   cacheDirectMessages,
   cacheEvents,
   cacheEventStats,
+  cacheOwnAction,
   cacheProfile,
   cacheProfileEvents,
   getCachedDirectMessages,
   getCachedEvents,
   getCachedEventStats,
+  getCachedOwnActions,
   getCachedHashtagEvents,
   getCachedProfileEvents,
   getCachedProfiles,
+  removeCachedEventsByIds,
+  removeCachedOwnAction,
   resetCacheConnectionForTests
 } from './cache';
 import type { DirectMessage, EventStats, NostrEvent } from './types';
@@ -157,6 +161,50 @@ describe('IndexedDB cache', () => {
     expect(Object.keys(cached)).toHaveLength(3000);
     expect(cached['0'.repeat(63) + '0']).toBeUndefined();
   }, 10_000);
+
+  it('stores own like and repost actions per account and target', async () => {
+    const owner = 'c'.repeat(64);
+    const other = 'd'.repeat(64);
+    const liked = '1'.repeat(64);
+    const reposted = '2'.repeat(64);
+    const likeEvent = { ...event('3'.repeat(64), 50, owner), kind: 7, tags: [['e', liked]], content: '+' };
+    const repostEvent = { ...event('4'.repeat(64), 60, owner), kind: 6, tags: [['e', reposted]] };
+
+    await cacheOwnAction(owner, liked, 'like', likeEvent);
+    await cacheOwnAction(owner, reposted, 'repost', repostEvent);
+    await cacheOwnAction(other, liked, 'like');
+
+    expect(await getCachedOwnActions(owner)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ owner, targetId: liked, type: 'like', event: likeEvent }),
+        expect.objectContaining({ owner, targetId: reposted, type: 'repost', event: repostEvent })
+      ])
+    );
+    expect((await getCachedOwnActions(owner, [liked])).map((action) => action.targetId)).toEqual([liked]);
+  });
+
+  it('removes cached own actions by account, target, and type', async () => {
+    const owner = 'c'.repeat(64);
+    const target = '1'.repeat(64);
+    await cacheOwnAction(owner, target, 'like');
+    await cacheOwnAction(owner, target, 'repost');
+
+    await removeCachedOwnAction(owner, target, 'like');
+
+    expect(await getCachedOwnActions(owner, [target])).toEqual([expect.objectContaining({ targetId: target, type: 'repost' })]);
+  });
+
+  it('removes deleted events from global and profile caches', async () => {
+    const owner = 'c'.repeat(64);
+    const kept = event('1'.repeat(64), 50, owner);
+    const deleted = event('2'.repeat(64), 60, owner);
+    await cacheProfileEvents([kept, deleted]);
+
+    await removeCachedEventsByIds([deleted.id]);
+
+    expect((await getCachedEvents()).map((item) => item.id)).toEqual([kept.id]);
+    expect((await getCachedProfileEvents(owner)).map((item) => item.id)).toEqual([kept.id]);
+  });
 
   it('caches direct messages per account and returns newest first', async () => {
     const alice = 'a'.repeat(64);

@@ -23,6 +23,7 @@
   import { extractMediaAttachments, extractQuotedNoteReferences, parseNoteText } from '$lib/nostr/media';
   import { appPath } from '$lib/paths';
   import { findOrCreatePomegranateConnection } from '$lib/nostr/pomegranateAuth';
+  import { loginRelaysReady, relayStatus } from '$lib/stores/relayStatus';
   import type { DirectMessage, MediaAttachment, NostrEvent, Profile } from '$lib/nostr/types';
   import ImageViewer from './ImageViewer.svelte';
   import QuotedNotePreview from './QuotedNotePreview.svelte';
@@ -58,6 +59,7 @@
   $: cleanRecipientInput = recipientInput.trim();
   $: localProfiles = profileSuggestions(cleanRecipientInput, Object.values($profiles));
   $: recipientSuggestions = mergeProfiles(localProfiles, remoteProfiles).slice(0, 6);
+  $: canLogin = loginRelaysReady($relays, $relayStatus);
 
   onMount(() => {
     markMessagesSeen();
@@ -325,7 +327,7 @@
       <MessageSquareText size={26} />
       <strong>Sign in to read messages</strong>
       <span>Direct messages need your signer or local key so encrypted payloads can be handled on-device.</span>
-      <button class="primary" on:click={() => loginDialogOpen.set(true)}>Sign in</button>
+      <button class="primary" disabled={!canLogin} on:click={() => loginDialogOpen.set(true)}>Sign in</button>
     </section>
   {:else}
     <section class="dm-shell" class:chat-open={activePeer} aria-label="Direct messages">

@@ -4,7 +4,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { Bell, Home, Info, LogIn, Mail, Settings, SlidersHorizontal, UserRound, X } from '@lucide/svelte';
-  import { bootstrap, directMessages, goHome, loginDialogOpen, markMessagesSeen, markNotificationsSeen, notifications, selectMessagePeer, session, unreadMessageCount, unreadNotificationCount } from '$lib/stores/app';
+  import { bootstrap, directMessages, goHome, loginDialogOpen, markMessagesSeen, markNotificationsSeen, notifications, relays, selectMessagePeer, session, unreadMessageCount, unreadNotificationCount } from '$lib/stores/app';
   import Composer from '$lib/components/Composer.svelte';
   import AlgorithmPanel from '$lib/components/AlgorithmPanel.svelte';
   import LeftNav from '$lib/components/LeftNav.svelte';
@@ -13,6 +13,7 @@
   import RightRail from '$lib/components/RightRail.svelte';
   import ThemeToggle from '$lib/components/ThemeToggle.svelte';
   import { appPath } from '$lib/paths';
+  import { loginRelaysReady, relayStatus } from '$lib/stores/relayStatus';
   import { themeMode, type ThemeMode } from '$lib/stores/theme';
 
   const rightRailStorageKey = 'nostr-right-rail-collapsed';
@@ -160,6 +161,7 @@
   $: seoJsonLd = seo ? JSON.stringify([seo.schema, breadcrumbSchema(seo.path, pageNameForSeo(seo))]) : '';
   $: notificationCount = badgeCount($unreadNotificationCount);
   $: messageCount = badgeCount($unreadMessageCount);
+  $: canLogin = loginRelaysReady($relays, $relayStatus);
   $: if ($session && $page.route.id === '/notifications') markNotificationsSeen();
   $: if ($session && $page.route.id === '/messages') markMessagesSeen();
 
@@ -346,7 +348,7 @@
       <a href={appPath('/settings')} aria-label="Settings"><Settings size={22} /></a>
       <a href={appPath(`/profile/${$session.pubkey}`)} aria-label="Profile"><UserRound size={22} /></a>
     {:else}
-      <button class="tabbar-signin" on:click={() => loginDialogOpen.set(true)}><LogIn size={19} /> Sign in</button>
+      <button class="tabbar-signin" disabled={!canLogin} on:click={() => loginDialogOpen.set(true)}><LogIn size={19} /> Sign in</button>
       <a class="tabbar-info" href={appPath('/info')} aria-label="Info">i</a>
     {/if}
   </nav>

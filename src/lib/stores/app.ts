@@ -4,16 +4,21 @@ import { writable } from 'svelte/store';
 import {
   cacheEvents,
   cacheEventStats,
+  cacheOwnAction,
   cacheDirectMessages,
   cacheNotifications,
   clearEventCache,
   getCachedDirectMessages,
   getCachedEvents,
   getCachedEventStats,
+  getCachedOwnActions,
   getCachedHashtagEvents,
   getCachedNotifications,
   getCachedProfileEvents,
-  getCachedProfiles
+  getCachedProfiles,
+  removeCachedOwnAction,
+  removeCachedEventsByIds,
+  type CachedOwnAction
 } from '$lib/nostr/cache';
 import { defaultCustomFeedSettings, defaultGlobalFeedAuthors, defaultGuestNip05, defaultProfileRelays, defaultRelays, globalFeedCuratorPubkey, globalFeedHashtags, keywordsForInterests } from '$lib/nostr/config';
 import { appPath } from '$lib/paths';
@@ -57,6 +62,7 @@ import {
   publishReport,
   publishRepost,
   publishNip17DirectMessage,
+  parseRepostContent,
   resolveNip05Profile,
   resolvePubkeyIdentifier,
   subscribeDirectMessages,
@@ -218,6 +224,7 @@ session.subscribe((value) => {
   currentSessionValue = value;
   currentNotificationSeenAt = value && browser ? readLastSeen(notificationSeenStorageKey, value.pubkey) : 0;
   currentMessageSeenAt = value && browser ? readLastSeen(messageSeenStorageKey, value.pubkey) : 0;
+  if (value) void hydrateCachedOwnActions(value.pubkey);
   recalculateUnreadCounts();
 });
 notifications.subscribe((value) => {
@@ -365,7 +372,7 @@ export function displayEventsForFeedMode(
   enforceRecentWindow = false
 ) {
   const feedItems = enforceRecentWindow ? recentFeedEvents(items) : items;
-  return eventsForFeedMode(mode, feedItems, follows, settings, friendsOfFriends);
+  return displayFeedEvents(eventsForFeedMode(mode, feedItems, follows, settings, friendsOfFriends));
 }
 
 function eventsForFeedMode(mode: FeedMode, items: NostrEvent[], follows = currentFollows, settings = currentSettings, friendsOfFriends = currentFriendsOfFriends) {
@@ -376,15 +383,36 @@ function eventsForFeedMode(mode: FeedMode, items: NostrEvent[], follows = curren
     const feedKeywords = feedKeywordTerms(settings);
     if (!follows.length && !feedHashtags.length && !feedKeywords.length) return [];
     return items.filter(
-      (event) =>
-        follows.includes(event.pubkey) ||
-        (follows.length > 0 && friendAuthors.has(event.pubkey)) ||
-        feedHashtags.some((tag) => eventHasHashtag(event, tag)) ||
-        feedKeywords.some((keyword) => eventMatchesKeyword(event, keyword))
+      (event) => {
+        const displayEvent = feedDisplayEvent(event) ?? event;
+        return (
+          follows.includes(event.pubkey) ||
+          (follows.length > 0 && friendAuthors.has(event.pubkey)) ||
+          feedHashtags.some((tag) => eventHasHashtag(displayEvent, tag)) ||
+          feedKeywords.some((keyword) => eventMatchesKeyword(displayEvent, keyword))
+        );
+      }
     );
   }
   if (currentHashtag) return items.filter((event) => !eventHasImgurUrl(event));
-  return items.filter((event) => isGlobalFeedEvent(event));
+  return items.filter((event) => isGlobalFeedEvent(feedDisplayEvent(event) ?? event));
+}
+
+function displayFeedEvents(items: NostrEvent[]) {
+  const byId = new Map<string, { event: NostrEvent; sortAt: number }>();
+  for (const event of items) {
+    const displayEvent = feedDisplayEvent(event);
+    if (!displayEvent) continue;
+    const existing = byId.get(displayEvent.id);
+    if (!existing || event.created_at > existing.sortAt) byId.set(displayEvent.id, { event: displayEvent, sortAt: event.created_at });
+  }
+  return [...byId.values()].sort((a, b) => b.sortAt - a.sortAt).map((item) => item.event);
+}
+
+function feedDisplayEvent(event: NostrEvent) {
+  if (event.kind === 1) return topLevelFeedEvents([event])[0];
+  const reposted = parseRepostContent(event);
+  return reposted ? topLevelFeedEvents([reposted])[0] : undefined;
 }
 
 async function getCachedFeedCandidates(mode: FeedMode, limit = cachedFeedBufferLimit) {
@@ -568,10 +596,21 @@ function applyDeletionRequest(event: NostrEvent) {
 
 function applyDeletedEventIds(deleted: Set<string>) {
   if (!deleted.size) return;
+  clearOwnActionsForDeletedEvents(deleted);
   deletedEventIds.update((existing) => new Set([...existing, ...deleted]));
   events.update((existing) => existing.filter((item) => !deleted.has(item.id)));
   pendingNewerEvents.update((existing) => existing.filter((item) => !deleted.has(item.id)));
   cachedOlderEvents = cachedOlderEvents.filter((item) => !deleted.has(item.id));
+  void removeCachedEventsByIds([...deleted]);
+}
+
+function clearOwnActionsForDeletedEvents(deleted: Set<string>) {
+  for (const [targetId, event] of ownLikeEvents) {
+    if (deleted.has(event.id)) applyLocalLikeState(targetId, event.pubkey, false, { adjustStats: true });
+  }
+  for (const [targetId, event] of ownRepostEvents) {
+    if (deleted.has(event.id)) applyLocalRepostState(targetId, event.pubkey, false, { adjustStats: true });
+  }
 }
 
 export async function pruneDeletedEvents(candidateEvents: NostrEvent[], relayHints: string[] = []) {
@@ -624,10 +663,12 @@ function mergeOwnActionEvent(event: NostrEvent, targetIds: string[]) {
   if (!targetIds.length) return;
   if (event.kind === 7 && (!event.content.trim() || event.content.trim() === '+')) {
     targetIds.forEach((id) => ownLikeEvents.set(id, event));
+    targetIds.forEach((id) => seenLiveReactionAuthors.add(ownActionKey(id, event.pubkey)));
     likedEvents.update((existing) => new Set([...existing, ...targetIds]));
   }
   if (event.kind === 6 || event.kind === 16) {
     targetIds.forEach((id) => ownRepostEvents.set(id, event));
+    targetIds.forEach((id) => seenLiveRepostAuthors.add(ownActionKey(id, event.pubkey)));
     repostedEvents.update((existing) => new Set([...existing, ...targetIds]));
   }
 }
@@ -635,6 +676,11 @@ function mergeOwnActionEvent(event: NostrEvent, targetIds: string[]) {
 function mergeOwnEventActions(actions: { liked: Set<string>; reposted: Set<string>; likeEvents: Map<string, NostrEvent>; repostEvents: Map<string, NostrEvent> }) {
   actions.likeEvents.forEach((event, id) => ownLikeEvents.set(id, event));
   actions.repostEvents.forEach((event, id) => ownRepostEvents.set(id, event));
+  const currentPubkey = currentSessionValue?.pubkey;
+  if (currentPubkey) {
+    actions.liked.forEach((id) => seenLiveReactionAuthors.add(ownActionKey(id, currentPubkey)));
+    actions.reposted.forEach((id) => seenLiveRepostAuthors.add(ownActionKey(id, currentPubkey)));
+  }
   if (actions.liked.size) likedEvents.update((existing) => new Set([...existing, ...actions.liked]));
   if (actions.reposted.size) repostedEvents.update((existing) => new Set([...existing, ...actions.reposted]));
 }
@@ -832,6 +878,7 @@ export async function refreshEventStats(ids: string[], force = false) {
   if (!nextIds.length) return;
   void hydrateCachedEventStats(nextIds);
   const currentSession = currentSessionValue;
+  if (currentSession) void hydrateCachedOwnActions(currentSession.pubkey, nextIds);
   const stats = await fetchEventStats(nextIds, currentRelays).catch(() => ({}));
   if (Object.keys(stats).length) {
     eventStats.update((existing) => {
@@ -867,6 +914,60 @@ async function refreshOwnEventActions(ids: string[], currentSession: Session) {
   }));
   if (currentSessionValue?.pubkey !== currentSession.pubkey) return;
   mergeOwnEventActions(ownActions);
+  ownActions.likeEvents.forEach((event, id) => void cacheOwnAction(currentSession.pubkey, id, 'like', event));
+  ownActions.repostEvents.forEach((event, id) => void cacheOwnAction(currentSession.pubkey, id, 'repost', event));
+}
+
+async function hydrateCachedOwnActions(pubkey: string, ids: string[] = []) {
+  if (!browser) return;
+  const actions = await getCachedOwnActions(pubkey, ids);
+  if (currentSessionValue?.pubkey !== pubkey) return;
+  mergeCachedOwnActions(await attachCachedOwnActionEvents(actions));
+}
+
+async function attachCachedOwnActionEvents(actions: CachedOwnAction[]) {
+  const missing = actions.filter((action) => !action.event);
+  if (!missing.length) return actions;
+
+  const cachedEvents = [
+    ...getStoreSnapshot(events),
+    ...getStoreSnapshot(pendingNewerEvents),
+    ...cachedOlderEvents,
+    ...(await getCachedEvents(2000).catch(() => []))
+  ];
+  const actionEvent = (action: CachedOwnAction) => cachedEvents.find((event) => eventMatchesOwnAction(event, action));
+  return actions.map((action) => (action.event ? action : { ...action, event: actionEvent(action) }));
+}
+
+function mergeCachedOwnActions(actions: CachedOwnAction[]) {
+  if (!actions.length) return;
+  const liked = new Set<string>();
+  const reposted = new Set<string>();
+  for (const action of actions) {
+    if (action.type === 'like') {
+      liked.add(action.targetId);
+      if (action.event) ownLikeEvents.set(action.targetId, action.event);
+      seenLiveReactionAuthors.add(ownActionKey(action.targetId, action.owner));
+    }
+    if (action.type === 'repost') {
+      reposted.add(action.targetId);
+      if (action.event) ownRepostEvents.set(action.targetId, action.event);
+      seenLiveRepostAuthors.add(ownActionKey(action.targetId, action.owner));
+    }
+  }
+  if (liked.size) likedEvents.update((existing) => new Set([...existing, ...liked]));
+  if (reposted.size) repostedEvents.update((existing) => new Set([...existing, ...reposted]));
+  eventStats.update((existing) => {
+    const reconciled = reconcileStatsWithOwnActions(existing, actions);
+    void cacheEventStats(pickStats(reconciled, actions.map((action) => action.targetId)));
+    return reconciled;
+  });
+}
+
+function eventMatchesOwnAction(event: NostrEvent, action: CachedOwnAction) {
+  if (event.pubkey !== action.owner) return false;
+  if (action.type === 'like') return event.kind === 7 && (!event.content.trim() || event.content.trim() === '+') && reactionTargetIdForLocalUse(event) === action.targetId;
+  return (event.kind === 6 || event.kind === 16) && event.tags.some((tag) => tag[0] === 'e' && tag[1] === action.targetId);
 }
 
 export function prefetchThreadPreview(event: NostrEvent) {
@@ -931,6 +1032,17 @@ function mergeStats(existing: Record<string, EventStats>, incoming: Record<strin
       dislikes: Math.max(previous.dislikes, stat.dislikes),
       emoji: Math.max(previous.emoji, stat.emoji)
     };
+  }
+  return next;
+}
+
+export function reconcileStatsWithOwnActions(existing: Record<string, EventStats>, actions: Pick<CachedOwnAction, 'targetId' | 'type'>[]) {
+  if (!actions.length) return existing;
+  const next = { ...existing };
+  for (const action of actions) {
+    const previous = next[action.targetId] ?? emptyStats();
+    if (action.type === 'like' && previous.likes < 1) next[action.targetId] = { ...previous, likes: 1 };
+    if (action.type === 'repost' && previous.reposts < 1) next[action.targetId] = { ...previous, reposts: 1 };
   }
   return next;
 }
@@ -1243,66 +1355,47 @@ export async function deleteNote(target: NostrEvent) {
 
 export async function repostNote(target: NostrEvent) {
   const currentSession = requireSession('Sign in before reposting.');
-  const pendingKey = `${target.id}:${currentSession.pubkey}`;
+  const pendingKey = ownActionKey(target.id, currentSession.pubkey);
   if (pendingRepostToggles.has(pendingKey)) return;
   pendingRepostToggles.add(pendingKey);
 
   const alreadyReposted = getStoreSnapshot(repostedEvents).has(target.id);
   if (alreadyReposted) {
-    repostedEvents.update((existing) => {
-      const next = new Set(existing);
-      next.delete(target.id);
-      return next;
-    });
-    eventStats.update((existing) => {
-      const previous = existing[target.id] ?? emptyStats();
-      return {
-        ...existing,
-        [target.id]: {
-          ...previous,
-          reposts: Math.max(0, previous.reposts - 1)
-        }
-      };
-    });
-    seenLiveRepostAuthors.delete(pendingKey);
+    const repostEventPromise = ownRepostEvents.has(target.id) ? Promise.resolve(ownRepostEvents.get(target.id)) : findOwnRepostEvent(target.id, currentSession);
+    applyLocalRepostState(target.id, currentSession.pubkey, false, { adjustStats: true });
+    try {
+      const repostEvent = await repostEventPromise;
+      if (repostEvent) {
+        await publishDeletion(currentSession, repostEvent, currentRelays, 'Unreposted by author');
+        applyDeletedEventIds(new Set([repostEvent.id]));
+      }
+      return;
+    } catch (err) {
+      const repostEvent = await repostEventPromise.catch(() => undefined);
+      applyLocalRepostState(target.id, currentSession.pubkey, true, { adjustStats: true, event: repostEvent });
+      throw err;
+    } finally {
+      pendingRepostToggles.delete(pendingKey);
+    }
+  }
+
+  applyLocalRepostState(target.id, currentSession.pubkey, true, { adjustStats: true });
+
+  const existingRepostEvent = ownRepostEvents.get(target.id) ?? (await fetchOwnRepostEvent(target.id, currentSession));
+  if (existingRepostEvent) {
+    applyLocalRepostState(target.id, currentSession.pubkey, true, { event: existingRepostEvent });
     pendingRepostToggles.delete(pendingKey);
     return;
   }
 
-  repostedEvents.update((existing) => new Set(existing).add(target.id));
-  seenLiveRepostAuthors.add(pendingKey);
-  eventStats.update((existing) => {
-    const previous = existing[target.id] ?? emptyStats();
-    return {
-      ...existing,
-      [target.id]: {
-        ...previous,
-        reposts: previous.reposts + 1
-      }
-    };
-  });
-
   try {
     const event = await publishRepost(currentSession, target, currentRelays);
+    applyLocalRepostState(target.id, currentSession.pubkey, true, { event });
+    seenLiveStatEvents.add(event.id);
     events.update((existing) => mergeEvents([event], existing));
     void cacheEvents([event]);
   } catch (err) {
-    repostedEvents.update((existing) => {
-      const next = new Set(existing);
-      next.delete(target.id);
-      return next;
-    });
-    seenLiveRepostAuthors.delete(pendingKey);
-    eventStats.update((existing) => {
-      const previous = existing[target.id] ?? emptyStats();
-      return {
-        ...existing,
-        [target.id]: {
-          ...previous,
-          reposts: Math.max(0, previous.reposts - 1)
-        }
-      };
-    });
+    applyLocalRepostState(target.id, currentSession.pubkey, false, { adjustStats: true });
     throw err;
   } finally {
     pendingRepostToggles.delete(pendingKey);
@@ -1316,88 +1409,43 @@ export async function reactToNote(target: NostrEvent, content = '+') {
     return;
   }
 
-  const pendingKey = `${target.id}:${currentSession.pubkey}`;
+  const pendingKey = ownActionKey(target.id, currentSession.pubkey);
   if (pendingLikeToggles.has(pendingKey)) return;
   pendingLikeToggles.add(pendingKey);
 
   const alreadyLiked = getStoreSnapshot(likedEvents).has(target.id);
 
   if (alreadyLiked) {
-    const reactionEvent = ownLikeEvents.get(target.id) ?? (await fetchOwnLikeEvent(target.id, currentSession));
-    likedEvents.update((existing) => {
-      const next = new Set(existing);
-      next.delete(target.id);
-      return next;
-    });
-    ownLikeEvents.delete(target.id);
-    eventStats.update((existing) => {
-      const previous = existing[target.id] ?? emptyStats();
-      return {
-        ...existing,
-        [target.id]: {
-          ...previous,
-          likes: Math.max(0, previous.likes - 1)
-        }
-      };
-    });
+    const reactionEventPromise = ownLikeEvents.has(target.id) ? Promise.resolve(ownLikeEvents.get(target.id)) : fetchOwnLikeEvent(target.id, currentSession);
+    applyLocalLikeState(target.id, currentSession.pubkey, false, { adjustStats: true });
     try {
+      const reactionEvent = await reactionEventPromise;
       if (reactionEvent) await publishDeletion(currentSession, reactionEvent, currentRelays, 'Unliked by author');
       return;
     } catch (err) {
-      if (reactionEvent) ownLikeEvents.set(target.id, reactionEvent);
-      likedEvents.update((existing) => new Set(existing).add(target.id));
-      eventStats.update((existing) => {
-        const previous = existing[target.id] ?? emptyStats();
-        return {
-          ...existing,
-          [target.id]: {
-            ...previous,
-            likes: previous.likes + 1
-          }
-        };
-      });
+      const reactionEvent = await reactionEventPromise.catch(() => undefined);
+      applyLocalLikeState(target.id, currentSession.pubkey, true, { adjustStats: true, event: reactionEvent });
       throw err;
     } finally {
       pendingLikeToggles.delete(pendingKey);
     }
   }
 
-  likedEvents.update((existing) => new Set(existing).add(target.id));
-  seenLiveReactionAuthors.add(pendingKey);
-  eventStats.update((existing) => {
-    const previous = existing[target.id] ?? emptyStats();
-    return {
-      ...existing,
-      [target.id]: {
-        ...previous,
-        likes: content === '+' || !content ? previous.likes + 1 : previous.likes,
-        dislikes: content === '-' ? previous.dislikes + 1 : previous.dislikes,
-        emoji: content !== '+' && content !== '-' && content ? previous.emoji + 1 : previous.emoji
-      }
-    };
-  });
+  applyLocalLikeState(target.id, currentSession.pubkey, true, { adjustStats: true });
+
+  const existingLikeEvent = ownLikeEvents.get(target.id) ?? (await fetchOwnLikeEvent(target.id, currentSession));
+  if (existingLikeEvent) {
+    applyLocalLikeState(target.id, currentSession.pubkey, true, { event: existingLikeEvent });
+    pendingLikeToggles.delete(pendingKey);
+    return;
+  }
 
   try {
     const event = await publishReaction(currentSession, target, currentRelays, content);
     seenLiveStatEvents.add(event.id);
-    if (content === '+' || !content) ownLikeEvents.set(target.id, event);
+    if (content === '+' || !content) applyLocalLikeState(target.id, currentSession.pubkey, true, { event });
   } catch (err) {
-    likedEvents.update((existing) => {
-      const next = new Set(existing);
-      next.delete(target.id);
-      return next;
-    });
-    seenLiveReactionAuthors.delete(pendingKey);
-    eventStats.update((existing) => {
-      const previous = existing[target.id] ?? emptyStats();
-      return {
-        ...existing,
-        [target.id]: {
-          ...previous,
-          likes: Math.max(0, previous.likes - 1)
-        }
-      };
-    });
+    applyLocalLikeState(target.id, currentSession.pubkey, false, { adjustStats: true });
     throw err;
   } finally {
     pendingLikeToggles.delete(pendingKey);
@@ -1406,9 +1454,87 @@ export async function reactToNote(target: NostrEvent, content = '+') {
 
 async function fetchOwnLikeEvent(targetId: string, currentSession: Session) {
   const actions = await fetchUserEventActions([targetId], currentSession.pubkey, currentRelays).catch(() => undefined);
-  const event = actions?.likeEvents.get(targetId);
-  if (event) ownLikeEvents.set(targetId, event);
-  return event;
+  return actions?.likeEvents.get(targetId);
+}
+
+async function fetchOwnRepostEvent(targetId: string, currentSession: Session) {
+  const actions = await fetchUserEventActions([targetId], currentSession.pubkey, currentRelays).catch(() => undefined);
+  return actions?.repostEvents.get(targetId);
+}
+
+async function findOwnRepostEvent(targetId: string, currentSession: Session) {
+  return (await findLocalOwnRepostEvent(targetId, currentSession.pubkey)) ?? (await fetchOwnRepostEvent(targetId, currentSession));
+}
+
+async function findLocalOwnRepostEvent(targetId: string, pubkey: string) {
+  const localEvents = [...getStoreSnapshot(events), ...getStoreSnapshot(pendingNewerEvents), ...cachedOlderEvents];
+  const local = localEvents.find((event) => eventMatchesOwnRepost(event, targetId, pubkey));
+  if (local) return local;
+  const cachedEvents = await getCachedEvents(2000).catch(() => []);
+  return cachedEvents.find((event) => eventMatchesOwnRepost(event, targetId, pubkey));
+}
+
+function eventMatchesOwnRepost(event: NostrEvent, targetId: string, pubkey: string) {
+  return event.pubkey === pubkey && (event.kind === 6 || event.kind === 16) && event.tags.some((tag) => tag[0] === 'e' && tag[1] === targetId);
+}
+
+function applyLocalLikeState(targetId: string, pubkey: string, active: boolean, options: { adjustStats?: boolean; event?: NostrEvent | undefined } = {}) {
+  if (active) {
+    likedEvents.update((existing) => new Set(existing).add(targetId));
+    seenLiveReactionAuthors.add(ownActionKey(targetId, pubkey));
+    if (options.event) ownLikeEvents.set(targetId, options.event);
+    void cacheOwnAction(pubkey, targetId, 'like', options.event);
+    if (options.adjustStats) adjustEventStats(targetId, { likes: 1 });
+    return;
+  }
+
+  likedEvents.update((existing) => {
+    const next = new Set(existing);
+    next.delete(targetId);
+    return next;
+  });
+  ownLikeEvents.delete(targetId);
+  seenLiveReactionAuthors.delete(ownActionKey(targetId, pubkey));
+  void removeCachedOwnAction(pubkey, targetId, 'like');
+  if (options.adjustStats) adjustEventStats(targetId, { likes: -1 });
+}
+
+function applyLocalRepostState(targetId: string, pubkey: string, active: boolean, options: { adjustStats?: boolean; event?: NostrEvent | undefined } = {}) {
+  if (active) {
+    repostedEvents.update((existing) => new Set(existing).add(targetId));
+    seenLiveRepostAuthors.add(ownActionKey(targetId, pubkey));
+    if (options.event) ownRepostEvents.set(targetId, options.event);
+    void cacheOwnAction(pubkey, targetId, 'repost', options.event);
+    if (options.adjustStats) adjustEventStats(targetId, { reposts: 1 });
+    return;
+  }
+
+  repostedEvents.update((existing) => {
+    const next = new Set(existing);
+    next.delete(targetId);
+    return next;
+  });
+  ownRepostEvents.delete(targetId);
+  seenLiveRepostAuthors.delete(ownActionKey(targetId, pubkey));
+  void removeCachedOwnAction(pubkey, targetId, 'repost');
+  if (options.adjustStats) adjustEventStats(targetId, { reposts: -1 });
+}
+
+function ownActionKey(targetId: string, pubkey: string) {
+  return `${targetId}:${pubkey}`;
+}
+
+function adjustEventStats(targetId: string, delta: Partial<Pick<EventStats, 'likes' | 'reposts'>>) {
+  eventStats.update((existing) => {
+    const previous = existing[targetId] ?? emptyStats();
+    const nextStats = {
+      ...previous,
+      likes: Math.max(0, previous.likes + (delta.likes ?? 0)),
+      reposts: Math.max(0, previous.reposts + (delta.reposts ?? 0))
+    };
+    void cacheEventStats({ [targetId]: nextStats });
+    return { ...existing, [targetId]: nextStats };
+  });
 }
 
 export async function reportNote(target: NostrEvent, reportType = 'spam') {

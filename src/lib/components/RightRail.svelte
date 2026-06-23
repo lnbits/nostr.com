@@ -3,7 +3,7 @@
   import { Apple, ChevronsLeft, ChevronsRight, Download, Globe, LogIn, Monitor, Smartphone, Terminal, X } from '@lucide/svelte';
   import AlgorithmPanel from './AlgorithmPanel.svelte';
   import { loginDialogOpen, relays, session } from '$lib/stores/app';
-  import { relayStatus } from '$lib/stores/relayStatus';
+  import { loginRelaysReady, relayStatus } from '$lib/stores/relayStatus';
 
   interface BeforeInstallPromptEvent extends Event {
     prompt(): Promise<void>;
@@ -30,6 +30,7 @@
   let appVersion = __APP_VERSION__;
 
   $: showInstallButton = !installed;
+  $: canLogin = loginRelaysReady($relays, $relayStatus);
 
   onMount(() => {
     installed = isStandalone();
@@ -90,7 +91,7 @@
   {#if !collapsed}
     {#if !$session}
       <section class="panel account-panel">
-        <button class="primary" on:click={() => loginDialogOpen.set(true)}><LogIn size={18} /> Sign in</button>
+        <button class="primary" disabled={!canLogin} on:click={() => loginDialogOpen.set(true)}><LogIn size={18} /> Sign in</button>
       </section>
     {/if}
 

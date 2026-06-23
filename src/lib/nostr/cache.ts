@@ -1,13 +1,16 @@
 import type { DirectMessage, EventStats, NostrEvent, NotificationItem, Profile } from './types';
 
 const DB_NAME = 'nostr-social-cache';
-const DB_VERSION = 7;
+const DB_VERSION = 8;
 const MAX_CACHED_EVENTS = 2400;
 const MAX_CACHED_PROFILE_EVENTS = 1200;
 const MAX_CACHED_HASHTAG_EVENTS = 1200;
 const MAX_CACHED_EVENT_STATS = 3000;
+const MAX_CACHED_OWN_ACTIONS = 3000;
 const MAX_CACHED_DIRECT_MESSAGES_PER_OWNER = 500;
 const MAX_CACHED_NOTIFICATIONS_PER_OWNER = 240;
+
+export type CachedOwnActionType = 'like' | 'repost';
 
 interface CachedProfileEvent {
   cacheKey: string;
@@ -43,6 +46,15 @@ interface CachedEventStats {
   stats: EventStats;
 }
 
+export interface CachedOwnAction {
+  cacheKey: string;
+  owner: string;
+  targetId: string;
+  type: CachedOwnActionType;
+  updated_at: number;
+  event?: NostrEvent;
+}
+
 let dbPromise: Promise<IDBDatabase> | undefined;
 
 function openDb() {
@@ -75,6 +87,11 @@ function openDb() {
       if (!db.objectStoreNames.contains('eventStats')) {
         const eventStats = db.createObjectStore('eventStats', { keyPath: 'id' });
         eventStats.createIndex('updated_at', 'updated_at');
+      }
+      if (!db.objectStoreNames.contains('ownActions')) {
+        const ownActions = db.createObjectStore('ownActions', { keyPath: 'cacheKey' });
+        ownActions.createIndex('owner', 'owner');
+        ownActions.createIndex('updated_at', 'updated_at');
       }
       if (!db.objectStoreNames.contains('contacts')) db.createObjectStore('contacts', { keyPath: 'pubkey' });
       if (!db.objectStoreNames.contains('settings')) db.createObjectStore('settings', { keyPath: 'key' });
@@ -120,6 +137,18 @@ export async function cacheEvents(events: NostrEvent[]) {
   await cacheHashtagEventIndex(events);
 }
 
+export async function removeCachedEventsByIds(ids: string[]) {
+  const idSet = new Set(ids.map(normalizeEventId).filter(Boolean));
+  if (!idSet.size) return;
+  await Promise.all([
+    withStore<void>('events', 'readwrite', (store) => {
+      idSet.forEach((id) => store.delete(id));
+    }),
+    deleteCachedEventIndexEntries('profileEvents', idSet),
+    deleteCachedEventIndexEntries('hashtagEvents', idSet)
+  ]).catch(() => undefined);
+}
+
 export async function cacheProfileEvents(events: NostrEvent[]) {
   if (!events.length) return;
   await cacheEvents(events);
@@ -154,6 +183,54 @@ export async function cacheEventStats(statsById: Record<string, EventStats>) {
   }).catch(() => undefined);
 }
 
+export async function cacheOwnAction(owner: string, targetId: string, type: CachedOwnActionType, event?: NostrEvent) {
+  const cleanOwner = normalizePubkey(owner);
+  const cleanTargetId = normalizeEventId(targetId);
+  if (!cleanOwner || !cleanTargetId) return;
+  const updated_at = Date.now();
+  await withStore<void>('ownActions', 'readwrite', (store) => {
+    store.put({
+      cacheKey: ownActionCacheKey(cleanOwner, cleanTargetId, type),
+      owner: cleanOwner,
+      targetId: cleanTargetId,
+      type,
+      updated_at,
+      event
+    } satisfies CachedOwnAction);
+    pruneOldOwnActions(store, MAX_CACHED_OWN_ACTIONS);
+  }).catch(() => undefined);
+  if (event) await cacheEvents([event]);
+}
+
+export async function removeCachedOwnAction(owner: string, targetId: string, type: CachedOwnActionType) {
+  const cleanOwner = normalizePubkey(owner);
+  const cleanTargetId = normalizeEventId(targetId);
+  if (!cleanOwner || !cleanTargetId) return;
+  await withStore<void>('ownActions', 'readwrite', (store) => {
+    store.delete(ownActionCacheKey(cleanOwner, cleanTargetId, type));
+  }).catch(() => undefined);
+}
+
+export async function getCachedOwnActions(owner: string, targetIds: string[] = []) {
+  const cleanOwner = normalizePubkey(owner);
+  if (!cleanOwner) return [];
+  const targetSet = new Set(targetIds.map(normalizeEventId).filter(Boolean));
+  return withStore<CachedOwnAction[]>('ownActions', 'readonly', (store) => {
+    const request = store.index('owner').openCursor(IDBKeyRange.only(cleanOwner));
+    const actions: CachedOwnAction[] = [];
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) {
+        (store as IDBObjectStore & { __setResult(value: CachedOwnAction[]): void }).__setResult(actions);
+        return;
+      }
+      const action = cursor.value as CachedOwnAction;
+      if (!targetSet.size || targetSet.has(action.targetId)) actions.push(action);
+      cursor.continue();
+    };
+  }).catch(() => []);
+}
+
 export async function getCachedEventStats(ids: string[]) {
   const uniqueIds = [...new Set(ids)].filter((id) => /^[0-9a-f]{64}$/i.test(id));
   if (!uniqueIds.length) return {};
@@ -183,6 +260,10 @@ function pruneOldEvents(store: IDBObjectStore, maxEvents: number) {
 
 function pruneOldEventStats(store: IDBObjectStore, maxStats: number) {
   pruneOverflow(store.index('updated_at'), maxStats);
+}
+
+function pruneOldOwnActions(store: IDBObjectStore, maxActions: number) {
+  pruneOverflow(store.index('updated_at'), maxActions);
 }
 
 function pruneOldProfileEvents(store: IDBObjectStore, pubkey: string, maxEvents: number) {
@@ -226,6 +307,19 @@ function pruneOverflow(index: IDBIndex, maxItems: number, query?: IDBValidKey | 
       cursor.continue();
     };
   };
+}
+
+async function deleteCachedEventIndexEntries(storeName: 'profileEvents' | 'hashtagEvents', idSet: Set<string>) {
+  await withStore<void>(storeName, 'readwrite', (store) => {
+    const request = store.openCursor();
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) return;
+      const cached = cursor.value as CachedProfileEvent | CachedHashtagEvent;
+      if (idSet.has(cached.event.id)) cursor.delete();
+      cursor.continue();
+    };
+  });
 }
 
 function eventHashtags(event: NostrEvent) {
@@ -447,12 +541,22 @@ function normalizePubkey(value: string) {
   return /^[0-9a-f]{64}$/.test(clean) ? clean : '';
 }
 
+function normalizeEventId(value: string) {
+  const clean = value.trim().toLowerCase();
+  return /^[0-9a-f]{64}$/.test(clean) ? clean : '';
+}
+
+function ownActionCacheKey(owner: string, targetId: string, type: CachedOwnActionType) {
+  return `${owner}:${targetId}:${type}`;
+}
+
 export async function clearEventCache() {
   await Promise.all([
     withStore<void>('events', 'readwrite', (store) => store.clear()),
     withStore<void>('profileEvents', 'readwrite', (store) => store.clear()),
     withStore<void>('hashtagEvents', 'readwrite', (store) => store.clear()),
     withStore<void>('eventStats', 'readwrite', (store) => store.clear()),
+    withStore<void>('ownActions', 'readwrite', (store) => store.clear()),
     withStore<void>('notifications', 'readwrite', (store) => store.clear())
   ]).catch(() => undefined);
 }
