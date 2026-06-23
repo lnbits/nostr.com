@@ -245,6 +245,10 @@ function registerNotificationHandlers() {
   });
 }
 
+function registerAppInfoHandlers() {
+  ipcMain.handle('app-info:version', () => app.getVersion());
+}
+
 async function uploadToNostrBuild(payload) {
   const authorization = typeof payload?.authorization === 'string' ? payload.authorization : '';
   const mediaType = ['avatar', 'banner', 'media'].includes(payload?.mediaType) ? payload.mediaType : 'media';
@@ -313,6 +317,7 @@ if (!gotSingleInstanceLock) {
   });
 
   app.whenReady().then(() => {
+    registerAppInfoHandlers();
     registerSecureSessionHandlers();
     registerUploadHandlers();
     registerNotificationHandlers();

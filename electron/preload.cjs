@@ -15,3 +15,7 @@ contextBridge.exposeInMainWorld('nostrDesktopNotifications', {
   isAvailable: () => ipcRenderer.invoke('notification:available'),
   show: (payload) => ipcRenderer.invoke('notification:show', payload)
 });
+
+contextBridge.exposeInMainWorld('nostrDesktopApp', {
+  version: () => ipcRenderer.invoke('app-info:version')
+});

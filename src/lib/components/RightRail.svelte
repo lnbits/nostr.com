@@ -27,11 +27,13 @@
   let installed = false;
   let installBusy = false;
   let installDialogOpen = false;
+  let desktopAppVersion = '';
 
   $: showInstallButton = !installed;
 
   onMount(() => {
     installed = isStandalone();
+    void loadDesktopAppVersion();
     const beforeInstallPrompt = (event: Event) => {
       event.preventDefault();
       installPrompt = event as BeforeInstallPromptEvent;
@@ -72,6 +74,10 @@
   function isStandalone() {
     return window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(display-mode: window-controls-overlay)').matches;
   }
+
+  async function loadDesktopAppVersion() {
+    desktopAppVersion = (await window.nostrDesktopApp?.version().catch(() => '')) ?? '';
+  }
 </script>
 
 <aside class="rail" class:collapsed>
@@ -111,6 +117,10 @@
          
       </section>
        
+    {/if}
+
+    {#if desktopAppVersion}
+      <div class="desktop-version">v{desktopAppVersion}</div>
     {/if}
   {/if}
 </aside>

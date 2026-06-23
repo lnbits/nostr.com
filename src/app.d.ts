@@ -23,6 +23,9 @@ declare global {
       isAvailable(): Promise<boolean>;
       show(payload: { title: string; body: string; route: string }): Promise<boolean>;
     };
+    nostrDesktopApp?: {
+      version(): Promise<string>;
+    };
     nostr?: {
       getPublicKey(): Promise<string>;
       signEvent(event: Record<string, unknown>): Promise<Record<string, unknown>>;

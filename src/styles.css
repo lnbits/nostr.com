@@ -1394,6 +1394,14 @@ label span, label strong { color: var(--text); }
 }
 .rail .panel { box-shadow: none; }
 .rail .panel > button { width: 100%; justify-content: flex-start; margin-top: 8px; }
+.desktop-version {
+  justify-self: end;
+  margin-top: -4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
 .desktop-install-dialog .dialog-head {
   align-items: start;
 }
@@ -1647,6 +1655,7 @@ label span, label strong { color: var(--text); }
 .crop-frame {
   position: relative;
   width: 100%;
+  aspect-ratio: 1 / 1;
   max-height: min(62svh, 640px);
   overflow: hidden;
   border: 1px solid var(--line);

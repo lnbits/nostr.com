@@ -206,28 +206,35 @@
           cropImageNaturalHeight = cropImageElement.naturalHeight;
           resetCrop();
         }}
+        on:error={() => {
+          cropImageNaturalWidth = 0;
+          cropImageNaturalHeight = 0;
+          error = 'Could not read this image. Try saving it as a JPEG or PNG first.';
+        }}
       />
-      <div
-        class="crop-box"
-        style={cropBoxStyle}
-        role="presentation"
-        on:pointerdown={startCropDrag}
-        on:pointermove={dragCrop}
-        on:pointerup={stopCropDrag}
-        on:pointercancel={stopCropDrag}
-      >
-        {#each cropResizeHandles as handle}
-          <button
-            type="button"
-            class={`crop-handle ${handle}`}
-            aria-label={`Resize crop ${handle}`}
-            on:pointerdown={(event) => startCropResize(event, handle)}
-            on:pointermove={resizeCrop}
-            on:pointerup={stopCropResize}
-            on:pointercancel={stopCropResize}
-          ></button>
-        {/each}
-      </div>
+      {#if cropImageNaturalWidth && cropImageNaturalHeight}
+        <div
+          class="crop-box"
+          style={cropBoxStyle}
+          role="presentation"
+          on:pointerdown={startCropDrag}
+          on:pointermove={dragCrop}
+          on:pointerup={stopCropDrag}
+          on:pointercancel={stopCropDrag}
+        >
+          {#each cropResizeHandles as handle}
+            <button
+              type="button"
+              class={`crop-handle ${handle}`}
+              aria-label={`Resize crop ${handle}`}
+              on:pointerdown={(event) => startCropResize(event, handle)}
+              on:pointermove={resizeCrop}
+              on:pointerup={stopCropResize}
+              on:pointercancel={stopCropResize}
+            ></button>
+          {/each}
+        </div>
+      {/if}
     </div>
     <div class="crop-controls">
       <span>Drag the edges or corners to crop.</span>
