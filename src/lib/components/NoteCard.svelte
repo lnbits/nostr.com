@@ -74,6 +74,7 @@
   let prefetchTimer: ReturnType<typeof setTimeout> | undefined;
   let floatingMenuListenerActive = false;
   let statsVisible = false;
+  let heavyContentReady = embedded;
   let statsEventId = event.id;
   $: statsStore = statsForEvent(event.id);
   $: likedStore = likedStateForEvent(event.id);
@@ -84,6 +85,7 @@
     if (!browser || embedded) return;
     if (!('IntersectionObserver' in window)) {
       statsVisible = true;
+      heavyContentReady = true;
       watchVisibleNoteStats(event.id, true);
       scheduleThreadPrefetch(true);
       return;
@@ -120,10 +122,10 @@
   $: parsedContent = displayEvent.content.slice(0, maxParsedContentLength);
   $: renderedContent = displayEvent.content.slice(0, maxExpandedContentLength);
   $: contentWasCapped = displayEvent.content.length > maxExpandedContentLength;
-  $: mediaAttachments = extractMediaAttachments({ ...displayEvent, content: parsedContent, tags: safeTags }).slice(0, maxMediaAttachments);
-  $: socialEmbeds = extractSocialEmbeds(parsedContent).slice(0, maxSocialEmbeds);
+  $: mediaAttachments = heavyContentReady ? extractMediaAttachments({ ...displayEvent, content: parsedContent, tags: safeTags }).slice(0, maxMediaAttachments) : [];
+  $: socialEmbeds = heavyContentReady ? extractSocialEmbeds(parsedContent).slice(0, maxSocialEmbeds) : [];
   $: hiddenQuotedNoteIdSet = new Set(hiddenQuotedNoteIds);
-  $: allQuotedNoteReferences = extractQuotedNoteReferences(parsedContent, safeTags).slice(0, maxQuotedNotes);
+  $: allQuotedNoteReferences = heavyContentReady ? extractQuotedNoteReferences(parsedContent, safeTags).slice(0, maxQuotedNotes) : [];
   $: quotedNoteReferences = allQuotedNoteReferences.filter((reference) => !hiddenQuotedNoteIdSet.has(reference.id));
   $: quotedNoteRawValues = allQuotedNoteReferences.map((reference) => reference.raw);
   $: isLong = displayEvent.content.length > previewLength;
@@ -369,6 +371,7 @@
   function updateStatsVisibility(visible: boolean) {
     if (visible === statsVisible) return;
     statsVisible = visible;
+    if (visible) heavyContentReady = true;
     watchVisibleNoteStats(event.id, visible);
     scheduleThreadPrefetch(visible);
   }

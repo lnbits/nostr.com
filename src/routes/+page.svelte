@@ -54,8 +54,15 @@
   const newerBubbleCooldownMs = 5000;
   const feedScrollStateMaxAgeMs = 30 * 60 * 1000;
   const autoFillMaxLoads = 5;
+  const feedRenderInitialLimit = 72;
+  const feedRenderIncrement = 48;
+  let feedRenderLimit = feedRenderInitialLimit;
+  let feedRenderKey = '';
   $: hasReadRelays = $relays.some((relay) => relay.enabled && relay.read);
   $: feedEvents = hashtagFilteredEvents(displayEventsForFeedMode($feedMode, $events, $follows, $customFeedSettings), $activeHashtag);
+  $: renderedFeedEvents = feedEvents.slice(0, feedRenderLimit);
+  $: hiddenRenderedFeedCount = Math.max(0, feedEvents.length - renderedFeedEvents.length);
+  $: syncFeedRenderWindow(`${$feedMode}:${$activeHashtag}`);
   $: if (observer && loadMoreSentinel && feedEvents.length) {
     observer.unobserve(loadMoreSentinel);
     observer.observe(loadMoreSentinel);
@@ -91,7 +98,7 @@
       ([entry]) => {
         if (entry.isIntersecting && loadOlderArmed) {
           loadOlderArmed = false;
-          void requestOlderFeed();
+          if (!expandRenderedFeedWindow()) void requestOlderFeed();
         }
       },
       { rootMargin: '320px 0px' }
@@ -233,6 +240,18 @@
     }
   }
 
+  function syncFeedRenderWindow(key: string) {
+    if (feedRenderKey === key) return;
+    feedRenderKey = key;
+    feedRenderLimit = feedRenderInitialLimit;
+  }
+
+  function expandRenderedFeedWindow() {
+    if (feedRenderLimit >= feedEvents.length) return false;
+    feedRenderLimit = Math.min(feedEvents.length, feedRenderLimit + feedRenderIncrement);
+    return true;
+  }
+
   function scheduleFeedAutoFill() {
     if (!feedEvents.length || $loadingFeed || $loadingMoreFeed || !$hasMoreFeed || autoFillQueued || autoFillRunning) return;
     autoFillQueued = true;
@@ -262,6 +281,7 @@
 
   function shouldAutoLoadOlderFeed() {
     if (!feedEvents.length || $loadingFeed || $loadingMoreFeed || !$hasMoreFeed || requestingOlder) return false;
+    if (expandRenderedFeedWindow()) return false;
     const page = document.documentElement;
     return page.scrollHeight <= window.innerHeight + 180 || isNearPageBottom();
   }
@@ -293,6 +313,8 @@
         const top = window.scrollY + anchor.getBoundingClientRect().top - (state.anchorOffset ?? 0);
         window.scrollTo({ top: Math.max(0, top), left: 0, behavior: 'instant' });
         break;
+      } else if (state.anchorId && expandRenderedFeedWindow()) {
+        continue;
       } else if (attempt === 3) {
         window.scrollTo({ top: state.scrollY, left: 0, behavior: 'instant' });
       }
@@ -368,7 +390,7 @@
     {/if}
     <section class="feed-list" aria-label="Feed">
       {#if feedEvents.length}
-        {#each feedEvents as event (event.id)}
+        {#each renderedFeedEvents as event (event.id)}
           <NoteCard {event} profile={$profiles[event.pubkey]} prefetchThread onOpen={openFeedNote} />
         {/each}
       {:else if $loadingFeed}
@@ -383,7 +405,9 @@
       {/if}
     </section>
     <div class="load-more-sentinel" bind:this={loadMoreSentinel}>
-      {#if $loadingMoreFeed}
+      {#if hiddenRenderedFeedCount}
+        <span>Showing more notes</span>
+      {:else if $loadingMoreFeed}
         <span>Loading more notes</span>
       {:else if $hasMoreFeed && feedEvents.length}
         <span>Scroll down for older notes</span>
