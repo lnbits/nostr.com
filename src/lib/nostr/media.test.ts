@@ -210,6 +210,14 @@ describe('media helpers', () => {
     ]);
   });
 
+  it('extracts nostr.com thread urls as quoted note references', () => {
+    const id = 'a4edc4f203db0b64b75d5367efdb5e06e8370367ea27a20b2a01a79fb70c6711';
+    const url = `https://nostr.com/thread/${id}`;
+
+    expect(extractQuotedNoteReferences(`look ${url}`)).toEqual([{ id, raw: url }]);
+    expect(parseNoteText(`look ${url}`, [url])).toEqual([{ type: 'text', value: 'look' }]);
+  });
+
   it('keeps nevent route links intact so relay hints survive navigation', () => {
     const id = 'f'.repeat(64);
     const nevent = nip19.neventEncode({ id, relays: ['wss://relay.example'] });

@@ -7,6 +7,7 @@ const webUrlPattern = /https?:\/\/[^\s<>"']+/gi;
 const bareDomainPattern = /(^|[\s([{"'])([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+(?:\/[^\s<>"']*)?)/gi;
 const hashtagPattern = /(^|[\s([{"'])#([A-Za-z0-9_]{2,64})/g;
 const nostrRefPattern = /(?:nostr:)?((?:npub|nprofile|note|nevent)1[023456789acdefghjklmnpqrstuvwxyz]+)/gi;
+const nostrThreadUrlPattern = /https?:\/\/(?:www\.)?nostr\.com\/thread\/([0-9a-f]{64})(?:[/?#][^\s<>"']*)?/gi;
 const indexedRefPattern = /#\[(\d+)]/g;
 const mentionPattern = /(^|[\s([{"'])(@([A-Za-z0-9_.-]{2,64})(?:\/([A-Za-z0-9:_-]{4,128}))?)/g;
 
@@ -82,6 +83,13 @@ export function extractQuotedNoteReferences(content: string, tags: string[][] = 
   while ((match = nostrRefPattern.exec(content))) {
     const id = noteIdForNostrReference(match[1]);
     if (id) refs.set(id, { id, raw: match[0] });
+  }
+
+  nostrThreadUrlPattern.lastIndex = 0;
+  while ((match = nostrThreadUrlPattern.exec(content))) {
+    const raw = trimTrailingUrlPunctuation(match[0]);
+    const id = match[1].toLowerCase();
+    refs.set(id, { id, raw });
   }
 
   indexedRefPattern.lastIndex = 0;
