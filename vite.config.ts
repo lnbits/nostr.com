@@ -1,5 +1,5 @@
 import { sveltekit } from '@sveltejs/kit/vite';
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 import pkg from './package.json' with { type: 'json' };
 
 export default defineConfig({
@@ -10,7 +10,8 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
-    globals: true
+    globals: true,
+    exclude: [...configDefaults.exclude, 'nostr-gadgets/**']
   },
   server: {
     port: 5173,

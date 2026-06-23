@@ -16,6 +16,7 @@
     loadNewerFeed,
     loadMoreFeed,
     pendingNewerEvents,
+    prefetchThreadPreview,
     profiles,
     revealNewerFeed,
     relays,
@@ -305,6 +306,7 @@
     const focus = rootId !== event.id ? `?focus=${event.id}` : '';
     saveFeedScrollPositionForAnchor(anchor);
     saveThreadSeed(event);
+    prefetchThreadPreview(event);
     saveThreadReturnTarget(rootId, currentThreadReturnTarget($page.url.pathname, $page.url.search, $page.url.hash));
     clickedFeedNoteSaved = true;
     void goto(appPath(`/thread/${rootId}${focus}`));

@@ -3,13 +3,14 @@
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
+  import { get } from 'svelte/store';
   import { Copy, ExternalLink, Flag, Heart, Link, MessageCircle, MoreHorizontal, Pencil, Repeat2, Trash2, UserX, Zap } from '@lucide/svelte';
   import { nip19 } from 'nostr-tools';
   import type { NostrEvent, Profile } from '$lib/nostr/types';
   import { extractMediaAttachments, extractQuotedNoteReferences, extractSocialEmbeds, parseNoteText } from '$lib/nostr/media';
   import { activeRelayUrls, fetchLikeAuthors, fetchProfiles, subscribeZapReceipts } from '$lib/nostr/client';
   import { createZapInvoice, loadZapInfo, type ZapInfo } from '$lib/nostr/zap';
-  import { deleteNote, editedEvents, eventStats, filterByHashtag, likedEvents, mergeProfileRecords, muteAccount, prefetchThreadPreview, profiles, reactToNote, refreshEventStats, relays, reportNote, repostedEvents, repostNote, session, startEdit, startQuote, startReply, watchVisibleNoteStats } from '$lib/stores/app';
+  import { deleteNote, displayEventForEvent, filterByHashtag, likedStateForEvent, mergeProfileRecords, muteAccount, prefetchThreadPreview, profiles, reactToNote, refreshEventStats, relays, reportNote, repostedStateForEvent, repostNote, session, startEdit, startQuote, startReply, statsForEvent, watchVisibleNoteStats } from '$lib/stores/app';
   import { appPath } from '$lib/paths';
   import { pauseWhenHidden } from '$lib/actions/pauseWhenHidden';
   import { saveRouteScrollState } from '$lib/stores/routeScroll';
@@ -74,6 +75,10 @@
   let floatingMenuListenerActive = false;
   let statsVisible = false;
   let statsEventId = event.id;
+  $: statsStore = statsForEvent(event.id);
+  $: likedStore = likedStateForEvent(event.id);
+  $: repostedStore = repostedStateForEvent(event.id);
+  $: displayEventStore = displayEventForEvent(event);
 
   onMount(() => {
     if (!browser || embedded) return;
@@ -108,7 +113,7 @@
     statsEventId = event.id;
   }
 
-  $: displayEvent = $editedEvents[event.id] ?? event;
+  $: displayEvent = $displayEventStore;
   $: name = profile?.display_name || profile?.name || displayEvent.pubkey.slice(0, 10);
   $: avatar = profile?.picture;
   $: safeTags = displayEvent.tags.slice(0, maxRenderableTags);
@@ -124,9 +129,9 @@
   $: isLong = displayEvent.content.length > previewLength;
   $: visibleContent = !isLong || expanded ? renderedContent : renderedContent.slice(0, previewLength).trimEnd();
   $: contentParts = parseNoteText(visibleContent, [...mediaAttachments.map((media) => media.url), ...socialEmbeds.map((embed) => embed.url), ...quotedNoteRawValues], safeTags).slice(0, maxRenderedTextParts);
-  $: counts = $eventStats[event.id] ?? { replies: 0, reposts: 0, likes: 0, zaps: 0, zapSats: 0, dislikes: 0, emoji: 0 };
-  $: liked = $likedEvents.has(event.id);
-  $: reposted = $repostedEvents.has(event.id);
+  $: counts = $statsStore;
+  $: liked = $likedStore;
+  $: reposted = $repostedStore;
   $: isOwnPost = $session?.pubkey === event.pubkey;
   $: canZap = Boolean(zapInfo && $session);
   $: zapTitle = !$session ? 'Sign in to zap' : zapInfo ? 'Zap this post' : zapChecking ? 'Checking zap support' : 'This user has not enabled zaps';
@@ -173,6 +178,7 @@
       if ($page.url.pathname === threadPath) return;
       saveCurrentRoutePosition(noteElement);
       saveThreadSeed(event);
+      prefetchThreadPreview(displayEvent);
       saveThreadReturnTarget(rootId || event.id, currentThreadReturnTarget($page.url.pathname, $page.url.search, $page.url.hash));
       void goto(threadPath);
     }
@@ -278,7 +284,8 @@
     loadingLikeAuthors = true;
     try {
       likeAuthors = await fetchLikeAuthors(event.id, $relays);
-      const missing = likeAuthors.filter((pubkey) => !$profiles[pubkey]);
+      const knownProfiles = get(profiles);
+      const missing = likeAuthors.filter((pubkey) => !knownProfiles[pubkey]);
       if (missing.length) {
         const fetchedProfiles = await fetchProfiles(missing, $relays).catch(() => []);
         if (fetchedProfiles.length) profiles.update((existing) => mergeProfileRecords(existing, fetchedProfiles));
@@ -289,7 +296,7 @@
   }
 
   function profileName(pubkey: string) {
-    const item = $profiles[pubkey];
+    const item = get(profiles)[pubkey];
     return item?.display_name || item?.name || `${pubkey.slice(0, 8)}...${pubkey.slice(-4)}`;
   }
 

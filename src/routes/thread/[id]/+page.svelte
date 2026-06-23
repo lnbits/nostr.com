@@ -6,7 +6,7 @@
   import { ArrowLeft } from '@lucide/svelte';
   import NoteCard from '$lib/components/NoteCard.svelte';
   import { cacheEvents, getCachedThreadEvents } from '$lib/nostr/cache';
-  import { deletedEventIds, eventStats, events, mergeEvents, mergeProfileRecords, profiles, pruneDeletedEvents, refreshEventStats, relays } from '$lib/stores/app';
+  import { deletedEventIds, eventStats, events, mergeEvents, mergeProfileRecords, prefetchThreadPreview, profiles, pruneDeletedEvents, refreshEventStats, relays } from '$lib/stores/app';
   import { eventStatsFromEvents, fetchMissingEvents, fetchProfiles, fetchThreadReplies, subscribeEventStats } from '$lib/nostr/client';
   import { eventPointerFromIdentifier } from '$lib/nostr/identifiers';
   import { appPath } from '$lib/paths';
@@ -174,10 +174,17 @@
       seedThreadFromCache(rootId, focusedReplyId);
       hasOlderReplies = true;
       olderThreadReplyCursor = 0;
-      loading = true;
+      loading = !rootEvent;
+      void hydrateCachedThreadReplies(rootId, runId);
     }
     try {
-      const cached = $events.find((event) => event.id === rootId);
+      if (rootEvent) {
+        loading = false;
+        refreshThreadStats([rootEvent]);
+      }
+      const focusedContextPromise = hydrateFocusedReplyContext(rootId, runId);
+
+      const cached = rootEvent?.id === rootId ? rootEvent : $events.find((event) => event.id === rootId);
       const [found] = cached ? [cached] : await fetchMissingEvents([rootId], $relays, pointer?.relays ?? []).catch(() => []);
       if (!isCurrentHydration(rootId, runId)) return;
       if (found) {
@@ -195,8 +202,7 @@
         void pruneDeletedEvents([found], pointer?.relays ?? []);
       }
       if (rootEvent) refreshThreadStats([rootEvent]);
-      if (!restored) void hydrateCachedThreadReplies(rootId, runId);
-      await hydrateFocusedReplyContext(rootId, runId);
+      await focusedContextPromise;
 
       let replyBatch =
         restored && rootEvent
@@ -483,6 +489,7 @@
     saveCurrentThreadState();
     saveCurrentThreadScrollPosition();
     saveThreadSeed(event);
+    prefetchThreadPreview(rootEvent ?? event);
     if (rootId !== event.id && rootEvent) saveHydratedThread(rootId, currentItems, hasOlderReplies);
     void goto(threadPath);
   }

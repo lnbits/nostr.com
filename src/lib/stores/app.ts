@@ -1,6 +1,6 @@
 import { browser } from '$app/environment';
 import { goto } from '$app/navigation';
-import { writable } from 'svelte/store';
+import { writable, type Readable } from 'svelte/store';
 import {
   cacheEvents,
   cacheEventStats,
@@ -144,6 +144,22 @@ export const onboardingDialogOpen = writable(false);
 export const replyTarget = writable<NostrEvent | null>(null);
 export const editTarget = writable<NostrEvent | null>(null);
 export const quoteTarget = writable<NostrEvent | null>(null);
+
+export function statsForEvent(id: string): Readable<EventStats> {
+  return selectedStore(eventStats, (items) => items[id] ?? emptyStats(), statsEqual);
+}
+
+export function likedStateForEvent(id: string): Readable<boolean> {
+  return selectedStore(likedEvents, (items) => items.has(id));
+}
+
+export function repostedStateForEvent(id: string): Readable<boolean> {
+  return selectedStore(repostedEvents, (items) => items.has(id));
+}
+
+export function displayEventForEvent(event: NostrEvent): Readable<NostrEvent> {
+  return selectedStore(editedEvents, (items) => items[event.id] ?? event);
+}
 
 export function mergeProfileRecords(existing: Record<string, Profile>, nextProfiles: Profile[]) {
   const merged = { ...existing };
@@ -2421,6 +2437,37 @@ function getStoreSnapshot<T>(store: { subscribe(run: (value: T) => void): () => 
   let value!: T;
   store.subscribe((next) => (value = next))();
   return value;
+}
+
+function selectedStore<TSource, TValue>(
+  store: { subscribe(run: (value: TSource) => void): () => void },
+  select: (value: TSource) => TValue,
+  equal: (left: TValue, right: TValue) => boolean = Object.is
+): Readable<TValue> {
+  return {
+    subscribe(run) {
+      let current = select(getStoreSnapshot(store));
+      run(current);
+      return store.subscribe((value) => {
+        const next = select(value);
+        if (equal(current, next)) return;
+        current = next;
+        run(next);
+      });
+    }
+  };
+}
+
+function statsEqual(left: EventStats, right: EventStats) {
+  return (
+    left.replies === right.replies &&
+    left.reposts === right.reposts &&
+    left.likes === right.likes &&
+    left.zaps === right.zaps &&
+    left.zapSats === right.zapSats &&
+    left.dislikes === right.dislikes &&
+    left.emoji === right.emoji
+  );
 }
 
 function emptyStats(): EventStats {

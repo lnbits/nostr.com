@@ -1,5 +1,5 @@
-import { displayEventsForFeedMode, mergeEvents, reconcileStatsWithOwnActions } from './app';
-import type { NostrEvent } from '$lib/nostr/types';
+import { displayEventsForFeedMode, eventStats, likedEvents, likedStateForEvent, mergeEvents, reconcileStatsWithOwnActions, statsForEvent } from './app';
+import type { EventStats, NostrEvent } from '$lib/nostr/types';
 
 function event(id: string, created_at: number, content = id): NostrEvent {
   return {
@@ -29,6 +29,19 @@ function repostEvent(id: string, created_at: number, pubkey: string, reposted: N
     ],
     content: JSON.stringify(reposted),
     sig: 'b'.repeat(128)
+  };
+}
+
+function stats(overrides: Partial<EventStats> = {}): EventStats {
+  return {
+    replies: 0,
+    reposts: 0,
+    likes: 0,
+    zaps: 0,
+    zapSats: 0,
+    dislikes: 0,
+    emoji: 0,
+    ...overrides
   };
 }
 
@@ -166,5 +179,37 @@ describe('app store helpers', () => {
       [reposted]: { replies: 0, reposts: 1, likes: 0, zaps: 0, zapSats: 0, dislikes: 0, emoji: 0 },
       [popular]: { replies: 0, reposts: 4, likes: 9, zaps: 0, zapSats: 0, dislikes: 0, emoji: 0 }
     });
+  });
+
+  it('only notifies per-note selectors when the selected note changes', () => {
+    const target = '1'.repeat(64);
+    const other = '2'.repeat(64);
+    const selectedStats: unknown[] = [];
+    const selectedLikes: boolean[] = [];
+
+    eventStats.set({});
+    likedEvents.set(new Set());
+    const unsubscribeStats = statsForEvent(target).subscribe((value) => selectedStats.push(value));
+    const unsubscribeLikes = likedStateForEvent(target).subscribe((value) => selectedLikes.push(value));
+
+    eventStats.set({ [other]: stats({ likes: 1 }) });
+    likedEvents.set(new Set([other]));
+    expect(selectedStats).toHaveLength(1);
+    expect(selectedLikes).toEqual([false]);
+
+    eventStats.set({ [target]: stats({ likes: 1 }), [other]: stats({ likes: 2 }) });
+    likedEvents.set(new Set([target, other]));
+    expect(selectedStats).toHaveLength(2);
+    expect(selectedLikes).toEqual([false, true]);
+
+    eventStats.set({ [target]: stats({ likes: 1 }), [other]: stats({ likes: 3 }) });
+    likedEvents.set(new Set([target]));
+    expect(selectedStats).toHaveLength(2);
+    expect(selectedLikes).toEqual([false, true]);
+
+    unsubscribeStats();
+    unsubscribeLikes();
+    eventStats.set({});
+    likedEvents.set(new Set());
   });
 });

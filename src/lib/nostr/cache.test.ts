@@ -2,6 +2,7 @@ import {
   cacheDirectMessages,
   cacheEvents,
   cacheEventStats,
+  cacheNotifications,
   cacheOwnAction,
   cacheProfile,
   cacheProfileEvents,
@@ -10,17 +11,27 @@ import {
   getCachedEventStats,
   getCachedOwnActions,
   getCachedHashtagEvents,
+  getCachedNotifications,
   getCachedProfileEvents,
   getCachedProfiles,
   removeCachedEventsByIds,
   removeCachedOwnAction,
   resetCacheConnectionForTests
 } from './cache';
-import type { DirectMessage, EventStats, NostrEvent } from './types';
+import type { DirectMessage, EventStats, NostrEvent, NotificationItem } from './types';
+
+function hexId(label: string) {
+  if (/^[0-9a-f]{64}$/i.test(label)) return label.toLowerCase();
+  return Array.from(label)
+    .map((char) => char.charCodeAt(0).toString(16).padStart(2, '0'))
+    .join('')
+    .padEnd(64, '0')
+    .slice(0, 64);
+}
 
 function event(id: string, created_at: number, pubkey = 'a'.repeat(64), content = `event ${id}`, tags: string[][] = []): NostrEvent {
   return {
-    id,
+    id: hexId(id),
     pubkey,
     created_at,
     kind: 1,
@@ -28,6 +39,10 @@ function event(id: string, created_at: number, pubkey = 'a'.repeat(64), content 
     content,
     sig: 'b'.repeat(128)
   };
+}
+
+function ids(labels: string[]) {
+  return labels.map(hexId);
 }
 
 function dm(id: string, created_at: number, peer = 'b'.repeat(64)): DirectMessage {
@@ -79,8 +94,8 @@ describe('IndexedDB cache', () => {
   it('stores events and returns newest cached events first', async () => {
     await cacheEvents([event('older', 10), event('newer', 30), event('middle', 20)]);
 
-    expect((await getCachedEvents()).map((item) => item.id)).toEqual(['newer', 'middle', 'older']);
-    expect((await getCachedEvents(2)).map((item) => item.id)).toEqual(['newer', 'middle']);
+    expect((await getCachedEvents()).map((item) => item.id)).toEqual(ids(['newer', 'middle', 'older']));
+    expect((await getCachedEvents(2)).map((item) => item.id)).toEqual(ids(['newer', 'middle']));
   });
 
   it('prunes old events after the cache reaches its storage cap', async () => {
@@ -88,8 +103,19 @@ describe('IndexedDB cache', () => {
 
     const cached = await getCachedEvents(2500);
     expect(cached).toHaveLength(2400);
-    expect(cached[0].id).toBe('event-2404');
-    expect(cached.at(-1)?.id).toBe('event-5');
+    expect(cached[0].id).toBe(hexId('event-2404'));
+    expect(cached.at(-1)?.id).toBe(hexId('event-5'));
+  });
+
+  it('normalizes cached event ids and rejects malformed events', async () => {
+    await cacheEvents([
+      { ...event('A'.repeat(64), 10, 'B'.repeat(64), 'upper') },
+      { ...event('valid', 20), id: 'not-a-real-event-id' }
+    ]);
+
+    const cached = await getCachedEvents();
+    expect(cached).toHaveLength(1);
+    expect(cached[0]).toEqual(expect.objectContaining({ id: 'a'.repeat(64), pubkey: 'b'.repeat(64) }));
   });
 
   it('upserts profiles by pubkey', async () => {
@@ -104,8 +130,8 @@ describe('IndexedDB cache', () => {
     const bob = 'b'.repeat(64);
     await cacheProfileEvents([event('alice-old', 10, alice), event('bob-note', 30, bob), event('alice-new', 40, alice)]);
 
-    expect((await getCachedProfileEvents(alice)).map((item) => item.id)).toEqual(['alice-new', 'alice-old']);
-    expect((await getCachedProfileEvents(bob)).map((item) => item.id)).toEqual(['bob-note']);
+    expect((await getCachedProfileEvents(alice.toUpperCase())).map((item) => item.id)).toEqual(ids(['alice-new', 'alice-old']));
+    expect((await getCachedProfileEvents(bob)).map((item) => item.id)).toEqual(ids(['bob-note']));
   });
 
   it('caps profile event indexes independently of the global event cache', async () => {
@@ -114,8 +140,8 @@ describe('IndexedDB cache', () => {
 
     const cached = await getCachedProfileEvents(alice, 1300);
     expect(cached).toHaveLength(1200);
-    expect(cached[0].id).toBe('alice-1204');
-    expect(cached.at(-1)?.id).toBe('alice-5');
+    expect(cached[0].id).toBe(hexId('alice-1204'));
+    expect(cached.at(-1)?.id).toBe(hexId('alice-5'));
   }, 10_000);
 
   it('keeps a separate ordered hashtag event cache from tags and content', async () => {
@@ -125,16 +151,16 @@ describe('IndexedDB cache', () => {
       event('nostr-new', 40, 'c'.repeat(64), 'new #nostr thing')
     ]);
 
-    expect((await getCachedHashtagEvents('nostr')).map((item) => item.id)).toEqual(['nostr-new', 'nostr-old']);
-    expect((await getCachedHashtagEvents('#music')).map((item) => item.id)).toEqual(['music-note']);
+    expect((await getCachedHashtagEvents('nostr')).map((item) => item.id)).toEqual(ids(['nostr-new', 'nostr-old']));
+    expect((await getCachedHashtagEvents('#music')).map((item) => item.id)).toEqual(ids(['music-note']));
   });
 
   it('recycles the hashtag cache across all tags instead of capping each tag independently', async () => {
     await cacheEvents(Array.from({ length: 1205 }, (_, index) => event(`tagged-${index}`, index, 'a'.repeat(64), `hello #topic${index}`)));
 
     expect(await getCachedHashtagEvents('topic0')).toEqual([]);
-    expect((await getCachedHashtagEvents('topic1204')).map((item) => item.id)).toEqual(['tagged-1204']);
-    expect((await getCachedHashtagEvents('topic5')).map((item) => item.id)).toEqual(['tagged-5']);
+    expect((await getCachedHashtagEvents('topic1204')).map((item) => item.id)).toEqual(ids(['tagged-1204']));
+    expect((await getCachedHashtagEvents('topic5')).map((item) => item.id)).toEqual(ids(['tagged-5']));
   });
 
   it('stores event stats snapshots by event id', async () => {
@@ -174,10 +200,11 @@ describe('IndexedDB cache', () => {
     await cacheOwnAction(owner, reposted, 'repost', repostEvent);
     await cacheOwnAction(other, liked, 'like');
 
-    expect(await getCachedOwnActions(owner)).toEqual(
+    const ownActions = await getCachedOwnActions(owner);
+    expect(ownActions).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ owner, targetId: liked, type: 'like', event: likeEvent }),
-        expect.objectContaining({ owner, targetId: reposted, type: 'repost', event: repostEvent })
+        expect.objectContaining({ owner, targetId: liked, type: 'like', event: expect.objectContaining({ id: likeEvent.id }) }),
+        expect.objectContaining({ owner, targetId: reposted, type: 'repost', event: expect.objectContaining({ id: repostEvent.id }) })
       ])
     );
     expect((await getCachedOwnActions(owner, [liked])).map((action) => action.targetId)).toEqual([liked]);
@@ -194,16 +221,20 @@ describe('IndexedDB cache', () => {
     expect(await getCachedOwnActions(owner, [target])).toEqual([expect.objectContaining({ targetId: target, type: 'repost' })]);
   });
 
-  it('removes deleted events from global and profile caches', async () => {
+  it('removes deleted events from global, profile, hashtag, and own action caches', async () => {
     const owner = 'c'.repeat(64);
     const kept = event('1'.repeat(64), 50, owner);
-    const deleted = event('2'.repeat(64), 60, owner);
+    const deleted = event('2'.repeat(64), 60, owner, 'deleted #nostr');
+    const actionEvent = { ...event('3'.repeat(64), 70, owner), kind: 6, tags: [['e', kept.id]] };
     await cacheProfileEvents([kept, deleted]);
+    await cacheOwnAction(owner, kept.id, 'repost', actionEvent);
 
-    await removeCachedEventsByIds([deleted.id]);
+    await removeCachedEventsByIds([deleted.id, actionEvent.id]);
 
     expect((await getCachedEvents()).map((item) => item.id)).toEqual([kept.id]);
     expect((await getCachedProfileEvents(owner)).map((item) => item.id)).toEqual([kept.id]);
+    expect(await getCachedHashtagEvents('nostr')).toEqual([]);
+    expect(await getCachedOwnActions(owner, [kept.id])).toEqual([]);
   });
 
   it('caches direct messages per account and returns newest first', async () => {
@@ -214,5 +245,29 @@ describe('IndexedDB cache', () => {
 
     expect((await getCachedDirectMessages(alice)).map((message) => message.id)).toEqual(['alice-new', 'alice-old']);
     expect((await getCachedDirectMessages(bob)).map((message) => message.id)).toEqual(['bob-note']);
+  });
+
+  it('caches notifications per account and normalizes nested events', async () => {
+    const owner = 'a'.repeat(64);
+    const actor = 'B'.repeat(64);
+    const note = event('notified', 20, actor);
+    const notification: NotificationItem = {
+      id: 'like:1',
+      type: 'like',
+      actor,
+      event: note,
+      targetId: 'C'.repeat(64),
+      seen: false
+    };
+
+    await cacheNotifications(owner, [notification]);
+
+    expect(await getCachedNotifications(owner)).toEqual([
+      expect.objectContaining({
+        actor: actor.toLowerCase(),
+        event: expect.objectContaining({ id: note.id, pubkey: actor.toLowerCase() }),
+        targetId: 'c'.repeat(64)
+      })
+    ]);
   });
 });
