@@ -1,7 +1,7 @@
 import type { DirectMessage, EventStats, NostrEvent, NotificationItem, Profile } from './types';
 
 const DB_NAME = 'nostr-social-cache';
-const DB_VERSION = 9;
+const DB_VERSION = 10;
 const MAX_CACHED_EVENTS = 2400;
 const MAX_CACHED_PROFILE_EVENTS = 1200;
 const MAX_CACHED_HASHTAG_EVENTS = 1200;
@@ -9,6 +9,7 @@ const MAX_CACHED_EVENT_STATS = 3000;
 const MAX_CACHED_OWN_ACTIONS = 3000;
 const MAX_CACHED_DIRECT_MESSAGES_PER_OWNER = 500;
 const MAX_CACHED_NOTIFICATIONS_PER_OWNER = 240;
+const MAX_CACHED_DELETED_EVENTS = 3000;
 
 export type CachedOwnActionType = 'like' | 'repost';
 
@@ -53,6 +54,13 @@ export interface CachedOwnAction {
   type: CachedOwnActionType;
   updated_at: number;
   event?: NostrEvent;
+}
+
+interface CachedDeletedEvent {
+  id: string;
+  pubkey: string;
+  deleted_at: number;
+  deletionEvent?: NostrEvent;
 }
 
 let dbPromise: Promise<IDBDatabase> | undefined;
@@ -108,6 +116,10 @@ function openDb() {
         const notifications = db.createObjectStore('notifications', { keyPath: 'cacheKey' });
         notifications.createIndex('owner_created_at', ['owner', 'created_at']);
       }
+      if (!db.objectStoreNames.contains('deletedEvents')) {
+        const deletedEvents = db.createObjectStore('deletedEvents', { keyPath: 'id' });
+        deletedEvents.createIndex('deleted_at', 'deleted_at');
+      }
     };
 
     request.onerror = () => reject(request.error);
@@ -159,6 +171,66 @@ export async function removeCachedEventsByIds(ids: string[]) {
     deleteCachedEventIndexEntries('hashtagEvents', idSet),
     deleteCachedOwnActionsByEventIds(idSet)
   ]).catch(() => undefined);
+}
+
+export async function cacheDeletedEventIds(ids: string[], pubkey = '', deletionEvent?: NostrEvent) {
+  const idSet = new Set(ids.map(normalizeEventId).filter(Boolean));
+  const cleanPubkey = normalizePubkey(pubkey);
+  const cleanDeletionEvent = deletionEvent ? normalizeCachedEvent(deletionEvent) || undefined : undefined;
+  if (!idSet.size) return;
+  await withStore<void>('deletedEvents', 'readwrite', (store) => {
+    idSet.forEach((id) =>
+      store.put({
+        id,
+        pubkey: cleanPubkey,
+        deleted_at: Date.now(),
+        deletionEvent: cleanDeletionEvent
+      } satisfies CachedDeletedEvent)
+    );
+    pruneOldDeletedEvents(store, MAX_CACHED_DELETED_EVENTS);
+  }).catch(() => undefined);
+  await removeCachedEventsByIds([...idSet]);
+}
+
+export async function cacheDeletionRequest(event: NostrEvent, deletedIds?: string[]) {
+  const cleanEvent = normalizeCachedEvent(event);
+  if (!cleanEvent || cleanEvent.kind !== 5) return;
+  const ids = deletedIds ?? cleanEvent.tags.filter((tag) => tag[0] === 'e' && tag[1]).map((tag) => tag[1]);
+  await cacheDeletedEventIds(ids, cleanEvent.pubkey, cleanEvent);
+}
+
+export async function getCachedDeletedEventIds(ids: string[] = []) {
+  const idSet = new Set(ids.map(normalizeEventId).filter(Boolean));
+  return withStore<Set<string>>('deletedEvents', 'readonly', (store) => {
+    const deleted = new Set<string>();
+    if (idSet.size) {
+      let remaining = idSet.size;
+      idSet.forEach((id) => {
+        const request = store.get(id);
+        request.onsuccess = () => {
+          if (request.result) deleted.add(id);
+          remaining -= 1;
+          if (!remaining) (store as IDBObjectStore & { __setResult(value: Set<string>): void }).__setResult(deleted);
+        };
+        request.onerror = () => {
+          remaining -= 1;
+          if (!remaining) (store as IDBObjectStore & { __setResult(value: Set<string>): void }).__setResult(deleted);
+        };
+      });
+      return;
+    }
+
+    const request = store.openCursor();
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) {
+        (store as IDBObjectStore & { __setResult(value: Set<string>): void }).__setResult(deleted);
+        return;
+      }
+      deleted.add((cursor.value as CachedDeletedEvent).id);
+      cursor.continue();
+    };
+  }).catch(() => new Set<string>());
 }
 
 export async function cacheProfileEvents(events: NostrEvent[]) {
@@ -282,6 +354,10 @@ function pruneOldOwnActions(store: IDBObjectStore, maxActions: number) {
   pruneOverflow(store.index('updated_at'), maxActions);
 }
 
+function pruneOldDeletedEvents(store: IDBObjectStore, maxEvents: number) {
+  pruneOverflow(store.index('deleted_at'), maxEvents);
+}
+
 function pruneOldProfileEvents(store: IDBObjectStore, pubkey: string, maxEvents: number) {
   const range = IDBKeyRange.bound([pubkey, 0], [pubkey, Number.MAX_SAFE_INTEGER]);
   pruneOverflow(store.index('pubkey_created_at'), maxEvents, range);
@@ -365,7 +441,7 @@ function normalizeHashtag(tag: string) {
 }
 
 export async function getCachedEvents(limit = 80) {
-  return withStore<NostrEvent[]>('events', 'readonly', (store) => {
+  const events = await withStore<NostrEvent[]>('events', 'readonly', (store) => {
     const request = store.index('created_at').openCursor(null, 'prev');
     const events: NostrEvent[] = [];
     request.onsuccess = () => {
@@ -378,12 +454,13 @@ export async function getCachedEvents(limit = 80) {
       cursor.continue();
     };
   }).catch(() => []);
+  return filterCachedDeletedEvents(events, limit);
 }
 
 export async function getCachedThreadEvents(rootId: string, limit = 160, scanLimit = MAX_CACHED_EVENTS) {
   const cleanRootId = normalizeEventId(rootId);
   if (!cleanRootId) return [];
-  return withStore<NostrEvent[]>('events', 'readonly', (store) => {
+  const events = await withStore<NostrEvent[]>('events', 'readonly', (store) => {
     const request = store.index('created_at').openCursor(null, 'prev');
     const candidates: NostrEvent[] = [];
     const includedIds = new Set([cleanRootId]);
@@ -406,12 +483,13 @@ export async function getCachedThreadEvents(rootId: string, limit = 160, scanLim
       cursor.continue();
     };
   }).catch(() => []);
+  return filterCachedDeletedEvents(events, limit);
 }
 
 export async function getCachedProfileEvents(pubkey: string, limit = 120) {
   const cleanPubkey = normalizePubkey(pubkey);
   if (!cleanPubkey) return [];
-  return withStore<NostrEvent[]>('profileEvents', 'readonly', (store) => {
+  const events = await withStore<NostrEvent[]>('profileEvents', 'readonly', (store) => {
     const range = IDBKeyRange.bound([cleanPubkey, 0], [cleanPubkey, Number.MAX_SAFE_INTEGER]);
     const request = store.index('pubkey_created_at').openCursor(range, 'prev');
     const events: NostrEvent[] = [];
@@ -425,12 +503,13 @@ export async function getCachedProfileEvents(pubkey: string, limit = 120) {
       cursor.continue();
     };
   }).catch(() => []);
+  return filterCachedDeletedEvents(events, limit);
 }
 
 export async function getCachedHashtagEvents(tag: string, limit = 120) {
   const clean = normalizeHashtag(tag);
   if (!clean) return [];
-  return withStore<NostrEvent[]>('hashtagEvents', 'readonly', (store) => {
+  const events = await withStore<NostrEvent[]>('hashtagEvents', 'readonly', (store) => {
     const range = IDBKeyRange.bound([clean, 0], [clean, Number.MAX_SAFE_INTEGER]);
     const request = store.index('tag_created_at').openCursor(range, 'prev');
     const events: NostrEvent[] = [];
@@ -445,6 +524,13 @@ export async function getCachedHashtagEvents(tag: string, limit = 120) {
       cursor.continue();
     };
   }).catch(() => []);
+  return filterCachedDeletedEvents(events, limit);
+}
+
+async function filterCachedDeletedEvents(events: NostrEvent[], limit: number) {
+  if (!events.length) return [];
+  const deleted = await getCachedDeletedEventIds(events.map((event) => event.id));
+  return deleted.size ? events.filter((event) => !deleted.has(event.id)).slice(0, limit) : events.slice(0, limit);
 }
 
 function createHashtagEventsStore(db: IDBDatabase) {

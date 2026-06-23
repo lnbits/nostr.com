@@ -1,5 +1,7 @@
 import {
   cacheDirectMessages,
+  cacheDeletedEventIds,
+  cacheDeletionRequest,
   cacheEvents,
   cacheEventStats,
   cacheNotifications,
@@ -7,6 +9,7 @@ import {
   cacheProfile,
   cacheProfileEvents,
   getCachedDirectMessages,
+  getCachedDeletedEventIds,
   getCachedEvents,
   getCachedEventStats,
   getCachedOwnActions,
@@ -14,6 +17,7 @@ import {
   getCachedNotifications,
   getCachedProfileEvents,
   getCachedProfiles,
+  getCachedThreadEvents,
   removeCachedEventsByIds,
   removeCachedOwnAction,
   resetCacheConnectionForTests
@@ -235,6 +239,35 @@ describe('IndexedDB cache', () => {
     expect((await getCachedProfileEvents(owner)).map((item) => item.id)).toEqual([kept.id]);
     expect(await getCachedHashtagEvents('nostr')).toEqual([]);
     expect(await getCachedOwnActions(owner, [kept.id])).toEqual([]);
+  });
+
+  it('keeps deleted events hidden across cached feed, profile, hashtag, and thread reads', async () => {
+    const owner = 'd'.repeat(64);
+    const root = event('root', 40, owner, 'root #nostr');
+    const deletedReply = event('reply', 50, owner, 'deleted reply #nostr', [['e', root.id]]);
+    await cacheProfileEvents([root, deletedReply]);
+
+    await cacheDeletedEventIds([deletedReply.id], owner);
+
+    expect(await getCachedDeletedEventIds([deletedReply.id])).toEqual(new Set([deletedReply.id]));
+    expect((await getCachedEvents()).map((item) => item.id)).toEqual([root.id]);
+    expect((await getCachedProfileEvents(owner)).map((item) => item.id)).toEqual([root.id]);
+    expect((await getCachedHashtagEvents('nostr')).map((item) => item.id)).toEqual([root.id]);
+    expect((await getCachedThreadEvents(root.id)).map((item) => item.id)).toEqual([root.id]);
+  });
+
+  it('stores deletion request markers and removes the deleted event from indexes', async () => {
+    const owner = 'e'.repeat(64);
+    const deleted = event('gone', 50, owner, 'gone #nostr');
+    const deletion = { ...event('delete-request', 60, owner), kind: 5, tags: [['e', deleted.id], ['k', '1']] };
+    await cacheProfileEvents([deleted]);
+
+    await cacheDeletionRequest(deletion);
+
+    expect(await getCachedDeletedEventIds()).toEqual(new Set([deleted.id]));
+    expect(await getCachedEvents()).toEqual([]);
+    expect(await getCachedProfileEvents(owner)).toEqual([]);
+    expect(await getCachedHashtagEvents('nostr')).toEqual([]);
   });
 
   it('caches direct messages per account and returns newest first', async () => {

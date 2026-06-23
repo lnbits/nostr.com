@@ -101,6 +101,19 @@ export function extractQuotedNoteReferences(content: string, tags: string[][] = 
   return [...refs.values()];
 }
 
+export function quotedNoteIdsForEvent(event: NostrEvent) {
+  if (event.kind !== 1) return [];
+  const ids = new Set(extractQuotedNoteReferences(event.content, event.tags).map((reference) => reference.id));
+  event.tags.forEach((tag) => {
+    if (tag[0] === 'q' && /^[0-9a-f]{64}$/i.test(tag[1])) ids.add(tag[1].toLowerCase());
+  });
+  return [...ids];
+}
+
+export function isQuoteRepostEvent(event: NostrEvent) {
+  return quotedNoteIdsForEvent(event).length > 0;
+}
+
 export function extractSocialEmbeds(content: string): SocialEmbed[] {
   const embeds = new Map<string, SocialEmbed>();
   for (const raw of extractWebUrls(content)) {

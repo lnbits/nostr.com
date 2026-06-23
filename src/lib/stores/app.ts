@@ -4,11 +4,14 @@ import { writable, type Readable } from 'svelte/store';
 import {
   cacheEvents,
   cacheEventStats,
+  cacheDeletedEventIds,
+  cacheDeletionRequest,
   cacheOwnAction,
   cacheDirectMessages,
   cacheNotifications,
   clearEventCache,
   getCachedDirectMessages,
+  getCachedDeletedEventIds,
   getCachedEvents,
   getCachedEventStats,
   getCachedOwnActions,
@@ -17,7 +20,6 @@ import {
   getCachedProfileEvents,
   getCachedProfiles,
   removeCachedOwnAction,
-  removeCachedEventsByIds,
   type CachedOwnAction
 } from '$lib/nostr/cache';
 import { defaultCustomFeedSettings, defaultGlobalFeedAuthors, defaultGuestNip05, defaultProfileRelays, defaultRelays, globalFeedCuratorPubkey, globalFeedHashtags, keywordsForInterests } from '$lib/nostr/config';
@@ -267,7 +269,8 @@ export async function bootstrap() {
     if (nativeSession) restoreSession(nativeSession);
   }
 
-  const [cachedEvents, cachedProfiles] = await Promise.all([getCachedEvents(cachedFeedBufferLimit), getCachedProfiles()]);
+  const [cachedEvents, cachedProfiles, cachedDeletedIds] = await Promise.all([getCachedEvents(cachedFeedBufferLimit), getCachedProfiles(), getCachedDeletedEventIds()]);
+  if (cachedDeletedIds.size) deletedEventIds.set(cachedDeletedIds);
   const cachedTopLevelEvents = recentFeedEventsForMode(
     currentMode,
     cachedEventsForMode(currentMode, topLevelFeedEvents(filterSpam(cachedEvents, currentMutedPubkeys, trustedFeedPubkeys(currentMode))), cachedFeedBufferLimit)
@@ -607,17 +610,19 @@ function applyDeletionRequest(event: NostrEvent) {
     .map((tag) => tag[1])
     .filter((id) => eventAuthorForLocalUse(id) === event.pubkey);
   if (!deletedIds.length) return;
-  applyDeletedEventIds(new Set(deletedIds));
+  void cacheDeletionRequest(event, deletedIds);
+  applyDeletedEventIds(new Set(deletedIds), { cache: false });
 }
 
-function applyDeletedEventIds(deleted: Set<string>) {
+function applyDeletedEventIds(deleted: Set<string>, options: { cache?: boolean } = {}) {
   if (!deleted.size) return;
+  const shouldCache = options.cache ?? true;
   clearOwnActionsForDeletedEvents(deleted);
   deletedEventIds.update((existing) => new Set([...existing, ...deleted]));
   events.update((existing) => existing.filter((item) => !deleted.has(item.id)));
   pendingNewerEvents.update((existing) => existing.filter((item) => !deleted.has(item.id)));
   cachedOlderEvents = cachedOlderEvents.filter((item) => !deleted.has(item.id));
-  void removeCachedEventsByIds([...deleted]);
+  if (shouldCache) void cacheDeletedEventIds([...deleted]);
 }
 
 function clearOwnActionsForDeletedEvents(deleted: Set<string>) {
@@ -1354,16 +1359,14 @@ export async function editNote(content: string, target: NostrEvent, extraTags: s
 export async function deleteNote(target: NostrEvent) {
   const currentSession = requireSession('Sign in before deleting.');
   if (target.pubkey !== currentSession.pubkey) throw new Error('You can only delete your own posts.');
-  await publishDeletion(currentSession, target, currentRelays, 'Deleted by author');
-  deletedEventIds.update((existing) => new Set(existing).add(target.id));
+  const deletion = await publishDeletion(currentSession, target, currentRelays, 'Deleted by author');
+  await cacheDeletionRequest(deletion, [target.id]);
+  applyDeletedEventIds(new Set([target.id]), { cache: false });
   editedEvents.update((existing) => {
     const next = { ...existing };
     delete next[target.id];
     return next;
   });
-  events.update((existing) => existing.filter((item) => item.id !== target.id));
-  pendingNewerEvents.update((existing) => existing.filter((item) => item.id !== target.id));
-  cachedOlderEvents = cachedOlderEvents.filter((item) => item.id !== target.id);
   if (getStoreSnapshot(replyTarget)?.id === target.id) replyTarget.set(null);
   if (getStoreSnapshot(editTarget)?.id === target.id) editTarget.set(null);
   if (getStoreSnapshot(quoteTarget)?.id === target.id) quoteTarget.set(null);

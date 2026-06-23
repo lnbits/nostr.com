@@ -2,7 +2,7 @@ import { finalizeEvent, generateSecretKey, getEventHash, getPublicKey, nip04, ni
 import type { Event as NostrToolsEvent, Filter } from 'nostr-tools';
 import * as nip46 from 'nostr-tools/nip46';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
-import { cacheEvents, cacheProfile, cacheProfileEvents } from './cache';
+import { cacheDeletedEventIds, cacheEvents, cacheProfile, cacheProfileEvents, getCachedDeletedEventIds } from './cache';
 import { adultDomains, adultHashtags, mutedWords, profanityTerms } from './contentFilters';
 import { defaultGuestNip05, defaultPomegranateCentral, defaultRelays, globalFeedHashtags } from './config';
 import { eventHasImgurUrl } from './media';
@@ -679,7 +679,9 @@ async function fetchDeletedEventIds(events: NostrEvent[], relayUrls: string[]) {
   const deletionRequests = verifiedRelayEvents(
     await queryShortLived(relayUrls, { kinds: [5], '#e': ids, limit: Math.min(500, Math.max(40, ids.length * 4)) }, 3500)
   );
-  return deletedEventIdsFromRequests(events, deletionRequests);
+  const deleted = deletedEventIdsFromRequests(events, deletionRequests);
+  if (deleted.size) void cacheDeletedEventIds([...deleted]);
+  return deleted;
 }
 
 export function filterEventsDeletedByRequests(events: NostrEvent[], deletionRequests: NostrEvent[]) {
@@ -793,9 +795,17 @@ export async function fetchProfileEvents(pubkey: string, relays = defaultRelays,
   if (options.until) filter.until = options.until;
   if (options.since) filter.since = options.since;
   const events = verifiedRelayEvents(await queryShortLived(relayUrls, filter, 5000, { minEvents: Math.min(limit, 36), idleAfterMs: 650 }));
-  const clean = dedupeEvents([...filterSpam(events.filter((event) => event.kind !== 6)), ...events.filter((event) => event.kind === 6 && parseRepostContent(event))]);
+  const activeIds = await fetchDeletedEventIds(events, relayUrls).catch(() => new Set<string>());
+  const activeEvents = activeIds.size ? events.filter((event) => !activeIds.has(event.id)) : events;
+  const clean = await filterLocallyDeletedEvents(dedupeEvents([...filterSpam(activeEvents.filter((event) => event.kind !== 6)), ...activeEvents.filter((event) => event.kind === 6 && parseRepostContent(event))]));
   await cacheProfileEvents(clean);
   return clean;
+}
+
+async function filterLocallyDeletedEvents(events: NostrEvent[]) {
+  if (!events.length) return events;
+  const deleted = await getCachedDeletedEventIds(events.map((event) => event.id));
+  return deleted.size ? events.filter((event) => !deleted.has(event.id)) : events;
 }
 
 export async function hasPublishedTextNote(pubkey: string, relays = defaultRelays) {

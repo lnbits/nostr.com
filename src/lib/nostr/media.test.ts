@@ -1,5 +1,5 @@
 import { nip19 } from 'nostr-tools';
-import { eventHasImgurUrl, extractMediaAttachments, extractMediaUrls, extractQuotedNoteReferences, extractSocialEmbeds, isVideoUrl, parseHashtags, parseNoteText } from './media';
+import { eventHasImgurUrl, extractMediaAttachments, extractMediaUrls, extractQuotedNoteReferences, extractSocialEmbeds, isQuoteRepostEvent, isVideoUrl, parseHashtags, parseNoteText, quotedNoteIdsForEvent } from './media';
 import type { NostrEvent } from './types';
 
 function event(overrides: Partial<NostrEvent> = {}): NostrEvent {
@@ -216,6 +216,24 @@ describe('media helpers', () => {
 
     expect(extractQuotedNoteReferences(`look ${url}`)).toEqual([{ id, raw: url }]);
     expect(parseNoteText(`look ${url}`, [url])).toEqual([{ type: 'text', value: 'look' }]);
+  });
+
+  it('detects quote reposts from q tags and inline note references', () => {
+    const first = 'a'.repeat(64);
+    const second = 'b'.repeat(64);
+    const note = nip19.noteEncode(second);
+    const event = {
+      id: 'c'.repeat(64),
+      pubkey: 'd'.repeat(64),
+      created_at: 1,
+      kind: 1,
+      tags: [['q', first.toUpperCase()]],
+      content: `quoting nostr:${note}`
+    };
+
+    expect(quotedNoteIdsForEvent(event)).toEqual([second, first]);
+    expect(isQuoteRepostEvent(event)).toBe(true);
+    expect(isQuoteRepostEvent({ ...event, kind: 6 })).toBe(false);
   });
 
   it('keeps nevent route links intact so relay hints survive navigation', () => {

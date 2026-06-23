@@ -7,7 +7,7 @@
   import { Copy, ExternalLink, Flag, Heart, Link, MessageCircle, MoreHorizontal, Pencil, Repeat2, Trash2, UserX, Zap } from '@lucide/svelte';
   import { nip19 } from 'nostr-tools';
   import type { NostrEvent, Profile } from '$lib/nostr/types';
-  import { extractMediaAttachments, extractQuotedNoteReferences, extractSocialEmbeds, parseNoteText } from '$lib/nostr/media';
+  import { extractMediaAttachments, extractQuotedNoteReferences, extractSocialEmbeds, isQuoteRepostEvent, parseNoteText } from '$lib/nostr/media';
   import { activeRelayUrls, fetchLikeAuthors, fetchProfiles, subscribeZapReceipts } from '$lib/nostr/client';
   import { createZapInvoice, loadZapInfo, type ZapInfo } from '$lib/nostr/zap';
   import { deleteNote, displayEventForEvent, filterByHashtag, likedStateForEvent, mergeProfileRecords, muteAccount, prefetchThreadPreview, profiles, reactToNote, refreshEventStats, relays, reportNote, repostedStateForEvent, repostNote, session, startEdit, startQuote, startReply, statsForEvent, watchVisibleNoteStats } from '$lib/stores/app';
@@ -135,6 +135,8 @@
   $: liked = $likedStore;
   $: reposted = $repostedStore;
   $: isOwnPost = $session?.pubkey === event.pubkey;
+  $: ownQuoteRepost = isOwnPost && isQuoteRepostEvent(displayEvent);
+  $: repostActionActive = reposted || ownQuoteRepost;
   $: canZap = Boolean(zapInfo && $session);
   $: zapTitle = !$session ? 'Sign in to zap' : zapInfo ? 'Zap this post' : zapChecking ? 'Checking zap support' : 'This user has not enabled zaps';
   $: timestamp = new Date(event.created_at * 1000);
@@ -263,6 +265,10 @@
     reposting = true;
     repostMenuOpen = false;
     try {
+      if (ownQuoteRepost) {
+        await deleteNote(displayEvent);
+        return;
+      }
       await repostNote(displayEvent);
     } finally {
       reposting = false;
@@ -635,11 +641,11 @@
       <div class="note-actions">
         <button aria-label="Reply" on:click={() => startReply(displayEvent)}><MessageCircle size={18} /><span>{counts.replies}</span></button>
         <span class="repost-action" bind:this={repostMenuElement}>
-          <button class:reposted aria-label={reposted ? 'Repost options' : 'Repost'} aria-pressed={reposted} aria-expanded={repostMenuOpen} on:click|stopPropagation={() => (repostMenuOpen = !repostMenuOpen)}><Repeat2 size={18} /><span>{counts.reposts}</span></button>
+          <button class:reposted={repostActionActive} aria-label={repostActionActive ? 'Repost options' : 'Repost'} aria-pressed={repostActionActive} aria-expanded={repostMenuOpen} on:click|stopPropagation={() => (repostMenuOpen = !repostMenuOpen)}><Repeat2 size={18} /><span>{counts.reposts}</span></button>
           {#if repostMenuOpen}
             <div class="repost-popover" role="menu">
               <button type="button" role="menuitem" on:click|stopPropagation={quoteNoteAction}>Quote</button>
-              <button type="button" role="menuitem" on:click|stopPropagation={() => void repostNoteAction()}>{reposted ? 'Undo repost' : 'Repost'}</button>
+              <button type="button" role="menuitem" on:click|stopPropagation={() => void repostNoteAction()}>{repostActionActive ? 'Undo repost' : 'Repost'}</button>
             </div>
           {/if}
         </span>
