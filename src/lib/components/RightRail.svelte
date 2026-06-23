@@ -27,7 +27,7 @@
   let installed = false;
   let installBusy = false;
   let installDialogOpen = false;
-  let desktopAppVersion = '';
+  let appVersion = __APP_VERSION__;
 
   $: showInstallButton = !installed;
 
@@ -76,7 +76,7 @@
   }
 
   async function loadDesktopAppVersion() {
-    desktopAppVersion = (await window.nostrDesktopApp?.version().catch(() => '')) ?? '';
+    appVersion = (await window.nostrDesktopApp?.version().catch(() => '')) || __APP_VERSION__;
   }
 </script>
 
@@ -119,8 +119,8 @@
        
     {/if}
 
-    {#if desktopAppVersion}
-      <div class="desktop-version">v{desktopAppVersion}</div>
+    {#if appVersion}
+      <div class="desktop-version">v{appVersion}</div>
     {/if}
   {/if}
 </aside>

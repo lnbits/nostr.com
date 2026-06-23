@@ -1,6 +1,7 @@
 import type { CustomFeedSettings, RelayState } from './types';
 
 export const defaultRelays: RelayState[] = [
+  { url: 'wss://relay.nostr.com', enabled: true, read: true, write: true, score: 100 },
   { url: 'wss://relay.damus.io', enabled: true, read: true, write: true, score: 98 },
   { url: 'wss://nos.lol', enabled: true, read: true, write: true, score: 96 },
   { url: 'wss://nostr.bitcoiner.social', enabled: true, read: true, write: true, score: 94 },
