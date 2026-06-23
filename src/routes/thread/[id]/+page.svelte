@@ -181,6 +181,14 @@
       const [found] = cached ? [cached] : await fetchMissingEvents([rootId], $relays, pointer?.relays ?? []).catch(() => []);
       if (!isCurrentHydration(rootId, runId)) return;
       if (found) {
+        const canonicalRootId = threadRootId(found);
+        if (canonicalRootId && canonicalRootId !== rootId) {
+          const existingReturnTarget = readThreadReturnTarget(canonicalRootId) || readThreadReturnTarget(rootId);
+          saveThreadSeed(found);
+          if (existingReturnTarget) saveThreadReturnTarget(canonicalRootId, existingReturnTarget);
+          void goto(appPath(`/thread/${canonicalRootId}?focus=${found.id}`), { replaceState: true });
+          return;
+        }
         rootEvent = found;
         localThreadEvents = mergeThreadEvents([found], localThreadEvents).filter((event) => event.id !== found.id);
         events.update((existing) => mergeEvents([found], existing));
@@ -467,16 +475,24 @@
 
   function openThreadNote(event: NostrEvent) {
     if (!browser) return;
-    const threadPath = appPath(`/thread/${event.id}`);
-    if ($page.url.pathname === threadPath) return;
+    const rootId = rootEvent?.id && event.id !== rootEvent.id ? rootEvent.id : threadRootId(event);
+    const focus = rootId !== event.id ? `?focus=${event.id}` : '';
+    const threadPath = appPath(`/thread/${rootId}${focus}`);
+    if (`${$page.url.pathname}${$page.url.search}` === threadPath) return;
     const currentItems = threadEventsForCache();
-    const childItems = threadEventsForRoot(event.id, mergeThreadEvents([event], currentItems));
     saveCurrentThreadState();
     saveCurrentThreadScrollPosition();
     saveThreadSeed(event);
-    saveHydratedThread(event.id, childItems, true);
-    saveThreadReturnTarget(event.id, currentThreadReturnTarget($page.url.pathname, $page.url.search, $page.url.hash));
+    if (rootId !== event.id && rootEvent) saveHydratedThread(rootId, currentItems, hasOlderReplies);
     void goto(threadPath);
+  }
+
+  function threadRootId(note: NostrEvent) {
+    if (note.kind !== 1) return note.id;
+    const rootTag = note.tags.find((tag) => tag[0] === 'e' && tag[1] && tag[3] === 'root');
+    if (rootTag?.[1]) return rootTag[1];
+    const eTags = note.tags.filter((tag) => tag[0] === 'e' && tag[1]);
+    return eTags[0]?.[1] ?? note.id;
   }
 
   function threadEventsForCache() {
@@ -493,11 +509,6 @@
       saveHydratedThread(parentId, mergeThreadEvents(parentRoot ? [parentRoot, ...threadItems] : threadItems, []), true);
       parentId = threadIdFromTarget(readThreadReturnTarget(parentId));
     }
-  }
-
-  function threadEventsForRoot(rootId: string, items: NostrEvent[]) {
-    const rootItem = items.find((event) => event.id === rootId);
-    return mergeThreadEvents([...(rootItem ? [rootItem] : []), ...threadReplyEvents(items, rootId)], []);
   }
 
   function syncThreadLiveSubscription(rootId: string, ids: string[]) {

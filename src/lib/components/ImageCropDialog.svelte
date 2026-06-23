@@ -34,7 +34,10 @@
 
   $: if (file && file !== loadedFile) openCropper(file);
   $: cropBoxStyle = `left: ${cropX}%; top: ${cropY}%; width: ${cropWidth}%; height: ${cropHeight}%;`;
-  $: cropFrameStyle = cropImageNaturalWidth && cropImageNaturalHeight ? `aspect-ratio: ${cropImageNaturalWidth} / ${cropImageNaturalHeight};` : '';
+  $: cropFrameStyle =
+    cropImageNaturalWidth && cropImageNaturalHeight
+      ? cropFrameSizingStyle(cropImageNaturalWidth, cropImageNaturalHeight)
+      : '';
 
   onDestroy(() => revokeCropImageUrl());
 
@@ -177,6 +180,11 @@
     };
   }
 
+  function cropFrameSizingStyle(width: number, height: number) {
+    const aspect = width / height;
+    return `width: min(100%, ${(aspect * 62).toFixed(4)}svh, ${(aspect * 640).toFixed(2)}px); aspect-ratio: ${width} / ${height};`;
+  }
+
   function clamp(value: number, min: number, max: number) {
     return Math.min(max, Math.max(min, value));
   }
@@ -188,11 +196,10 @@
       <h2>Crop image</h2>
       <button class="icon-button" disabled={uploading} on:click={close} aria-label="Close cropper"><X size={20} /></button>
     </div>
-    <div class="crop-frame" bind:this={cropFrameElement}>
+    <div class="crop-frame" style={cropFrameStyle} bind:this={cropFrameElement}>
       <img
         bind:this={cropImageElement}
         src={cropImageUrl}
-        style={cropFrameStyle}
         alt=""
         on:load={() => {
           cropImageNaturalWidth = cropImageElement.naturalWidth;

@@ -302,11 +302,21 @@
 
   function openFeedNote(event: NostrEvent) {
     const anchor = document.querySelector<HTMLElement>(`.feed-list [data-note-id="${event.id}"]`);
+    const rootId = threadRootId(event);
+    const focus = rootId !== event.id ? `?focus=${event.id}` : '';
     saveFeedScrollPositionForAnchor(anchor);
     saveThreadSeed(event);
-    saveThreadReturnTarget(event.id, currentThreadReturnTarget($page.url.pathname, $page.url.search, $page.url.hash));
+    saveThreadReturnTarget(rootId, currentThreadReturnTarget($page.url.pathname, $page.url.search, $page.url.hash));
     clickedFeedNoteSaved = true;
-    void goto(appPath(`/thread/${event.id}`));
+    void goto(appPath(`/thread/${rootId}${focus}`));
+  }
+
+  function threadRootId(event: NostrEvent) {
+    if (event.kind !== 1) return event.id;
+    const rootTag = event.tags.find((tag) => tag[0] === 'e' && tag[1] && tag[3] === 'root');
+    if (rootTag?.[1]) return rootTag[1];
+    const eTags = event.tags.filter((tag) => tag[0] === 'e' && tag[1]);
+    return eTags[0]?.[1] ?? event.id;
   }
 
   function firstVisibleFeedNote() {

@@ -1,16 +1,11 @@
 import type { CustomFeedSettings, RelayState } from './types';
 
 export const defaultRelays: RelayState[] = [
-  { url: 'wss://relay.nostr.com', enabled: true, read: true, write: true, score: 98 },
-  { url: 'wss://relay.damus.io', enabled: true, read: true, write: true, score: 94 },
-  { url: 'wss://nos.lol', enabled: true, read: true, write: true, score: 92 },
-  { url: 'wss://relay.primal.net', enabled: true, read: true, write: true, score: 90 },
-  { url: 'wss://relay.nostr.band', enabled: true, read: true, write: true, score: 88 },
-  { url: 'wss://relay.snort.social', enabled: true, read: true, write: false, score: 86 },
-  { url: 'wss://nostr.wine', enabled: true, read: true, write: false, score: 84 },
-  { url: 'wss://nostr.bitcoiner.social', enabled: true, read: true, write: false, score: 82 },
-  { url: 'wss://relay.current.fyi', enabled: true, read: true, write: false, score: 80 },
-  { url: 'wss://relay.wellorder.net', enabled: true, read: true, write: false, score: 78 }
+  { url: 'wss://relay.damus.io', enabled: true, read: true, write: true, score: 98 },
+  { url: 'wss://nos.lol', enabled: true, read: true, write: true, score: 96 },
+  { url: 'wss://nostr.bitcoiner.social', enabled: true, read: true, write: true, score: 94 },
+  { url: 'wss://nostr.mom', enabled: true, read: true, write: true, score: 92 },
+  { url: 'wss://relay.snort.social', enabled: true, read: true, write: true, score: 90 }
 ];
 
 export const defaultProfileRelays: RelayState[] = [

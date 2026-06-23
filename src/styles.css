@@ -1653,6 +1653,7 @@ label span, label strong { color: var(--text); }
   border-radius: 8px;
   background: #05070b;
   touch-action: none;
+  justify-self: center;
 }
 .crop-frame img {
   width: 100%;
