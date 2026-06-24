@@ -2678,7 +2678,7 @@ label span, label strong { color: var(--text); }
 }
 .success { color: #49c983; font-weight: 700; margin: 0; }
 .spin { animation: spin 1s linear infinite; }
-.settings-page, .thread-page, .profile-hero, .feed-list.narrow {
+.settings-page, .thread-page, .profile-hero, .profile-follow-feed-page, .feed-list.narrow {
   min-width: 0;
   max-width: 760px;
   margin: 0 auto;
@@ -2688,18 +2688,30 @@ label span, label strong { color: var(--text); }
 .feed-list.narrow {
   max-width: 680px;
 }
+.profile-follow-feed-page {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+.profile-follow-feed-page .feed-list.narrow {
+  padding: 0;
+}
 .feed-list.narrow {
   padding-top: 0;
 }
 .authed-main .settings-page,
 .authed-main .thread-page,
 .authed-main .profile-hero,
+.authed-main .profile-follow-feed-page,
 .authed-main .feed-list.narrow {
   max-width: none;
   padding: 18px;
 }
 .authed-main .feed-list.narrow {
   padding-top: 0;
+}
+.authed-main .profile-follow-feed-page .feed-list.narrow {
+  padding: 0;
 }
 .settings-page { display: grid; gap: 16px; }
 .settings-page .panel {
@@ -2928,6 +2940,18 @@ label span, label strong { color: var(--text); }
   position: relative;
   display: grid;
   gap: 14px;
+}
+.follow-feed-head {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.follow-feed-head h1 {
+  margin: 0;
+  font-size: clamp(26px, 4vw, 38px);
+  line-height: 1.05;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
 }
 .profile-banner {
   min-height: 190px;
@@ -3571,5 +3595,6 @@ label span, label strong { color: var(--text); }
   .profile-copy { padding-top: 0; }
   .nip-row { grid-template-columns: 1fr; gap: 4px; }
   .avatar.xlarge { width: 88px; height: 88px; font-size: 28px; }
-  .settings-page, .thread-page, .profile-hero, .feed-list.narrow { padding: 18px 14px; }
+  .settings-page, .thread-page, .profile-hero, .profile-follow-feed-page, .feed-list.narrow { padding: 18px 14px; }
+  .profile-follow-feed-page .feed-list.narrow { padding: 0; }
 }

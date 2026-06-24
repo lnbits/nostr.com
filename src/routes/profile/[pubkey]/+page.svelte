@@ -617,6 +617,7 @@
             {#if isMuted}<UserMinus size={14} />{:else}<UserX size={14} />{/if}
           </button>
           <button class="profile-action-icon" disabled={!$session} aria-label="Message" on:click={() => { selectMessagePeer(pubkey); void goto(appPath('/messages')); }}><MessageCircle size={15} /></button>
+          <button class="profile-action-icon voyeur-feed-action" disabled={!pubkey} aria-label="See user's follow feed" title="See user's follow feed" on:click={() => void goto(appPath(`/profile/${pubkey}/following`))}>👀</button>
           <button class="profile-action-pill primary-profile-action" disabled={!$session || updatingFollow} on:click={toggleFollow}>
             {#if isFollowing}Unfollow{:else}Follow{/if}
           </button>
