@@ -1141,6 +1141,27 @@ label span, label strong { color: var(--text); }
   height: 100%;
   border: 0;
 }
+.social-embed-load {
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  border: 0;
+  border-radius: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  color: #fff;
+  background:
+    linear-gradient(rgba(0, 0, 0, 0.34), rgba(0, 0, 0, 0.54)),
+    color-mix(in srgb, var(--surface) 84%, var(--text) 8%);
+  font-weight: 850;
+  text-align: center;
+}
+.social-embed-load span {
+  border-radius: 999px;
+  padding: 7px 12px;
+  background: rgba(0, 0, 0, 0.58);
+}
 .social-embed > a {
   position: absolute;
   left: 8px;
@@ -1175,8 +1196,10 @@ label span, label strong { color: var(--text); }
   grid-auto-rows: clamp(120px, 22vw, 210px);
 }
 .media-grid.triple .media-image-button:first-child,
+.media-grid.triple .video-attachment:first-child,
 .media-grid.triple video:first-child,
 .media-grid.quad .media-image-button:first-child,
+.media-grid.quad .video-attachment:first-child,
 .media-grid.quad video:first-child {
   grid-row: span 2;
 }
@@ -1211,7 +1234,13 @@ label span, label strong { color: var(--text); }
 .media-grid.quad img,
 .media-grid.double video,
 .media-grid.triple video,
-.media-grid.quad video {
+.media-grid.quad video,
+.media-grid.double .video-attachment,
+.media-grid.triple .video-attachment,
+.media-grid.quad .video-attachment,
+.media-grid.double .video-placeholder,
+.media-grid.triple .video-placeholder,
+.media-grid.quad .video-placeholder {
   height: 100%;
   max-height: none;
   object-fit: cover;
@@ -1219,6 +1248,23 @@ label span, label strong { color: var(--text); }
 .media-grid video {
   display: block;
   min-width: 0;
+}
+.video-attachment {
+  width: 100%;
+  min-width: 0;
+  display: block;
+}
+.video-placeholder {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: 420px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  background: #050505;
+  font-weight: 800;
 }
 .rail-collapsed .media-image-button,
 .rail-collapsed .media-grid img,
@@ -1606,6 +1652,27 @@ label span, label strong { color: var(--text); }
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   touch-action: none;
+}
+.composer-media-previews {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+.composer-media-preview {
+  min-width: 0;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--line) 58%, transparent);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.composer-media-preview img,
+.composer-media-preview video {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
 }
 .composer-mention-results {
   display: grid;

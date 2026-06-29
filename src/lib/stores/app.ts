@@ -63,6 +63,7 @@ import {
   publishRelayListMetadata,
   publishReport,
   publishRepost,
+  publishSignedNostrEvent,
   publishNip17DirectMessage,
   parseRepostContent,
   resetRelayBackoff,
@@ -72,6 +73,7 @@ import {
   subscribeEventStats,
   subscribeFeed,
   subscribeNotifications,
+  signNote,
   temporarilyUnavailableRelayUrls,
   topLevelFeedEvents
 } from '$lib/nostr/client';
@@ -89,6 +91,7 @@ const onboardingStorageKey = 'nostr-onboarding-complete';
 const customFeedStorageKey = 'nostr-custom-feed-settings';
 const notificationSeenStorageKey = 'nostr-notifications-seen-at';
 const messageSeenStorageKey = 'nostr-messages-seen-at';
+const pendingPublishStorageKey = 'nostr-pending-publishes';
 const initialFeedLimit = 24;
 const pageFeedLimit = 36;
 const maxFeedEvents = 600;
@@ -116,6 +119,10 @@ const deletionCheckCooldownMs = 5 * 60 * 1000;
 const maxNotificationItems = 160;
 const networkRecoveryCooldownMs = 12_000;
 const networkKeepaliveMs = 45_000;
+const publishRetryBaseMs = 2500;
+const publishRetryMaxMs = 45_000;
+const publishRetryLimit = 6;
+const maxPendingPublishes = 50;
 
 const initialSession = browser ? readStoredSession() : null;
 const initialStoredContacts = browser && initialSession ? readStoredContactList(initialSession.pubkey) : undefined;
@@ -241,6 +248,7 @@ let liveNotificationsSub: { close: (reason?: string) => void } | undefined;
 let liveMessagesSub: { close: (reason?: string) => void } | undefined;
 let networkRecoveryLastRun = 0;
 let networkKeepaliveTimer: ReturnType<typeof setInterval> | undefined;
+let publishQueueTimer: ReturnType<typeof setTimeout> | undefined;
 let liveInboxToken = 0;
 let cachedOlderEvents: NostrEvent[] = [];
 let cachedStatsEventsPromise: Promise<NostrEvent[]> | undefined;
@@ -252,6 +260,7 @@ const requestedStats = new Map<string, number>();
 const statsRetryMs = 60_000;
 const pendingLikeToggles = new Set<string>();
 const pendingRepostToggles = new Set<string>();
+const pendingPublishEvents = new Map<string, { event: NostrEvent; attempts: number; nextAttemptAt: number }>();
 const ownLikeEvents = new Map<string, NostrEvent>();
 const ownRepostEvents = new Map<string, NostrEvent>();
 const queuedThreadPrefetches: NostrEvent[] = [];
@@ -301,6 +310,7 @@ export async function bootstrap() {
   addEventListener('offline', handleBrowserOffline);
   addEventListener('visibilitychange', handleVisibilityNetworkCheck);
   startNetworkKeepalive();
+  restorePendingPublishes();
   void setupNativeLocalNotifications((route) => {
     void goto(appPath(route));
   });
@@ -369,6 +379,7 @@ async function recoverNetworkState(reason: 'online' | 'visible' | 'keepalive', o
   void restartLiveFeed(currentMode, timelineCursor(feedEventsForActiveHashtag([...getStoreSnapshot(events), ...getStoreSnapshot(pendingNewerEvents)]), 'newest'));
   void restartVisibleStatsSubscription();
   if (currentSessionValue) restartInboxSubscriptions();
+  drainPublishQueue();
   window.dispatchEvent(new CustomEvent('nostr-network-recovered', { detail: { reason } }));
 }
 
@@ -881,8 +892,8 @@ function isKnownFeedEvent(id: string) {
 function revealCachedOlderFeed() {
   if (!cachedOlderEvents.length) return [];
 
-  const existingIds = new Set(getStoreSnapshot(events).map((event) => event.id));
-  const nextEvents = cachedOlderEvents.filter((event) => !existingIds.has(event.id)).slice(0, pageFeedLimit);
+  const visibleEvents = getStoreSnapshot(events);
+  const nextEvents = cachedOlderFeedPage(cachedOlderEvents, visibleEvents, pageFeedLimit);
   const revealedIds = new Set(nextEvents.map((event) => event.id));
   cachedOlderEvents = cachedOlderEvents.filter((event) => !revealedIds.has(event.id));
   if (!nextEvents.length) return [];
@@ -891,6 +902,14 @@ function revealCachedOlderFeed() {
   void refreshEventStats(nextEvents.map((event) => event.id));
   void hydrateMissingProfiles(nextEvents, 40);
   return nextEvents;
+}
+
+export function cachedOlderFeedPage(cached: NostrEvent[], visible: NostrEvent[], limit = pageFeedLimit) {
+  const existingIds = new Set(visible.map((event) => event.id));
+  const oldestVisible = timelineCursor(feedEventsForActiveHashtag(visible), 'oldest');
+  return feedEventsForActiveHashtag(cached)
+    .filter((event) => !existingIds.has(event.id) && (oldestVisible === undefined || event.created_at < oldestVisible))
+    .slice(0, limit);
 }
 
 export async function loadMoreFeed(force = false) {
@@ -904,14 +923,14 @@ export async function loadMoreFeed(force = false) {
   loadingMoreFeed.set(true);
   try {
     if (fetchMode === 'custom') await refreshFriendsOfFriendsAuthors();
+    const revealedEvents = revealCachedOlderFeed();
+    if (revealedEvents.length) {
+      olderFeedEmptyAttempts = 0;
+      hasMoreFeed.set(true);
+      return;
+    }
     const freshEvents = await fetchOlderFeedPage(fetchMode, olderFetchTarget);
     if (!freshEvents.length) {
-      const revealedEvents = revealCachedOlderFeed();
-      if (revealedEvents.length) {
-        olderFeedEmptyAttempts = 0;
-        hasMoreFeed.set(true);
-        return;
-      }
       olderFeedEmptyAttempts += 1;
       hasMoreFeed.set(olderFeedEmptyAttempts < olderFetchEmptyAttemptLimit);
       return;
@@ -1016,7 +1035,8 @@ function recentFeedCutoffForMode(mode = currentMode) {
   return nowSeconds() - (mode === 'global' && !currentHashtag ? globalFeedCachedWindowSeconds : feedRecentWindowSeconds);
 }
 
-function olderFeedPageCutoff(cursor?: number, mode = currentMode) {
+export function olderFeedPageCutoff(cursor?: number, mode = currentMode) {
+  if (mode === 'follow') return undefined;
   return cursor ? Math.max(0, cursor - olderFetchPageWindowSeconds) : recentFeedCutoffForMode(mode);
 }
 
@@ -1520,13 +1540,111 @@ export async function postNote(content: string, parent?: NostrEvent, extraTags: 
   session.subscribe((value) => (currentSession = value))();
   if (!currentSession) throw new Error('Sign in before posting.');
   const tags = mergePublishTags(parent ? replyTags(parent) : [], extraTags);
-  const event = await publishNote(currentSession, content, currentRelays, tags);
+  const event = await signNote(currentSession, content, tags);
   rememberLiveStatEvent(event.id);
   events.update((existing) => mergeEvents([event], existing));
   void cacheEvents([event]);
+  enqueuePublish(event);
   if (parent) mergeLocalReplyStats(event);
   replyTarget.set(null);
   quoteTarget.set(null);
+}
+
+function enqueuePublish(event: NostrEvent) {
+  if (pendingPublishEvents.has(event.id)) return;
+  pendingPublishEvents.set(event.id, { event, attempts: 0, nextAttemptAt: Date.now() });
+  prunePendingPublishes();
+  persistPendingPublishes();
+  drainPublishQueue();
+}
+
+function hasClientPublishRuntime() {
+  return typeof window !== 'undefined';
+}
+
+function hasClientStorage() {
+  return typeof localStorage !== 'undefined';
+}
+
+function drainPublishQueue() {
+  if (!hasClientPublishRuntime() || publishQueueTimer) return;
+  publishQueueTimer = setTimeout(() => {
+    publishQueueTimer = undefined;
+    void publishQueuedEvents();
+  }, 0);
+}
+
+async function publishQueuedEvents() {
+  const now = Date.now();
+  const ready = [...pendingPublishEvents.values()].filter((item) => item.nextAttemptAt <= now);
+  for (const item of ready) {
+    try {
+      await publishSignedNostrEvent(item.event, currentRelays);
+      pendingPublishEvents.delete(item.event.id);
+      persistPendingPublishes();
+    } catch {
+      const attempts = item.attempts + 1;
+      if (attempts >= publishRetryLimit) {
+        pendingPublishEvents.delete(item.event.id);
+        persistPendingPublishes();
+        continue;
+      }
+      pendingPublishEvents.set(item.event.id, {
+        ...item,
+        attempts,
+        nextAttemptAt: Date.now() + Math.min(publishRetryBaseMs * 2 ** Math.max(0, attempts - 1), publishRetryMaxMs)
+      });
+      persistPendingPublishes();
+    }
+  }
+
+  const nextAttemptAt = Math.min(...[...pendingPublishEvents.values()].map((item) => item.nextAttemptAt));
+  if (Number.isFinite(nextAttemptAt)) {
+    publishQueueTimer = setTimeout(() => {
+      publishQueueTimer = undefined;
+      void publishQueuedEvents();
+    }, Math.max(500, nextAttemptAt - Date.now()));
+  }
+}
+
+function restorePendingPublishes() {
+  if (!hasClientStorage()) return;
+  try {
+    const raw = localStorage.getItem(pendingPublishStorageKey);
+    const items = raw ? (JSON.parse(raw) as Array<{ event: NostrEvent; attempts?: number; nextAttemptAt?: number }>) : [];
+    for (const item of items) {
+      if (!isPublishableCachedEvent(item.event)) continue;
+      pendingPublishEvents.set(item.event.id, {
+        event: item.event,
+        attempts: Math.max(0, item.attempts ?? 0),
+        nextAttemptAt: Math.min(item.nextAttemptAt ?? 0, Date.now())
+      });
+    }
+    prunePendingPublishes();
+    if (pendingPublishEvents.size) drainPublishQueue();
+  } catch {
+    localStorage.removeItem(pendingPublishStorageKey);
+  }
+}
+
+function persistPendingPublishes() {
+  if (!hasClientStorage()) return;
+  const items = [...pendingPublishEvents.values()].slice(-maxPendingPublishes);
+  if (!items.length) {
+    localStorage.removeItem(pendingPublishStorageKey);
+    return;
+  }
+  localStorage.setItem(pendingPublishStorageKey, JSON.stringify(items));
+}
+
+function prunePendingPublishes() {
+  if (pendingPublishEvents.size <= maxPendingPublishes) return;
+  const sorted = [...pendingPublishEvents.values()].sort((a, b) => a.event.created_at - b.event.created_at);
+  for (const item of sorted.slice(0, pendingPublishEvents.size - maxPendingPublishes)) pendingPublishEvents.delete(item.event.id);
+}
+
+function isPublishableCachedEvent(event: NostrEvent | undefined): event is NostrEvent {
+  return Boolean(event && /^[0-9a-f]{64}$/i.test(event.id) && /^[0-9a-f]{64}$/i.test(event.pubkey) && event.sig && event.kind === 1);
 }
 
 export async function editNote(content: string, target: NostrEvent, extraTags: string[][] = []) {

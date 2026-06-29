@@ -8,6 +8,9 @@ import {
   eventStatsFromEvents,
   eventMatchesTimeWindow,
   extractContactListDetails,
+  feedKindsForMode,
+  feedRelayLimitForMode,
+  feedSinceForQuery,
   feedFiltersForMode,
   fetchFeed,
   fetchRelayInfoDocuments,
@@ -25,6 +28,7 @@ import {
   normalizePomegranateCentralUrl,
   parseProfileEvents,
   pomegranateBunkerUrl,
+  preferredReadRelayUrls,
   publishNote,
   topLevelFeedEvents
 } from './client';
@@ -70,6 +74,29 @@ describe('nostr client helpers', () => {
     expect(second).toEqual({ failures: 2, retryAt: 2000 });
     expect(third.failures).toBe(3);
     expect(third.retryAt).toBeGreaterThan(3000);
+  });
+
+  it('prefers already connected read relays for the first short-lived query', () => {
+    const relays = [
+      'wss://relay-one.example',
+      'wss://relay-two.example/',
+      'wss://relay-three.example',
+      'wss://relay-four.example',
+      'wss://relay-five.example'
+    ];
+
+    expect(preferredReadRelayUrls(relays, ['wss://relay-two.example', 'wss://relay-three.example', 'wss://relay-five.example'])).toEqual([
+      'wss://relay-two.example/',
+      'wss://relay-three.example',
+      'wss://relay-five.example'
+    ]);
+  });
+
+  it('falls back to the full relay set when too few connected relays are available', () => {
+    const relays = ['wss://relay-one.example', 'wss://relay-two.example', 'wss://relay-three.example'];
+
+    expect(preferredReadRelayUrls(relays, ['wss://relay-two.example'])).toEqual(relays);
+    expect(preferredReadRelayUrls(relays, [])).toEqual(relays);
   });
 
   it('preserves relays when relay info lookups fail', async () => {
@@ -157,6 +184,24 @@ describe('nostr client helpers', () => {
   it('returns an empty follow or custom feed when there are no follows', async () => {
     await expect(fetchFeed('follow', [], [])).resolves.toEqual([]);
     await expect(fetchFeed('custom', [], [])).resolves.toEqual([]);
+  });
+
+  it('does not date-throttle the initial following feed query', () => {
+    expect(feedSinceForQuery('follow', {}, 1_000_000)).toBeUndefined();
+    expect(feedSinceForQuery('follow', { since: 123 }, 1_000_000)).toBe(123);
+    expect(feedSinceForQuery('global', {}, 1_000_000)).toBe(395_200);
+  });
+
+  it('requests reposts for personal feeds because profiles display repost activity too', () => {
+    expect(feedKindsForMode('follow')).toEqual([1, 6]);
+    expect(feedKindsForMode('custom')).toEqual([1, 6]);
+    expect(feedKindsForMode('global')).toEqual([1]);
+  });
+
+  it('over-fetches raw personal feed events so sparse follows can fill visible notes', () => {
+    expect(feedRelayLimitForMode('follow', 24)).toBe(96);
+    expect(feedRelayLimitForMode('custom', 72)).toBe(240);
+    expect(feedRelayLimitForMode('global', 24)).toBe(24);
   });
 
   it('adds hashtag constraints while preserving the active feed mode', async () => {

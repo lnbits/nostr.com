@@ -85,26 +85,56 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { pauseWhenHidden } from '$lib/actions/pauseWhenHidden';
+  import { prefersLeanMedia } from '$lib/clientCapabilities';
 
   export let src: string;
   export let poster: string | undefined = undefined;
   export let title: string | undefined = undefined;
 
+  let wrapper: HTMLDivElement;
   let generatedPoster = '';
+  let active = false;
+  let leanMedia = false;
+  let destroyed = false;
+  let posterRequestKey = '';
+  let observer: IntersectionObserver | undefined;
   $: displayPoster = poster || generatedPoster || undefined;
+  $: if (active && !leanMedia && !poster && src !== posterRequestKey) {
+    posterRequestKey = src;
+    void generatedPosterFor(src).then((nextPoster) => {
+      if (!destroyed && nextPoster && posterRequestKey === src) generatedPoster = nextPoster;
+    });
+  }
 
   onMount(() => {
-    let cancelled = false;
-    if (!poster) {
-      void generatedPosterFor(src).then((nextPoster) => {
-        if (!cancelled && nextPoster) generatedPoster = nextPoster;
-      });
+    leanMedia = prefersLeanMedia();
+    if (!('IntersectionObserver' in window)) {
+      active = true;
+    } else {
+      observer = new IntersectionObserver(
+        ([entry]) => {
+          if (!entry?.isIntersecting) return;
+          active = true;
+          observer?.disconnect();
+        },
+        { rootMargin: leanMedia ? '240px 0px' : '720px 0px' }
+      );
+      observer.observe(wrapper);
     }
     return () => {
-      cancelled = true;
+      destroyed = true;
+      observer?.disconnect();
     };
   });
 </script>
 
-<!-- svelte-ignore a11y_media_has_caption -->
-<video use:pauseWhenHidden {src} poster={displayPoster} controls preload="metadata" playsinline {title}></video>
+<div class="video-attachment" bind:this={wrapper}>
+  {#if active}
+    <!-- svelte-ignore a11y_media_has_caption -->
+    <video use:pauseWhenHidden src={src} poster={displayPoster} controls preload={leanMedia ? 'none' : 'metadata'} playsinline {title}></video>
+  {:else}
+    <div class="video-placeholder" aria-label={title || 'Video'}>
+      <span>Video</span>
+    </div>
+  {/if}
+</div>

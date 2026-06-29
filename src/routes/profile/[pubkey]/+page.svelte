@@ -37,6 +37,8 @@
   const profileWindowScanLimit = 6;
   const profilePreloadDistancePx = 1800;
   const profilePreloadRootMargin = `0px 0px ${profilePreloadDistancePx}px 0px`;
+  const profileRenderInitialLimit = 72;
+  const profileRenderIncrement = 48;
   type ProfileTab = 'notes' | 'replies' | 'reads' | 'media';
   type ProfileHydrateOptions = { reset?: boolean; useCache?: boolean };
   type ProfileTimelineItem = { id: string; event: NostrEvent };
@@ -50,6 +52,7 @@
   $: userItems = profileItemsForTab(activeProfileTab, profileNoteItems, profileSummaryEvents);
   $: userEvents = userItems.map((item) => item.event);
   $: profileNoteEvents = profileNoteItems.map((item) => item.event);
+  $: renderedUserItems = userItems.slice(0, profileRenderLimit);
   $: profileSummary = profileSummaryForEvents(profileSummaryEvents);
   $: npub = /^[0-9a-f]{64}$/i.test(pubkey) ? nip19.npubEncode(pubkey) : '';
   $: shortNpub = npub ? `${npub.slice(0, 12)}...${npub.slice(-8)}` : '';
@@ -87,6 +90,8 @@
   let hasMoreProfile = true;
   let profilePaginationCursor = 0;
   let profilePreloadTimer: ReturnType<typeof setTimeout> | undefined;
+  let profileRenderLimit = profileRenderInitialLimit;
+  let profileRenderKey = '';
   let pictureInput: HTMLInputElement;
   let bannerInput: HTMLInputElement;
   let editingProfilePubkey = '';
@@ -104,6 +109,7 @@
   }
   $: if (browser && pubkey) mergeProfileEventsFromGlobalStore(pubkey, $events);
   $: if (browser && routeKey && userItems.length && routeKey !== restoredProfileRouteKey) void restoreProfileScrollPosition(routeKey);
+  $: syncProfileRenderWindow(`${pubkey}:${activeProfileTab}`);
 
   beforeNavigate(() => {
     saveCurrentProfileScrollPosition();
@@ -119,7 +125,8 @@
     window.addEventListener('nostr-profile-feed-action', profileFeedAction);
     profileObserver = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) scheduleProfilePreload();
+        if (!entry.isIntersecting) return;
+        if (!expandProfileRenderWindow()) scheduleProfilePreload();
       },
       { rootMargin: profilePreloadRootMargin }
     );
@@ -271,6 +278,7 @@
     profileEvents = [];
     profileSummaryEvents = [];
     profilePaginationCursor = profileRecentWindowUpperBound();
+    profileRenderLimit = profileRenderInitialLimit;
   }
 
   async function loadMoreProfileEvents(targetPubkey = pubkey) {
@@ -328,7 +336,20 @@
 
   function scheduleProfilePreloadIfNeeded() {
     if (!browser || !hasMoreProfile || loadingProfile || loadingMoreProfile) return;
+    if (expandProfileRenderWindow()) return;
     if (distanceToPageBottom() <= profilePreloadDistancePx) scheduleProfilePreload();
+  }
+
+  function syncProfileRenderWindow(key: string) {
+    if (profileRenderKey === key) return;
+    profileRenderKey = key;
+    profileRenderLimit = profileRenderInitialLimit;
+  }
+
+  function expandProfileRenderWindow() {
+    if (profileRenderLimit >= userItems.length) return false;
+    profileRenderLimit = Math.min(userItems.length, profileRenderLimit + profileRenderIncrement);
+    return true;
   }
 
   function distanceToPageBottom() {
@@ -571,6 +592,8 @@
         const top = window.scrollY + anchor.getBoundingClientRect().top - (state.anchorOffset ?? 0);
         window.scrollTo({ top: Math.max(0, top), left: 0, behavior: 'instant' });
         break;
+      } else if (state.anchorId && expandProfileRenderWindow()) {
+        continue;
       } else if (attempt === 3) {
         window.scrollTo({ top: state.scrollY, left: 0, behavior: 'instant' });
       }
@@ -792,7 +815,7 @@
 
   <section class="feed-list narrow">
     {#if userItems.length}
-      {#each userItems as item (item.id)}
+      {#each renderedUserItems as item (item.id)}
         <NoteCard event={item.event} profile={$profiles[item.event.pubkey] ?? (item.event.pubkey === pubkey ? profile : undefined)} prefetchThread />
       {/each}
     {:else if loadingProfile}

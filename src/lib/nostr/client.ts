@@ -14,6 +14,7 @@ type QueryShortLivedOptions = {
   idleAfterMs?: number;
   retryEmpty?: boolean;
   retryDelayMs?: number;
+  preferConnected?: boolean;
 };
 
 const relayBackoff = new Map<string, RelayBackoffState>();
@@ -126,12 +127,20 @@ export function nextRelayBackoffState(previous: RelayBackoffState | undefined, n
 
 async function queryShortLived(relayUrls: string[], filter: Filter, maxWait = 5000, options: QueryShortLivedOptions = {}) {
   const attempts = options.retryEmpty ? 2 : 1;
+  const warmRelayUrls = options.preferConnected === false ? relayUrls : preferredReadRelayUrls(relayUrls);
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const events = await queryShortLivedOnce(relayUrls, filter, maxWait, options);
+    const urls = attempt === 0 ? warmRelayUrls : relayUrls;
+    const events = await queryShortLivedOnce(urls, filter, maxWait, options);
     if (events.length || attempt === attempts - 1) return events;
     await sleep(options.retryDelayMs ?? 350);
   }
   return [];
+}
+
+export function preferredReadRelayUrls(relayUrls: string[], connectedUrls = connectedRelayUrls()) {
+  const connected = new Set(connectedUrls.map((url) => normalizeRelayUrl(url)).filter(Boolean));
+  const preferred = relayUrls.filter((url) => connected.has(normalizeRelayUrl(url))).slice(0, 4);
+  return preferred.length >= Math.min(2, relayUrls.length) ? preferred : relayUrls;
 }
 
 function queryShortLivedOnce(relayUrls: string[], filter: Filter, maxWait = 5000, options: QueryShortLivedOptions = {}) {
@@ -649,20 +658,61 @@ export async function fetchFeed(
   if (mode === 'custom' && !follows.length && !keywordFilters(settings).length) return [];
 
   const relayUrls = activeRelayUrls(relays, 'read');
-  const base: Filter = { kinds: [1], limit: options.limit ?? 24 };
-  const since = options.since ?? (options.until ? undefined : Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 7);
+  const requestedLimit = options.limit ?? 24;
+  const base: Filter = { kinds: feedKindsForMode(mode), limit: feedRelayLimitForMode(mode, requestedLimit) };
+  const since = feedSinceForQuery(mode, options);
   if (options.until) base.until = options.until;
   const filters = await feedFiltersForMode(mode, base, follows, settings, since, relayUrls, options);
 
   const trustedGlobalAuthors = mode === 'global' ? new Set(options.globalAuthors?.filter((pubkey) => /^[0-9a-f]{64}$/i.test(pubkey)) ?? []) : new Set<string>();
-  const events = verifiedRelayEvents((await Promise.all(filters.map((filter) => queryShortLived(relayUrls, filter, 5000, { minEvents: feedIdleMinEvents(mode, filter.limit), idleAfterMs: 650, retryEmpty: true })))).flat()).filter((event) =>
-    filters.some((filter) => eventMatchesTimeWindow(event, filter.since, filter.until))
-  );
-  const clean = dedupeEvents(topLevelFeedEvents(filterSpam(events, new Set<string>(), trustedGlobalAuthors, { blockProfanity: mode === 'global' })));
-  const feedClean = mode === 'global' ? clean.filter((event) => trustedGlobalAuthors.has(event.pubkey) || !eventHasImgurUrl(event)) : clean;
-  const output = mode === 'global' ? applyGlobalFeedLimits(feedClean, trustedGlobalAuthors) : feedClean;
+  let output = await queryVisibleFeedEvents(mode, relayUrls, filters, trustedGlobalAuthors, requestedLimit);
+  if (shouldRetryPersonalFeedAcrossAllRelays(mode, relayUrls, output.length, requestedLimit)) {
+    output = await queryVisibleFeedEvents(mode, relayUrls, filters, trustedGlobalAuthors, requestedLimit, false);
+  }
   await cacheEvents(output);
   return output;
+}
+
+async function queryVisibleFeedEvents(mode: FeedMode, relayUrls: string[], filters: Filter[], trustedGlobalAuthors: Set<string>, requestedLimit: number, preferConnected = true) {
+  const events = verifiedRelayEvents(
+    (
+      await Promise.all(
+        filters.map((filter) => queryShortLived(relayUrls, filter, 5000, { minEvents: feedIdleMinEvents(mode, filter.limit), idleAfterMs: 650, retryEmpty: true, preferConnected }))
+      )
+    ).flat()
+  ).filter((event) => filters.some((filter) => eventMatchesTimeWindow(event, filter.since, filter.until)));
+  const spamChecked = filterSpam(events, new Set<string>(), trustedGlobalAuthors, { blockProfanity: mode === 'global' });
+  const clean = dedupeEvents([...topLevelFeedEvents(spamChecked), ...displayableRepostEvents(spamChecked, new Set<string>(), trustedGlobalAuthors, { blockProfanity: mode === 'global' })]);
+  const feedClean = mode === 'global' ? clean.filter((event) => trustedGlobalAuthors.has(event.pubkey) || !eventHasImgurUrl(event)) : clean;
+  return (mode === 'global' ? applyGlobalFeedLimits(feedClean, trustedGlobalAuthors) : feedClean).slice(0, requestedLimit);
+}
+
+function shouldRetryPersonalFeedAcrossAllRelays(mode: FeedMode, relayUrls: string[], visibleCount: number, requestedLimit: number) {
+  if (mode !== 'follow' && mode !== 'custom') return false;
+  if (visibleCount >= Math.min(requestedLimit, 4)) return false;
+  return preferredReadRelayUrls(relayUrls).length < relayUrls.length;
+}
+
+export function feedSinceForQuery(mode: FeedMode, options: FeedQueryOptions = {}, now = Math.floor(Date.now() / 1000)) {
+  if (options.since !== undefined) return options.since;
+  if (options.until || mode === 'follow') return undefined;
+  return now - 60 * 60 * 24 * 7;
+}
+
+export function feedKindsForMode(mode: FeedMode) {
+  return mode === 'follow' || mode === 'custom' ? [1, 6] : [1];
+}
+
+export function feedRelayLimitForMode(mode: FeedMode, requestedLimit: number) {
+  const limit = Math.max(1, requestedLimit);
+  return mode === 'follow' || mode === 'custom' ? Math.min(240, Math.max(limit, limit * 4)) : limit;
+}
+
+function displayableRepostEvents(events: NostrEvent[], mutedPubkeys = new Set<string>(), trustedPubkeys = new Set<string>(), options: { blockProfanity?: boolean } = {}) {
+  return events.filter((event) => {
+    const reposted = parseRepostContent(event);
+    return Boolean(reposted && topLevelFeedEvents(filterSpam([reposted], mutedPubkeys, trustedPubkeys, options)).length);
+  });
 }
 
 function applyGlobalFeedLimits(events: NostrEvent[], trustedAuthors = new Set<string>()) {
@@ -737,7 +787,7 @@ export async function subscribeFeed(
   const relayUrls = activeRelayUrls(relays, 'read');
   if (!relayUrls.length) return undefined;
 
-  const base: Filter = { kinds: [1] };
+  const base: Filter = { kinds: feedKindsForMode(mode) };
   const since = options.since ?? Math.floor(Date.now() / 1000);
   const filters = await feedFiltersForMode(mode, base, follows, settings, since, relayUrls, options);
   const requests = filters.flatMap((filter) => relayUrls.map((url) => ({ url, filter })));
@@ -1352,10 +1402,18 @@ async function encryptNip44(session: Session, peer: string, payload: unknown) {
 }
 
 export async function publishNote(session: Session, content: string, relays = defaultRelays, tags: string[][] = []) {
-  const draft = await signEventTemplate(session, { kind: 1, content, tags, created_at: now() });
-  void cacheEvents([draft as unknown as NostrEvent]);
-  await publishSignedEvent(draft, relays);
-  return draft as unknown as NostrEvent;
+  const event = await signNote(session, content, tags);
+  void cacheEvents([event]);
+  await publishSignedNostrEvent(event, relays);
+  return event;
+}
+
+export async function signNote(session: Session, content: string, tags: string[][] = []) {
+  return (await signEventTemplate(session, { kind: 1, content, tags, created_at: now() })) as unknown as NostrEvent;
+}
+
+export async function publishSignedNostrEvent(event: NostrEvent, relays = defaultRelays) {
+  await publishSignedEvent(event as NostrToolsEvent, relays);
 }
 
 export async function publishProfile(session: Session, profile: Profile, relays = defaultRelays) {

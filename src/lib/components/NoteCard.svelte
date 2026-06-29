@@ -13,6 +13,7 @@
   import { deleteNote, displayEventForEvent, filterByHashtag, likedStateForEvent, mergeProfileRecords, muteAccount, prefetchThreadPreview, profiles, reactToNote, refreshEventStats, relays, reportNote, repostedStateForEvent, repostNote, session, startEdit, startQuote, startReply, statsForEvent, watchVisibleNoteStats } from '$lib/stores/app';
   import { appPath } from '$lib/paths';
   import { pauseWhenHidden } from '$lib/actions/pauseWhenHidden';
+  import { lazyContentRootMargin, prefersLeanMedia } from '$lib/clientCapabilities';
   import { saveRouteScrollState } from '$lib/stores/routeScroll';
   import { saveThreadReturnTarget, currentThreadReturnTarget } from '$lib/stores/threadNavigation';
   import { saveThreadSeed } from '$lib/stores/threadSeed';
@@ -35,6 +36,7 @@
   const maxRenderableTags = 300;
   const maxRenderedTextParts = 240;
   const maxMediaAttachments = 6;
+  const maxLeanMediaAttachments = 3;
   const maxSocialEmbeds = 3;
   const maxQuotedNotes = 3;
   let expanded = initialExpanded;
@@ -75,6 +77,8 @@
   let floatingMenuListenerActive = false;
   let statsVisible = false;
   let heavyContentReady = embedded;
+  let leanMedia = false;
+  let loadedSocialEmbeds = new Set<string>();
   let statsEventId = event.id;
   $: statsStore = statsForEvent(event.id);
   $: likedStore = likedStateForEvent(event.id);
@@ -83,6 +87,7 @@
 
   onMount(() => {
     if (!browser || embedded) return;
+    leanMedia = prefersLeanMedia();
     if (!('IntersectionObserver' in window)) {
       statsVisible = true;
       heavyContentReady = true;
@@ -92,7 +97,7 @@
     }
     noteObserver = new IntersectionObserver(
       ([entry]) => updateStatsVisibility(Boolean(entry?.isIntersecting)),
-      { rootMargin: '900px 0px' }
+      { rootMargin: lazyContentRootMargin() }
     );
     noteObserver.observe(noteElement);
   });
@@ -122,8 +127,9 @@
   $: parsedContent = displayEvent.content.slice(0, maxParsedContentLength);
   $: renderedContent = displayEvent.content.slice(0, maxExpandedContentLength);
   $: contentWasCapped = displayEvent.content.length > maxExpandedContentLength;
-  $: mediaAttachments = heavyContentReady ? extractMediaAttachments({ ...displayEvent, content: parsedContent, tags: safeTags }).slice(0, maxMediaAttachments) : [];
-  $: socialEmbeds = heavyContentReady ? extractSocialEmbeds(parsedContent).slice(0, maxSocialEmbeds) : [];
+  $: mediaLimit = leanMedia ? maxLeanMediaAttachments : maxMediaAttachments;
+  $: mediaAttachments = heavyContentReady ? extractMediaAttachments({ ...displayEvent, content: parsedContent, tags: safeTags }).slice(0, mediaLimit) : [];
+  $: socialEmbeds = heavyContentReady ? extractSocialEmbeds(parsedContent).slice(0, leanMedia ? 1 : maxSocialEmbeds) : [];
   $: hiddenQuotedNoteIdSet = new Set(hiddenQuotedNoteIds);
   $: allQuotedNoteReferences = heavyContentReady ? extractQuotedNoteReferences(parsedContent, safeTags).slice(0, maxQuotedNotes) : [];
   $: quotedNoteReferences = allQuotedNoteReferences.filter((reference) => !hiddenQuotedNoteIdSet.has(reference.id));
@@ -336,6 +342,14 @@
 
   function shouldResetHiddenEmbed(provider: string) {
     return provider === 'instagram' || provider === 'tiktok';
+  }
+
+  function shouldGateSocialEmbed(url: string) {
+    return leanMedia && !loadedSocialEmbeds.has(url);
+  }
+
+  function loadSocialEmbed(url: string) {
+    loadedSocialEmbeds = new Set([...loadedSocialEmbeds, url]);
   }
 
   async function copyEmbed() {
@@ -607,16 +621,22 @@
       <div class="social-embed-list">
         {#each socialEmbeds as embed (embed.url)}
           <div class="social-embed" class:portrait={embed.aspect === 'portrait'} class:square={embed.aspect === 'square'}>
-            <iframe
-              use:pauseWhenHidden={{ resetIframe: shouldResetHiddenEmbed(embed.provider) }}
-              src={embed.embedUrl}
-              title={embed.title}
-              loading="lazy"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowfullscreen
-              sandbox="allow-scripts allow-same-origin allow-popups allow-presentation"
-              referrerpolicy="strict-origin-when-cross-origin"
-            ></iframe>
+            {#if shouldGateSocialEmbed(embed.url)}
+              <button class="social-embed-load" type="button" on:click={() => loadSocialEmbed(embed.url)}>
+                <span>{embed.title}</span>
+              </button>
+            {:else}
+              <iframe
+                use:pauseWhenHidden={{ resetIframe: shouldResetHiddenEmbed(embed.provider) }}
+                src={embed.embedUrl}
+                title={embed.title}
+                loading="lazy"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowfullscreen
+                sandbox="allow-scripts allow-same-origin allow-popups allow-presentation"
+                referrerpolicy="strict-origin-when-cross-origin"
+              ></iframe>
+            {/if}
             <a href={embed.url} target="_blank" rel="noreferrer">{embed.title}</a>
           </div>
         {/each}

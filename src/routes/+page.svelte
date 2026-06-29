@@ -34,8 +34,6 @@
 
   let loadMoreSentinel: HTMLDivElement;
   let observer: IntersectionObserver | undefined;
-  let previousScrollY = 0;
-  let loadOlderArmed = false;
   let pullStartY = 0;
   let pullDistance = 0;
   let wheelPullRaw = 0;
@@ -50,10 +48,12 @@
   let autoFillRunning = false;
   let autoFillQueued = false;
   let autoFillTimer: ReturnType<typeof setTimeout> | undefined;
+  let lastAutoOlderFetchAt = 0;
   const pullThreshold = 78;
   const newerBubbleCooldownMs = 5000;
   const feedScrollStateMaxAgeMs = 30 * 60 * 1000;
   const autoFillMaxLoads = 5;
+  const autoOlderFetchCooldownMs = 1200;
   const feedRenderInitialLimit = 72;
   const feedRenderIncrement = 48;
   let feedRenderLimit = feedRenderInitialLimit;
@@ -67,7 +67,7 @@
     observer.unobserve(loadMoreSentinel);
     observer.observe(loadMoreSentinel);
   }
-  $: if (browser) scheduleFeedAutoFill();
+  $: if (browser) scheduleFeedAutoFill(feedEvents.length, hiddenRenderedFeedCount, $loadingFeed, $loadingMoreFeed, $hasMoreFeed);
   $: pullProgress = Math.min(1, pullDistance / pullThreshold);
   $: showNewerBubble = canLoadNewerForFeed() && $pendingNewerEvents.length && !pullingNewer && !hideNewerBubble && !pullStartedAtTop && pullDistance <= 0;
   $: emptyMessage = !hasReadRelays
@@ -92,29 +92,17 @@
       return;
     }
 
-    previousScrollY = window.scrollY;
     void restoreFeedScrollPosition();
     observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && loadOlderArmed) {
-          loadOlderArmed = false;
-          if (!expandRenderedFeedWindow()) void requestOlderFeed();
-        }
+        if (entry.isIntersecting) scheduleFeedAutoFill();
       },
       { rootMargin: '320px 0px' }
     );
     if (loadMoreSentinel) observer.observe(loadMoreSentinel);
 
     const onScroll = () => {
-      const nextScrollY = window.scrollY;
-      if (nextScrollY > previousScrollY) {
-        loadOlderArmed = true;
-        if (isNearPageBottom()) {
-          loadOlderArmed = false;
-          void requestOlderFeed();
-        }
-      }
-      previousScrollY = nextScrollY;
+      if (isNearPageBottom()) scheduleFeedAutoFill();
     };
     addEventListener('scroll', onScroll, { passive: true });
     addEventListener('touchstart', startPullForNewer, { passive: true });
@@ -231,7 +219,7 @@
   }
 
   async function requestOlderFeed() {
-    if (requestingOlder || $loadingFeed || $loadingMoreFeed || !$hasMoreFeed || !feedEvents.length) return;
+    if (requestingOlder || $loadingFeed || $loadingMoreFeed || !$hasMoreFeed) return;
     requestingOlder = true;
     try {
       await loadMoreFeed();
@@ -252,8 +240,8 @@
     return true;
   }
 
-  function scheduleFeedAutoFill() {
-    if (!feedEvents.length || $loadingFeed || $loadingMoreFeed || !$hasMoreFeed || autoFillQueued || autoFillRunning) return;
+  function scheduleFeedAutoFill(..._state: unknown[]) {
+    if ($loadingFeed || $loadingMoreFeed || !$hasMoreFeed || autoFillQueued || autoFillRunning) return;
     autoFillQueued = true;
     clearTimeout(autoFillTimer);
     autoFillTimer = setTimeout(() => {
@@ -270,9 +258,20 @@
         await tick();
         if (!shouldAutoLoadOlderFeed()) return;
         const beforeCount = feedEvents.length;
+        const beforeRenderLimit = feedRenderLimit;
+        if (expandRenderedFeedWindow()) {
+          await tick();
+          if (feedRenderLimit === beforeRenderLimit) return;
+          continue;
+        }
+
+        const now = Date.now();
+        if (now - lastAutoOlderFetchAt < autoOlderFetchCooldownMs) return;
+        lastAutoOlderFetchAt = now;
         await requestOlderFeed();
         await tick();
         if (feedEvents.length <= beforeCount || !shouldAutoLoadOlderFeed()) return;
+        return;
       }
     } finally {
       autoFillRunning = false;
@@ -280,10 +279,15 @@
   }
 
   function shouldAutoLoadOlderFeed() {
-    if (!feedEvents.length || $loadingFeed || $loadingMoreFeed || !$hasMoreFeed || requestingOlder) return false;
-    if (expandRenderedFeedWindow()) return false;
+    if ($loadingFeed || $loadingMoreFeed || !$hasMoreFeed || requestingOlder) return false;
     const page = document.documentElement;
-    return page.scrollHeight <= window.innerHeight + 180 || isNearPageBottom();
+    return page.scrollHeight <= window.innerHeight + 180 || isNearPageBottom() || isLoadSentinelNearViewport();
+  }
+
+  function isLoadSentinelNearViewport() {
+    if (!loadMoreSentinel) return false;
+    const rect = loadMoreSentinel.getBoundingClientRect();
+    return rect.top <= window.innerHeight + 320 && rect.bottom >= -160;
   }
 
   function saveCurrentFeedScrollPosition() {
@@ -319,7 +323,6 @@
         window.scrollTo({ top: state.scrollY, left: 0, behavior: 'instant' });
       }
     }
-    previousScrollY = window.scrollY;
   }
 
   function openFeedNote(event: NostrEvent) {

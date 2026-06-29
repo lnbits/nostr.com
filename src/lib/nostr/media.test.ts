@@ -22,6 +22,7 @@ describe('media helpers', () => {
     expect(extractMediaUrls(`look ${image} again ${image} and ${video}`)).toEqual([image, video]);
     expect(isVideoUrl(image)).toBe(false);
     expect(isVideoUrl(video)).toBe(true);
+    expect(isVideoUrl('https://cdn.example.com/clip.m4v')).toBe(true);
   });
 
   it('ignores article page urls in imeta tags', () => {

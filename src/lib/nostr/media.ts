@@ -2,7 +2,7 @@ import { nip19 } from 'nostr-tools';
 import { appPath } from '$lib/paths';
 import type { MediaAttachment, NostrEvent } from './types';
 
-const mediaUrlPattern = /https?:\/\/[^\s<>"']+\.(?:png|jpe?g|gif|webp|avif|mp4|webm|mov)(?:\?[^\s<>"']*)?/gi;
+const mediaUrlPattern = /https?:\/\/[^\s<>"']+\.(?:png|jpe?g|gif|webp|avif|mp4|webm|mov|m4v)(?:\?[^\s<>"']*)?/gi;
 const webUrlPattern = /https?:\/\/[^\s<>"']+/gi;
 const bareDomainPattern = /(^|[\s([{"'])([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+(?:\/[^\s<>"']*)?)/gi;
 const hashtagPattern = /(^|[\s([{"'])#([A-Za-z0-9_]{2,64})/g;
@@ -16,7 +16,7 @@ export function extractMediaUrls(content: string) {
 }
 
 export function isVideoUrl(url: string) {
-  return /\.(mp4|webm|mov)(?:\?|$)/i.test(url);
+  return /\.(mp4|webm|mov|m4v)(?:\?|$)/i.test(url);
 }
 
 function isImageUrl(url: string) {

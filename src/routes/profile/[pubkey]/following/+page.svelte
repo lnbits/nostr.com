@@ -7,17 +7,21 @@
   import NoteCard from '$lib/components/NoteCard.svelte';
   import { eventStats, events, mergeEvents, mergeProfileRecords, profiles, refreshEventStats, relays } from '$lib/stores/app';
   import { dedupeEvents, fetchContactListDetails, fetchFeed, fetchProfiles } from '$lib/nostr/client';
+  import { getCachedEvents } from '$lib/nostr/cache';
   import { appPath } from '$lib/paths';
   import type { NostrEvent, Profile } from '$lib/nostr/types';
 
   const initialFeedLimit = 48;
   const pageFeedLimit = 48;
+  const renderInitialLimit = 72;
+  const renderIncrement = 48;
   const feedSettings = { friendsOfFriends: false, keywords: [], interests: [] };
 
   $: pubkey = normalizePubkey($page.params.pubkey ?? '');
   $: profile = $profiles[pubkey];
   $: displayName = profile?.display_name || profile?.name || shortNpub(pubkey) || 'Nostr profile';
   $: avatarInitial = (profile?.display_name || profile?.name || pubkey || '?').slice(0, 1).toUpperCase();
+  $: renderedFeedEvents = feedEvents.slice(0, renderLimit);
 
   let loading = true;
   let loadingMore = false;
@@ -26,6 +30,7 @@
   let hydratedPubkey = '';
   let followPubkeys: string[] = [];
   let feedEvents: NostrEvent[] = [];
+  let renderLimit = renderInitialLimit;
   let oldestCursor = 0;
   let hasMore = true;
   let loadMoreSentinel: HTMLDivElement;
@@ -34,7 +39,8 @@
   onMount(() => {
     observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) void loadOlderFeed();
+        if (!entry.isIntersecting) return;
+        if (!expandRenderWindow()) void loadOlderFeed();
       },
       { rootMargin: '420px 0px' }
     );
@@ -58,6 +64,7 @@
     error = '';
     followPubkeys = [];
     feedEvents = [];
+    renderLimit = renderInitialLimit;
     oldestCursor = 0;
     hasMore = true;
 
@@ -74,6 +81,13 @@
       if (!followPubkeys.length) {
         hasMore = false;
         return;
+      }
+
+      const cached = await cachedFollowFeedPage(followPubkeys, initialFeedLimit);
+      if (targetPubkey !== pubkey) return;
+      if (cached.length) {
+        setFeedEvents(cached);
+        void hydrateFeedProfiles(cached);
       }
 
       const events = await fetchFollowFeedPage(followPubkeys, initialFeedLimit);
@@ -94,7 +108,9 @@
     if (!pubkey || loading || loadingMore || !hasMore || !followPubkeys.length || !feedEvents.length) return;
     loadingMore = true;
     try {
-      const older = await fetchFollowFeedPage(followPubkeys, pageFeedLimit, oldestCursor ? oldestCursor - 1 : undefined);
+      const until = oldestCursor ? oldestCursor - 1 : undefined;
+      let older = await fetchFollowFeedPage(followPubkeys, pageFeedLimit, until);
+      if (!older.length) older = await cachedFollowFeedPage(followPubkeys, pageFeedLimit, until);
       if (!older.length) {
         hasMore = false;
         return;
@@ -111,12 +127,27 @@
     return fetchFeed('follow', $relays, follows, feedSettings, { limit, until });
   }
 
+  async function cachedFollowFeedPage(follows: string[], limit: number, until?: number) {
+    const followSet = new Set(follows);
+    const cached = await getCachedEvents(Math.max(240, limit * 4));
+    return dedupeEvents(cached)
+      .filter((event) => followSet.has(event.pubkey) && (!until || event.created_at <= until))
+      .sort((a, b) => b.created_at - a.created_at)
+      .slice(0, limit);
+  }
+
   function setFeedEvents(nextEvents: NostrEvent[]) {
     feedEvents = dedupeEvents(nextEvents).sort((a, b) => b.created_at - a.created_at);
     oldestCursor = feedEvents.at(-1)?.created_at ?? 0;
     hasMore = Boolean(nextEvents.length);
     if (feedEvents.length) events.update((existing) => mergeEvents(feedEvents, existing));
     if (feedEvents.length) void refreshEventStats(feedEvents.map((event) => event.id).filter((id) => !$eventStats[id]));
+  }
+
+  function expandRenderWindow() {
+    if (renderLimit >= feedEvents.length) return false;
+    renderLimit = Math.min(feedEvents.length, renderLimit + renderIncrement);
+    return true;
   }
 
   async function hydrateFeedProfiles(events: NostrEvent[]) {
@@ -149,7 +180,7 @@
 
   <section class="feed-list narrow" aria-label={`${displayName} follow feed`}>
     {#if feedEvents.length}
-      {#each feedEvents as event (event.id)}
+      {#each renderedFeedEvents as event (event.id)}
         <NoteCard {event} profile={$profiles[event.pubkey]} prefetchThread />
       {/each}
     {:else if loading}

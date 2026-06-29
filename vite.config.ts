@@ -15,6 +15,14 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    strictPort: false
+    strictPort: false,
+    proxy: {
+      '/__nostr_build_upload': {
+        target: 'https://nostr.build',
+        changeOrigin: true,
+        secure: true,
+        rewrite: () => '/api/v2/upload/files'
+      }
+    }
   }
 });

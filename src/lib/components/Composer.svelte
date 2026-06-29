@@ -6,8 +6,10 @@
   import { composerOpen, editNote, editTarget, mergeProfileRecords, postNote, profiles, quoteTarget, relays, replyTarget, session } from '$lib/stores/app';
   import { shouldSubmitTextareaOnEnter } from '$lib/keyboard';
   import { hasPublishedTextNote, searchProfiles } from '$lib/nostr/client';
-  import { uploadToNostrBuild } from '$lib/nostr/upload';
-  import type { NostrEvent, Profile } from '$lib/nostr/types';
+  import { appendMediaUrlToDraft } from '$lib/nostr/mediaDraft';
+  import { extractMediaAttachments } from '$lib/nostr/media';
+  import { uploadMediaValidationError, uploadToNostrBuild } from '$lib/nostr/upload';
+  import type { MediaAttachment, NostrEvent, Profile } from '$lib/nostr/types';
   import ImageCropDialog from './ImageCropDialog.svelte';
   import MentionSuggestions from './MentionSuggestions.svelte';
 
@@ -98,6 +100,7 @@
 
   $: mentionSuggestions = mergeMentionProfiles(localMentionSuggestions(mentionQuery), remoteMentionProfiles).slice(0, 6);
   $: orangeCultTag = content.match(/(^|[\s([{])#(600bn|600000000000)\b/i)?.[2];
+  $: mediaPreviews = draftMediaPreviews(content).slice(0, 4);
 
   $: if ($composerOpen && $editTarget && loadedEditId !== $editTarget.id) {
     content = $editTarget.content;
@@ -173,8 +176,9 @@
       error = 'Sign in before uploading media.';
       return;
     }
-    if (!file.type.startsWith('image/')) {
-      error = 'Choose an image file.';
+    const validationError = uploadMediaValidationError(file);
+    if (validationError) {
+      error = validationError;
       return;
     }
 
@@ -183,19 +187,22 @@
       return;
     }
 
-    await uploadCroppedMedia(file);
+    await uploadPreparedMedia(file);
   }
 
-  async function uploadCroppedMedia(file: File) {
+  async function uploadPreparedMedia(file: File) {
     if (!$session) return;
     uploading = true;
     error = '';
     try {
       const url = await uploadToNostrBuild($session, file, 'media');
-      content = `${content.trimEnd()}${content.trim() ? '\n\n' : ''}${url}`;
+      const draft = appendMediaUrlToDraft(content, url);
+      content = draft.content;
       closeCropper();
+      await tick();
+      focusTextareaAt(draft.caret);
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Could not upload image.';
+      error = err instanceof Error ? err.message : 'Could not upload media.';
     } finally {
       uploading = false;
       if (mediaInput) mediaInput.value = '';
@@ -210,6 +217,23 @@
   function shouldCropImage(file: File) {
     if (croppableImageTypes.has(file.type.toLowerCase())) return true;
     return /\.(jpe?g|png|webp|avif)$/i.test(file.name);
+  }
+
+  function draftMediaPreviews(value: string): MediaAttachment[] {
+    return extractMediaAttachments({
+      id: '',
+      pubkey: '',
+      created_at: 0,
+      kind: 1,
+      tags: [],
+      content: value,
+      sig: ''
+    });
+  }
+
+  function focusTextareaAt(position: number) {
+    textarea?.focus();
+    textarea?.setSelectionRange(position, position);
   }
 
   function closeCropper() {
@@ -489,6 +513,22 @@
           <MentionSuggestions profiles={mentionSuggestions} searching={searchingMentions} on:select={(event) => selectMention(event.detail)} />
         {/if}
       </div>
+      {#if mediaPreviews.length}
+        <div class="composer-media-previews" aria-label="Attached media previews">
+          {#each mediaPreviews as media (media.url)}
+            {#if media.type === 'video'}
+              <div class="composer-media-preview">
+                <!-- svelte-ignore a11y_media_has_caption -->
+                <video src={media.url} controls preload="metadata" playsinline title={media.alt || 'Video preview'}></video>
+              </div>
+            {:else}
+              <a class="composer-media-preview" href={media.url} target="_blank" rel="noreferrer">
+                <img src={media.url} alt={media.alt || 'Media preview'} loading="lazy" referrerpolicy="no-referrer" />
+              </a>
+            {/if}
+          {/each}
+        </div>
+      {/if}
       {#if orangeCultTag}
         <div class="composer-orange-cult-chip">#{orangeCultTag} <span>(not a cult)</span></div>
       {/if}
@@ -500,7 +540,7 @@
         </div>
       {/if}
       <div class="composer-actions">
-        <input class="visually-hidden" type="file" accept="image/*" bind:this={mediaInput} on:change={(event) => uploadMedia(event.currentTarget.files?.[0])} />
+        <input class="visually-hidden" type="file" accept="image/*,video/*" bind:this={mediaInput} on:change={(event) => uploadMedia(event.currentTarget.files?.[0])} />
         <button class="icon-button" disabled={uploading || !$session} aria-label="Add media" on:click={() => mediaInput.click()}>
           {#if uploading}<Loader2 size={20} class="spin" />{:else}<ImagePlus size={20} />{/if}
         </button>
@@ -516,5 +556,5 @@
 {/if}
 
 {#if cropFile}
-  <ImageCropDialog file={cropFile} {uploading} on:close={closeCropper} on:crop={(event) => void uploadCroppedMedia(event.detail)} />
+  <ImageCropDialog file={cropFile} {uploading} on:close={closeCropper} on:crop={(event) => void uploadPreparedMedia(event.detail)} />
 {/if}

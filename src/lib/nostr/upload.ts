@@ -4,6 +4,32 @@ import type { Session } from './types';
 export type NostrBuildMediaType = 'avatar' | 'banner' | 'media';
 
 const nostrBuildUploadUrl = 'https://nostr.build/api/v2/upload/files';
+const nostrBuildDevProxyUploadUrl = '/__nostr_build_upload';
+export const maxImageUploadBytes = 15 * 1024 * 1024;
+export const maxVideoUploadBytes = 25 * 1024 * 1024;
+const imageUploadNamePattern = /\.(?:png|jpe?g|gif|webp|avif)$/i;
+const videoUploadNamePattern = /\.(?:mp4|webm|mov|m4v)$/i;
+const imageUploadMimeTypes = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/avif']);
+const videoUploadMimeTypes = new Set(['video/mp4', 'video/webm', 'video/quicktime', 'video/x-m4v']);
+
+export type UploadMediaKind = 'image' | 'video';
+
+export function uploadMediaKind(file: Pick<File, 'name' | 'type'>): UploadMediaKind | '' {
+  const type = file.type.toLowerCase();
+  if (imageUploadMimeTypes.has(type)) return 'image';
+  if (videoUploadMimeTypes.has(type)) return 'video';
+  if (imageUploadNamePattern.test(file.name)) return 'image';
+  if (videoUploadNamePattern.test(file.name)) return 'video';
+  return '';
+}
+
+export function uploadMediaValidationError(file: Pick<File, 'name' | 'type' | 'size'>) {
+  const kind = uploadMediaKind(file);
+  if (!kind) return 'Choose an image, GIF, or video file.';
+  const limit = kind === 'video' ? maxVideoUploadBytes : maxImageUploadBytes;
+  if (file.size > limit) return `${kind === 'video' ? 'Videos' : 'Images and GIFs'} must be ${formatUploadSize(limit)} or smaller.`;
+  return '';
+}
 
 export async function uploadToNostrBuild(session: Session, file: File, mediaType: NostrBuildMediaType = 'media') {
   const form = new FormData();
@@ -16,7 +42,7 @@ export async function uploadToNostrBuild(session: Session, file: File, mediaType
   const desktopUploadUrl = await uploadWithDesktopBridge(file, mediaType, authorization);
   if (desktopUploadUrl) return desktopUploadUrl;
 
-  const response = await fetch(nostrBuildUploadUrl, {
+  const response = await fetch(browserUploadUrl(), {
     method: 'POST',
     headers: { Authorization: authorization },
     body: form
@@ -29,6 +55,10 @@ export async function uploadToNostrBuild(session: Session, file: File, mediaType
   const url = uploadResponseUrl(data) || response.headers.get('location') || '';
   if (!url) throw new Error('Upload finished but no media URL was returned.');
   return url;
+}
+
+export function browserUploadUrl() {
+  return import.meta.env.DEV ? nostrBuildDevProxyUploadUrl : nostrBuildUploadUrl;
 }
 
 async function uploadWithDesktopBridge(file: File, mediaType: NostrBuildMediaType, authorization: string) {
@@ -99,6 +129,11 @@ function uploadErrorMessage(data: unknown) {
 function uploadNetworkErrorMessage(err: unknown) {
   const detail = err instanceof Error && err.message ? ` ${err.message}` : '';
   return `Could not reach nostr.build for upload. This is usually a network, CORS, or browser-blocking issue.${detail}`;
+}
+
+function formatUploadSize(bytes: number) {
+  const mb = bytes / (1024 * 1024);
+  return `${Number.isInteger(mb) ? mb : mb.toFixed(1)} MB`;
 }
 
 async function parseUploadResponse(response: Response) {

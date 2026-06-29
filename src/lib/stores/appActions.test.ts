@@ -6,7 +6,9 @@ const clientMocks = vi.hoisted(() => ({
   fetchUserEventActions: vi.fn(),
   publishReaction: vi.fn(),
   publishRepost: vi.fn(),
-  publishDeletion: vi.fn()
+  publishDeletion: vi.fn(),
+  publishSignedNostrEvent: vi.fn(),
+  signNote: vi.fn()
 }));
 
 vi.mock('$lib/nostr/client', async (importOriginal) => {
@@ -16,11 +18,13 @@ vi.mock('$lib/nostr/client', async (importOriginal) => {
     fetchUserEventActions: clientMocks.fetchUserEventActions,
     publishReaction: clientMocks.publishReaction,
     publishRepost: clientMocks.publishRepost,
-    publishDeletion: clientMocks.publishDeletion
+    publishDeletion: clientMocks.publishDeletion,
+    publishSignedNostrEvent: clientMocks.publishSignedNostrEvent,
+    signNote: clientMocks.signNote
   };
 });
 
-import { deletedEventIds, events, eventStats, likedEvents, reactToNote, repostedEvents, repostNote, session } from './app';
+import { deletedEventIds, events, eventStats, likedEvents, postNote, reactToNote, repostedEvents, repostNote, session } from './app';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -80,6 +84,9 @@ describe('app action optimism', () => {
     clientMocks.publishReaction.mockReset();
     clientMocks.publishRepost.mockReset();
     clientMocks.publishDeletion.mockReset();
+    clientMocks.publishSignedNostrEvent.mockReset();
+    clientMocks.signNote.mockReset();
+    localStorage.removeItem('nostr-pending-publishes');
     eventStats.set({});
     events.set([]);
     deletedEventIds.set(new Set());
@@ -202,5 +209,27 @@ describe('app action optimism', () => {
     expect(get(events).some((event) => event.id === repost.id)).toBe(false);
     expect(get(deletedEventIds).has(repost.id)).toBe(true);
     expect(clientMocks.publishDeletion).toHaveBeenCalledWith(expect.objectContaining({ pubkey: 'c'.repeat(64) }), repost, expect.any(Array), 'Unreposted by author');
+  });
+
+  it('adds a posted note locally before the background publish queue drains', async () => {
+    vi.useFakeTimers();
+    try {
+      const signed = note('d'.repeat(64));
+      clientMocks.signNote.mockResolvedValueOnce({ ...signed, pubkey: 'c'.repeat(64), content: 'queued hello', created_at: 3 });
+      clientMocks.publishSignedNostrEvent.mockResolvedValueOnce(undefined);
+
+      await postNote('queued hello');
+
+      expect(get(events).map((event) => event.content)).toContain('queued hello');
+      expect(clientMocks.publishSignedNostrEvent).not.toHaveBeenCalled();
+
+      await vi.runOnlyPendingTimersAsync();
+
+      expect(clientMocks.publishSignedNostrEvent).toHaveBeenCalledTimes(1);
+      expect(clientMocks.publishSignedNostrEvent).toHaveBeenCalledWith(expect.objectContaining({ id: signed.id, content: 'queued hello' }), expect.any(Array));
+      expect(localStorage.getItem('nostr-pending-publishes')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

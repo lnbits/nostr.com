@@ -1,4 +1,4 @@
-import { displayEventsForFeedMode, eventStats, likedEvents, likedStateForEvent, mergeEvents, reconcileStatsWithOwnActions, statsForEvent } from './app';
+import { cachedOlderFeedPage, displayEventsForFeedMode, eventStats, likedEvents, likedStateForEvent, mergeEvents, olderFeedPageCutoff, reconcileStatsWithOwnActions, statsForEvent } from './app';
 import type { EventStats, NostrEvent } from '$lib/nostr/types';
 
 function event(id: string, created_at: number, content = id): NostrEvent {
@@ -88,6 +88,23 @@ describe('app store helpers', () => {
     expect(merged).toHaveLength(600);
     expect(merged[0].id).toBe('event-604');
     expect(merged.at(-1)?.id).toBe('event-5');
+  });
+
+  it('reveals cached older notes below the visible cursor before relay pagination can skip ahead', () => {
+    const visible = [authorEvent('visible-new', 100, 'a'.repeat(64)), authorEvent('visible-old', 90, 'b'.repeat(64))];
+    const cached = [
+      authorEvent('too-new', 95, 'c'.repeat(64)),
+      authorEvent('gap-fill-1', 80, 'd'.repeat(64)),
+      authorEvent('gap-fill-2', 70, 'e'.repeat(64)),
+      authorEvent('much-older', 10, 'f'.repeat(64))
+    ];
+
+    expect(cachedOlderFeedPage(cached, visible, 2).map((item) => item.id)).toEqual(['gap-fill-1', 'gap-fill-2']);
+  });
+
+  it('does not date-window older following pages so sparse follows can keep loading', () => {
+    expect(olderFeedPageCutoff(1_000_000, 'follow')).toBeUndefined();
+    expect(olderFeedPageCutoff(1_000_000, 'global')).toEqual(expect.any(Number));
   });
 
   it('limits global display to the default feed hashtags and explicit global authors', () => {
