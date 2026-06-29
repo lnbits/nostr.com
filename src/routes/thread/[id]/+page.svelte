@@ -87,6 +87,7 @@
       { rootMargin: '0px 0px 420px 0px' }
     );
     if (bottomSentinel) bottomObserver.observe(bottomSentinel);
+    window.addEventListener('nostr-network-recovered', recoverThreadAfterNetwork);
     void hydrateThread();
     void restoreThreadScrollPosition(routeKey);
   });
@@ -95,6 +96,7 @@
     saveCurrentThreadState();
     saveCurrentThreadScrollPosition();
     bottomObserver?.disconnect();
+    if (browser) window.removeEventListener('nostr-network-recovered', recoverThreadAfterNetwork);
     stopThreadLiveSubscription('leaving thread page');
     clearThreadReplyRetry();
   });
@@ -183,6 +185,7 @@
         refreshThreadStats([rootEvent]);
       }
       const focusedContextPromise = hydrateFocusedReplyContext(rootId, runId);
+      const earlyReplyBatchPromise = initialThreadReplyBatch(restored, rootEvent);
 
       const cached = rootEvent?.id === rootId ? rootEvent : $events.find((event) => event.id === rootId);
       const [found] = cached ? [cached] : await fetchMissingEvents([rootId], $relays, pointer?.relays ?? []).catch(() => []);
@@ -204,12 +207,7 @@
       if (rootEvent) refreshThreadStats([rootEvent]);
       await focusedContextPromise;
 
-      let replyBatch =
-        restored && rootEvent
-          ? await fetchLatestThreadReplyBatch(rootId, initialThreadReplyLimit)
-          : rootEvent
-            ? await fetchForwardThreadReplyBatch(rootEvent.created_at, initialThreadReplyLimit)
-            : await fetchThreadReplyWindow({ limit: initialThreadReplyLimit });
+      let replyBatch = await earlyReplyBatchPromise;
       if (!isCurrentHydration(rootId, runId)) return;
       if (!replyBatch.events.length && rootEvent) {
         const fallbackBatch = await fetchThreadReplyWindow({ limit: initialThreadReplyLimit });
@@ -239,6 +237,39 @@
         saveCurrentThreadState();
       }
     }
+  }
+
+  function initialThreadReplyBatch(restored: boolean, existingRoot: NostrEvent | undefined) {
+    const request = restored && existingRoot
+      ? fetchLatestThreadReplyBatch(id, initialThreadReplyLimit)
+      : existingRoot
+        ? fetchForwardThreadReplyBatch(existingRoot.created_at, initialThreadReplyLimit)
+        : fetchThreadReplyWindow({ limit: initialThreadReplyLimit });
+    return request.catch(() => ({ events: [], directCount: 0 }));
+  }
+
+  async function recoverThreadAfterNetwork() {
+    if (!id) return;
+    const rootId = id;
+    clearThreadReplyRetry();
+    if (!rootEvent) {
+      hydratedId = '';
+      void hydrateThread();
+      return;
+    }
+
+    stopThreadLiveSubscription('network recovered');
+    syncThreadLiveSubscription(rootEvent.id, [rootEvent.id, ...replies.map((reply) => reply.id)]);
+
+    const runId = hydrationRunId;
+    const replyBatch = await fetchLatestThreadReplyBatch(rootId, initialThreadReplyLimit).catch(() => ({ events: [], directCount: 0 }));
+    if (!isCurrentHydration(rootId, runId) || !replyBatch.events.length) return;
+    localThreadEvents = mergeThreadEvents(replyBatch.events, localThreadEvents);
+    trimThreadReplyWindow('bottom');
+    hydrateThreadProfiles(replyBatch.events);
+    refreshThreadStats(replyBatch.events);
+    void pruneDeletedEvents(replyBatch.events);
+    saveCurrentThreadState();
   }
 
   function isCurrentHydration(rootId: string, runId: number) {

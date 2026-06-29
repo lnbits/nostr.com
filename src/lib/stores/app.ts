@@ -65,6 +65,7 @@ import {
   publishRepost,
   publishNip17DirectMessage,
   parseRepostContent,
+  resetRelayBackoff,
   resolveNip05Profile,
   resolvePubkeyIdentifier,
   subscribeDirectMessages,
@@ -94,6 +95,13 @@ const maxFeedEvents = 600;
 const maxPendingNewerEvents = 600;
 const maxCachedOlderEvents = 600;
 const cachedFeedBufferLimit = maxFeedEvents + maxPendingNewerEvents + maxCachedOlderEvents;
+const maxInMemoryProfiles = 1200;
+const maxInMemoryStats = 3000;
+const maxInMemoryOwnActions = 2000;
+const maxInMemoryDeletedIds = 3000;
+const maxSeenLiveEvents = 1500;
+const maxSeenLiveActions = 4000;
+const maxRequestedStats = 2000;
 const olderFetchBatchLimit = 160;
 const olderFetchTarget = pageFeedLimit;
 const olderFetchMaxAttempts = 5;
@@ -106,6 +114,8 @@ const threadPrefetchCooldownMs = 5 * 60 * 1000;
 const maxThreadPrefetchConcurrent = 2;
 const deletionCheckCooldownMs = 5 * 60 * 1000;
 const maxNotificationItems = 160;
+const networkRecoveryCooldownMs = 12_000;
+const networkKeepaliveMs = 45_000;
 
 const initialSession = browser ? readStoredSession() : null;
 const initialStoredContacts = browser && initialSession ? readStoredContactList(initialSession.pubkey) : undefined;
@@ -171,7 +181,34 @@ export function mergeProfileRecords(existing: Record<string, Profile>, nextProfi
       merged[profile.pubkey] = profile;
     }
   }
-  return merged;
+  return pruneProfileRecords(merged, nextProfiles.map((profile) => profile.pubkey));
+}
+
+function pruneProfileRecords(items: Record<string, Profile>, priorityPubkeys: string[] = []) {
+  const entries = Object.entries(items);
+  if (entries.length <= maxInMemoryProfiles) return items;
+
+  const priority = new Set(
+    [
+      ...priorityPubkeys,
+      currentSessionValue?.pubkey ?? '',
+      ...currentFollows,
+      ...currentContactItems.map((item) => item.pubkey),
+      ...getStoreSnapshot(events).map((event) => event.pubkey),
+      ...getStoreSnapshot(pendingNewerEvents).map((event) => event.pubkey),
+      ...cachedOlderEvents.slice(0, 120).map((event) => event.pubkey),
+      ...currentNotifications.map((item) => item.actor),
+      ...currentDirectMessages.map((message) => message.peer)
+    ].filter((pubkey) => /^[0-9a-f]{64}$/i.test(pubkey))
+  );
+
+  const sorted = entries.sort(([a, aProfile], [b, bProfile]) => {
+    const priorityDelta = Number(priority.has(b)) - Number(priority.has(a));
+    if (priorityDelta) return priorityDelta;
+    return (bProfile.updated_at ?? 0) - (aProfile.updated_at ?? 0);
+  });
+
+  return Object.fromEntries(sorted.slice(0, maxInMemoryProfiles));
 }
 
 let currentRelays = defaultRelays;
@@ -202,6 +239,8 @@ let liveStatsKey = '';
 let visibleStatsRefreshTimer: ReturnType<typeof setTimeout> | undefined;
 let liveNotificationsSub: { close: (reason?: string) => void } | undefined;
 let liveMessagesSub: { close: (reason?: string) => void } | undefined;
+let networkRecoveryLastRun = 0;
+let networkKeepaliveTimer: ReturnType<typeof setInterval> | undefined;
 let liveInboxToken = 0;
 let cachedOlderEvents: NostrEvent[] = [];
 let cachedStatsEventsPromise: Promise<NostrEvent[]> | undefined;
@@ -258,8 +297,10 @@ deletedEventIds.subscribe((value) => (currentDeletedEventIds = value));
 export async function bootstrap() {
   if (!browser) return;
   online.set(navigator.onLine);
-  addEventListener('online', () => online.set(true));
-  addEventListener('offline', () => online.set(false));
+  addEventListener('online', handleBrowserOnline);
+  addEventListener('offline', handleBrowserOffline);
+  addEventListener('visibilitychange', handleVisibilityNetworkCheck);
+  startNetworkKeepalive();
   void setupNativeLocalNotifications((route) => {
     void goto(appPath(route));
   });
@@ -296,6 +337,41 @@ export async function bootstrap() {
     });
 }
 
+function handleBrowserOnline() {
+  online.set(true);
+  void recoverNetworkState('online', { refreshFeed: true });
+}
+
+function handleBrowserOffline() {
+  online.set(false);
+}
+
+function handleVisibilityNetworkCheck() {
+  if (document.visibilityState === 'visible' && navigator.onLine) void recoverNetworkState('visible');
+}
+
+function startNetworkKeepalive() {
+  if (networkKeepaliveTimer) return;
+  networkKeepaliveTimer = setInterval(() => {
+    if (document.visibilityState === 'visible' && navigator.onLine) void recoverNetworkState('keepalive');
+  }, networkKeepaliveMs);
+}
+
+async function recoverNetworkState(reason: 'online' | 'visible' | 'keepalive', options: { refreshFeed?: boolean } = {}) {
+  const now = Date.now();
+  if (now - networkRecoveryLastRun < networkRecoveryCooldownMs) return;
+  networkRecoveryLastRun = now;
+  resetRelayBackoff();
+  markConnectedRelaysOnline();
+  void refreshRelayInfo();
+  if (options.refreshFeed || !getStoreSnapshot(events).length) void refreshFeed(currentMode).catch(() => undefined);
+  else void loadNewerFeed().catch(() => undefined);
+  void restartLiveFeed(currentMode, timelineCursor(feedEventsForActiveHashtag([...getStoreSnapshot(events), ...getStoreSnapshot(pendingNewerEvents)]), 'newest'));
+  void restartVisibleStatsSubscription();
+  if (currentSessionValue) restartInboxSubscriptions();
+  window.dispatchEvent(new CustomEvent('nostr-network-recovered', { detail: { reason } }));
+}
+
 export async function refreshFeed(mode = currentMode, options: { replaceVisible?: boolean; reset?: boolean; clearCache?: boolean } = {}) {
   const fetchMode = currentHashtag ? 'global' : mode;
   if (options.reset) {
@@ -304,6 +380,7 @@ export async function refreshFeed(mode = currentMode, options: { replaceVisible?
   }
   const visibleEvents = feedEventsForActiveHashtag(getStoreSnapshot(events));
   const shouldReplaceVisible = options.reset || options.replaceVisible || !visibleEvents.length;
+  if (!visibleEvents.length && !options.reset && !options.clearCache) void hydrateCachedFeed(fetchMode);
   loadingFeed.set(true);
   hasMoreFeed.set(true);
   olderFeedEmptyAttempts = 0;
@@ -565,8 +642,7 @@ async function restartVisibleStatsSubscription() {
   liveStatsKey = nextKey;
   liveStatsSub = await subscribeEventStats(ids, currentRelays, (event) => {
     if (seenLiveStatEvents.has(event.id)) return;
-    seenLiveStatEvents.add(event.id);
-    if (seenLiveStatEvents.size > 1500) seenLiveStatEvents.clear();
+    rememberLiveStatEvent(event.id);
     mergeLiveStatEvent(ids, event);
   }).catch(() => undefined);
 }
@@ -588,6 +664,7 @@ function mergeLiveStatEvent(ids: string[], event: NostrEvent) {
       if (!stat.replies && !stat.reposts && !stat.likes && !stat.zaps && !stat.zapSats && !stat.dislikes && !stat.emoji) continue;
       if (event.kind === 7) seenLiveReactionAuthors.add(`${id}:${event.pubkey}`);
       if (event.kind === 6 || event.kind === 16) seenLiveRepostAuthors.add(`${id}:${event.pubkey}`);
+      pruneSeenActionAuthors();
       const previous = next[id] ?? emptyStats();
       next[id] = {
         replies: previous.replies + stat.replies,
@@ -618,7 +695,7 @@ function applyDeletedEventIds(deleted: Set<string>, options: { cache?: boolean }
   if (!deleted.size) return;
   const shouldCache = options.cache ?? true;
   clearOwnActionsForDeletedEvents(deleted);
-  deletedEventIds.update((existing) => new Set([...existing, ...deleted]));
+  deletedEventIds.update((existing) => limitStringSet(new Set([...existing, ...deleted]), maxInMemoryDeletedIds));
   events.update((existing) => existing.filter((item) => !deleted.has(item.id)));
   pendingNewerEvents.update((existing) => existing.filter((item) => !deleted.has(item.id)));
   cachedOlderEvents = cachedOlderEvents.filter((item) => !deleted.has(item.id));
@@ -685,13 +762,15 @@ function mergeOwnActionEvent(event: NostrEvent, targetIds: string[]) {
   if (event.kind === 7 && (!event.content.trim() || event.content.trim() === '+')) {
     targetIds.forEach((id) => ownLikeEvents.set(id, event));
     targetIds.forEach((id) => seenLiveReactionAuthors.add(ownActionKey(id, event.pubkey)));
-    likedEvents.update((existing) => new Set([...existing, ...targetIds]));
+    likedEvents.update((existing) => limitStringSet(new Set([...existing, ...targetIds]), maxInMemoryOwnActions));
   }
   if (event.kind === 6 || event.kind === 16) {
     targetIds.forEach((id) => ownRepostEvents.set(id, event));
     targetIds.forEach((id) => seenLiveRepostAuthors.add(ownActionKey(id, event.pubkey)));
-    repostedEvents.update((existing) => new Set([...existing, ...targetIds]));
+    repostedEvents.update((existing) => limitStringSet(new Set([...existing, ...targetIds]), maxInMemoryOwnActions));
   }
+  pruneSeenActionAuthors();
+  pruneOwnActionMemory();
 }
 
 function mergeOwnEventActions(actions: { liked: Set<string>; reposted: Set<string>; likeEvents: Map<string, NostrEvent>; repostEvents: Map<string, NostrEvent> }) {
@@ -702,8 +781,67 @@ function mergeOwnEventActions(actions: { liked: Set<string>; reposted: Set<strin
     actions.liked.forEach((id) => seenLiveReactionAuthors.add(ownActionKey(id, currentPubkey)));
     actions.reposted.forEach((id) => seenLiveRepostAuthors.add(ownActionKey(id, currentPubkey)));
   }
-  if (actions.liked.size) likedEvents.update((existing) => new Set([...existing, ...actions.liked]));
-  if (actions.reposted.size) repostedEvents.update((existing) => new Set([...existing, ...actions.reposted]));
+  if (actions.liked.size) likedEvents.update((existing) => limitStringSet(new Set([...existing, ...actions.liked]), maxInMemoryOwnActions));
+  if (actions.reposted.size) repostedEvents.update((existing) => limitStringSet(new Set([...existing, ...actions.reposted]), maxInMemoryOwnActions));
+  pruneSeenActionAuthors();
+  pruneOwnActionMemory();
+}
+
+function pruneOwnActionMemory() {
+  pruneEventMap(ownLikeEvents, maxInMemoryOwnActions, getStoreSnapshot(likedEvents));
+  pruneEventMap(ownRepostEvents, maxInMemoryOwnActions, getStoreSnapshot(repostedEvents));
+  likedEvents.update((existing) => limitStringSet(existing, maxInMemoryOwnActions));
+  repostedEvents.update((existing) => limitStringSet(existing, maxInMemoryOwnActions));
+}
+
+function pruneEventMap(map: Map<string, NostrEvent>, limit: number, priorityIds = new Set<string>()) {
+  if (map.size <= limit) return;
+  const priority = new Set([...priorityIds, ...visibleStatIds, ...getStoreSnapshot(events).map((event) => event.id), ...getStoreSnapshot(pendingNewerEvents).map((event) => event.id)]);
+  for (const key of map.keys()) {
+    if (map.size <= limit) break;
+    if (!priority.has(key)) map.delete(key);
+  }
+}
+
+function limitStringSet(set: Set<string>, limit: number) {
+  if (set.size <= limit) return set;
+  const priority = new Set([
+    ...visibleStatIds,
+    ...getStoreSnapshot(events).map((event) => event.id),
+    ...getStoreSnapshot(pendingNewerEvents).map((event) => event.id),
+    ...cachedOlderEvents.slice(0, 120).map((event) => event.id)
+  ]);
+  const kept = new Set<string>();
+  for (const id of priority) {
+    if (set.has(id)) kept.add(id);
+    if (kept.size >= limit) return kept;
+  }
+  for (const id of [...set].reverse()) {
+    kept.add(id);
+    if (kept.size >= limit) break;
+  }
+  return kept;
+}
+
+function pruneSeenActionAuthors() {
+  limitSetInPlace(seenLiveReactionAuthors, maxSeenLiveActions);
+  limitSetInPlace(seenLiveRepostAuthors, maxSeenLiveActions);
+}
+
+function limitSetInPlace<T>(set: Set<T>, limit: number) {
+  if (set.size <= limit) return;
+  const removeCount = set.size - limit;
+  let removed = 0;
+  for (const item of set) {
+    set.delete(item);
+    removed += 1;
+    if (removed >= removeCount) return;
+  }
+}
+
+function rememberLiveStatEvent(id: string) {
+  seenLiveStatEvents.add(id);
+  limitSetInPlace(seenLiveStatEvents, maxSeenLiveEvents);
 }
 
 async function restartLiveFeed(mode = currentMode, newestTimestamp?: number) {
@@ -896,6 +1034,7 @@ export async function refreshEventStats(ids: string[], force = false) {
   const checkedAt = Date.now();
   const nextIds = ids.filter((id) => force || checkedAt - (requestedStats.get(id) ?? 0) > statsRetryMs);
   nextIds.forEach((id) => requestedStats.set(id, checkedAt));
+  pruneRequestedStats();
   if (!nextIds.length) return;
   void hydrateCachedEventStats(nextIds);
   const currentSession = currentSessionValue;
@@ -976,8 +1115,10 @@ function mergeCachedOwnActions(actions: CachedOwnAction[]) {
       seenLiveRepostAuthors.add(ownActionKey(action.targetId, action.owner));
     }
   }
-  if (liked.size) likedEvents.update((existing) => new Set([...existing, ...liked]));
-  if (reposted.size) repostedEvents.update((existing) => new Set([...existing, ...reposted]));
+  if (liked.size) likedEvents.update((existing) => limitStringSet(new Set([...existing, ...liked]), maxInMemoryOwnActions));
+  if (reposted.size) repostedEvents.update((existing) => limitStringSet(new Set([...existing, ...reposted]), maxInMemoryOwnActions));
+  pruneSeenActionAuthors();
+  pruneOwnActionMemory();
   eventStats.update((existing) => {
     const reconciled = reconcileStatsWithOwnActions(existing, actions);
     void cacheEventStats(pickStats(reconciled, actions.map((action) => action.targetId)));
@@ -1054,7 +1195,42 @@ function mergeStats(existing: Record<string, EventStats>, incoming: Record<strin
       emoji: Math.max(previous.emoji, stat.emoji)
     };
   }
-  return next;
+  return pruneEventStats(next, Object.keys(incoming));
+}
+
+function pruneEventStats(items: Record<string, EventStats>, priorityIds: string[] = []) {
+  const entries = Object.entries(items);
+  if (entries.length <= maxInMemoryStats) return items;
+
+  const priority = new Set([
+    ...priorityIds,
+    ...visibleStatIds,
+    ...getStoreSnapshot(events).map((event) => event.id),
+    ...getStoreSnapshot(pendingNewerEvents).map((event) => event.id),
+    ...cachedOlderEvents.slice(0, 120).map((event) => event.id),
+    ...getStoreSnapshot(likedEvents),
+    ...getStoreSnapshot(repostedEvents),
+    ...ownLikeEvents.keys(),
+    ...ownRepostEvents.keys()
+  ]);
+
+  const kept: Record<string, EventStats> = {};
+  let count = 0;
+  for (const id of priority) {
+    if (!items[id] || kept[id]) continue;
+    kept[id] = items[id];
+    count += 1;
+    if (count >= maxInMemoryStats) return kept;
+  }
+
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const [id, stat] = entries[index];
+    if (kept[id]) continue;
+    kept[id] = stat;
+    count += 1;
+    if (count >= maxInMemoryStats) break;
+  }
+  return kept;
 }
 
 export function reconcileStatsWithOwnActions(existing: Record<string, EventStats>, actions: Pick<CachedOwnAction, 'targetId' | 'type'>[]) {
@@ -1065,7 +1241,19 @@ export function reconcileStatsWithOwnActions(existing: Record<string, EventStats
     if (action.type === 'like' && previous.likes < 1) next[action.targetId] = { ...previous, likes: 1 };
     if (action.type === 'repost' && previous.reposts < 1) next[action.targetId] = { ...previous, reposts: 1 };
   }
-  return next;
+  return pruneEventStats(next, actions.map((action) => action.targetId));
+}
+
+function pruneRequestedStats() {
+  if (requestedStats.size <= maxRequestedStats) return;
+  const priority = new Set([...visibleStatIds, ...getStoreSnapshot(events).map((event) => event.id), ...getStoreSnapshot(pendingNewerEvents).map((event) => event.id)]);
+  const entries = [...requestedStats.entries()].sort((a, b) => {
+    const priorityDelta = Number(priority.has(b[0])) - Number(priority.has(a[0]));
+    if (priorityDelta) return priorityDelta;
+    return b[1] - a[1];
+  });
+  requestedStats.clear();
+  for (const [id, checkedAt] of entries.slice(0, maxRequestedStats)) requestedStats.set(id, checkedAt);
 }
 
 function pickStats(stats: Record<string, EventStats>, ids: string[]) {
@@ -1333,7 +1521,7 @@ export async function postNote(content: string, parent?: NostrEvent, extraTags: 
   if (!currentSession) throw new Error('Sign in before posting.');
   const tags = mergePublishTags(parent ? replyTags(parent) : [], extraTags);
   const event = await publishNote(currentSession, content, currentRelays, tags);
-  seenLiveStatEvents.add(event.id);
+  rememberLiveStatEvent(event.id);
   events.update((existing) => mergeEvents([event], existing));
   void cacheEvents([event]);
   if (parent) mergeLocalReplyStats(event);
@@ -1410,7 +1598,7 @@ export async function repostNote(target: NostrEvent) {
   try {
     const event = await publishRepost(currentSession, target, currentRelays);
     applyLocalRepostState(target.id, currentSession.pubkey, true, { event });
-    seenLiveStatEvents.add(event.id);
+    rememberLiveStatEvent(event.id);
     events.update((existing) => mergeEvents([event], existing));
     void cacheEvents([event]);
   } catch (err) {
@@ -1461,7 +1649,7 @@ export async function reactToNote(target: NostrEvent, content = '+') {
 
   try {
     const event = await publishReaction(currentSession, target, currentRelays, content);
-    seenLiveStatEvents.add(event.id);
+    rememberLiveStatEvent(event.id);
     if (content === '+' || !content) applyLocalLikeState(target.id, currentSession.pubkey, true, { event });
   } catch (err) {
     applyLocalLikeState(target.id, currentSession.pubkey, false, { adjustStats: true });
@@ -1499,9 +1687,11 @@ function eventMatchesOwnRepost(event: NostrEvent, targetId: string, pubkey: stri
 
 function applyLocalLikeState(targetId: string, pubkey: string, active: boolean, options: { adjustStats?: boolean; event?: NostrEvent | undefined } = {}) {
   if (active) {
-    likedEvents.update((existing) => new Set(existing).add(targetId));
+    likedEvents.update((existing) => limitStringSet(new Set(existing).add(targetId), maxInMemoryOwnActions));
     seenLiveReactionAuthors.add(ownActionKey(targetId, pubkey));
     if (options.event) ownLikeEvents.set(targetId, options.event);
+    pruneSeenActionAuthors();
+    pruneOwnActionMemory();
     void cacheOwnAction(pubkey, targetId, 'like', options.event);
     if (options.adjustStats) adjustEventStats(targetId, { likes: 1 });
     return;
@@ -1520,9 +1710,11 @@ function applyLocalLikeState(targetId: string, pubkey: string, active: boolean, 
 
 function applyLocalRepostState(targetId: string, pubkey: string, active: boolean, options: { adjustStats?: boolean; event?: NostrEvent | undefined } = {}) {
   if (active) {
-    repostedEvents.update((existing) => new Set(existing).add(targetId));
+    repostedEvents.update((existing) => limitStringSet(new Set(existing).add(targetId), maxInMemoryOwnActions));
     seenLiveRepostAuthors.add(ownActionKey(targetId, pubkey));
     if (options.event) ownRepostEvents.set(targetId, options.event);
+    pruneSeenActionAuthors();
+    pruneOwnActionMemory();
     void cacheOwnAction(pubkey, targetId, 'repost', options.event);
     if (options.adjustStats) adjustEventStats(targetId, { reposts: 1 });
     return;
@@ -1552,7 +1744,7 @@ function adjustEventStats(targetId: string, delta: Partial<Pick<EventStats, 'lik
       reposts: Math.max(0, previous.reposts + (delta.reposts ?? 0))
     };
     void cacheEventStats({ [targetId]: nextStats });
-    return { ...existing, [targetId]: nextStats };
+    return pruneEventStats({ ...existing, [targetId]: nextStats }, [targetId]);
   });
 }
 
@@ -2405,7 +2597,7 @@ function mergeLocalReplyStats(reply: NostrEvent) {
         replies: previous.replies + stat.replies
       };
     }
-    return next;
+    return pruneEventStats(next, targetIds);
   });
 }
 

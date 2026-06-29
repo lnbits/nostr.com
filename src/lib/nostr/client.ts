@@ -8,15 +8,18 @@ import { defaultGuestNip05, defaultPomegranateCentral, defaultRelays, globalFeed
 import { eventHasImgurUrl } from './media';
 import type { ContactListDetails, ContactListItem, CustomFeedSettings, DirectMessage, EventStats, FeedMode, FeedQueryOptions, Nip05Profile, NostrEvent, NotificationItem, Profile, RelayState, Session } from './types';
 
-type RelayBackoffState = { failures: number; retryAt: number };
+export type RelayBackoffState = { failures: number; retryAt: number };
 type QueryShortLivedOptions = {
   minEvents?: number;
   idleAfterMs?: number;
+  retryEmpty?: boolean;
+  retryDelayMs?: number;
 };
 
 const relayBackoff = new Map<string, RelayBackoffState>();
-const relayBackoffBaseMs = 30_000;
-const relayBackoffMaxMs = 5 * 60_000;
+const relayBackoffBaseMs = 5_000;
+const relayBackoffMaxMs = 60_000;
+const relayBackoffFailureThreshold = 3;
 const pool = new SimplePool();
 pool.onRelayConnectionFailure = (url: string) => noteRelayConnectionFailure(url);
 pool.onRelayConnectionSuccess = (url: string) => noteRelayConnectionSuccess(url);
@@ -95,9 +98,8 @@ function noteRelayConnectionFailure(url: string, now = Date.now()) {
   const normalized = normalizeRelayUrl(url);
   if (!normalized) return;
   const previous = relayBackoff.get(normalized);
-  const failures = Math.min((previous?.failures ?? 0) + 1, 5);
-  const delay = Math.min(relayBackoffBaseMs * 2 ** (failures - 1), relayBackoffMaxMs);
-  relayBackoff.set(normalized, { failures, retryAt: now + delay });
+  const next = nextRelayBackoffState(previous, now);
+  relayBackoff.set(normalized, next);
 }
 
 function noteRelayConnectionSuccess(url: string) {
@@ -111,7 +113,28 @@ function pruneRelayBackoff(now = Date.now()) {
   }
 }
 
-function queryShortLived(relayUrls: string[], filter: Filter, maxWait = 5000, options: QueryShortLivedOptions = {}) {
+export function resetRelayBackoff() {
+  relayBackoff.clear();
+}
+
+export function nextRelayBackoffState(previous: RelayBackoffState | undefined, now = Date.now()): RelayBackoffState {
+  const failures = Math.min((previous?.failures ?? 0) + 1, 8);
+  if (failures < relayBackoffFailureThreshold) return { failures, retryAt: now };
+  const delay = Math.min(relayBackoffBaseMs * 2 ** (failures - relayBackoffFailureThreshold), relayBackoffMaxMs);
+  return { failures, retryAt: now + delay };
+}
+
+async function queryShortLived(relayUrls: string[], filter: Filter, maxWait = 5000, options: QueryShortLivedOptions = {}) {
+  const attempts = options.retryEmpty ? 2 : 1;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const events = await queryShortLivedOnce(relayUrls, filter, maxWait, options);
+    if (events.length || attempt === attempts - 1) return events;
+    await sleep(options.retryDelayMs ?? 350);
+  }
+  return [];
+}
+
+function queryShortLivedOnce(relayUrls: string[], filter: Filter, maxWait = 5000, options: QueryShortLivedOptions = {}) {
   return new Promise<NostrEvent[]>((resolve) => {
     if (!relayUrls.length) {
       resolve([]);
@@ -153,9 +176,7 @@ function queryShortLived(relayUrls: string[], filter: Filter, maxWait = 5000, op
         if (events.length >= maxEvents) finish();
         else finishWhenIdle();
       },
-      onclose() {
-        finish();
-      }
+      onclose() {}
     });
   });
 }
@@ -634,7 +655,7 @@ export async function fetchFeed(
   const filters = await feedFiltersForMode(mode, base, follows, settings, since, relayUrls, options);
 
   const trustedGlobalAuthors = mode === 'global' ? new Set(options.globalAuthors?.filter((pubkey) => /^[0-9a-f]{64}$/i.test(pubkey)) ?? []) : new Set<string>();
-  const events = verifiedRelayEvents((await Promise.all(filters.map((filter) => queryShortLived(relayUrls, filter, 5000, { minEvents: feedIdleMinEvents(mode, filter.limit), idleAfterMs: 650 })))).flat()).filter((event) =>
+  const events = verifiedRelayEvents((await Promise.all(filters.map((filter) => queryShortLived(relayUrls, filter, 5000, { minEvents: feedIdleMinEvents(mode, filter.limit), idleAfterMs: 650, retryEmpty: true })))).flat()).filter((event) =>
     filters.some((filter) => eventMatchesTimeWindow(event, filter.since, filter.until))
   );
   const clean = dedupeEvents(topLevelFeedEvents(filterSpam(events, new Set<string>(), trustedGlobalAuthors, { blockProfanity: mode === 'global' })));
@@ -658,8 +679,8 @@ function applyGlobalFeedLimits(events: NostrEvent[], trustedAuthors = new Set<st
 }
 
 function feedIdleMinEvents(mode: FeedMode, limit = 24) {
-  if (mode === 'follow' || mode === 'custom') return Math.min(limit, 8);
-  return Math.min(limit, 24);
+  if (mode === 'follow' || mode === 'custom') return Math.min(limit, 6);
+  return Math.min(limit, 10);
 }
 
 export function eventMatchesTimeWindow(event: NostrEvent, since?: number, until?: number) {
@@ -769,7 +790,7 @@ export async function subscribeZapReceipts(invoice: string, recipientPubkey: str
 export async function fetchMissingEvents(ids: string[], relays = defaultRelays, relayHints: string[] = []) {
   if (!ids.length) return [];
   const relayUrls = [...new Set([...relayHints.filter((url) => /^wss?:\/\//i.test(url)), ...activeRelayUrls(relays, 'read')])];
-  const events = verifiedRelayEvents(await queryShortLived(relayUrls, { ids }, 5000));
+  const events = verifiedRelayEvents(await queryShortLived(relayUrls, { ids }, 5000, { retryEmpty: true }));
   const clean = dedupeEvents(events);
   await cacheEvents(clean);
   return clean;
@@ -782,7 +803,7 @@ export async function fetchThreadReplies(rootId: string | string[], relays = def
   const filter: Filter = { kinds: [1], '#e': ids, limit };
   if (options.until) filter.until = options.until;
   if (options.since) filter.since = options.since;
-  const events = verifiedRelayEvents(await queryShortLived(relayUrls, filter, 5000, { minEvents: Math.min(limit, 40), idleAfterMs: 650 }));
+  const events = verifiedRelayEvents(await queryShortLived(relayUrls, filter, 5000, { minEvents: Math.min(limit, 8), idleAfterMs: 650, retryEmpty: true }));
   const clean = dedupeEvents(filterSpam(events));
   await cacheEvents(clean);
   return clean;
@@ -794,7 +815,7 @@ export async function fetchProfileEvents(pubkey: string, relays = defaultRelays,
   const filter: Filter = { kinds: [1, 6, 30023], authors: [pubkey], limit };
   if (options.until) filter.until = options.until;
   if (options.since) filter.since = options.since;
-  const events = verifiedRelayEvents(await queryShortLived(relayUrls, filter, 5000, { minEvents: Math.min(limit, 36), idleAfterMs: 650 }));
+  const events = verifiedRelayEvents(await queryShortLived(relayUrls, filter, 5000, { minEvents: Math.min(limit, 8), idleAfterMs: 650, retryEmpty: true }));
   const activeIds = await fetchDeletedEventIds(events, relayUrls).catch(() => new Set<string>());
   const activeEvents = activeIds.size ? events.filter((event) => !activeIds.has(event.id)) : events;
   const clean = await filterLocallyDeletedEvents(dedupeEvents([...filterSpam(activeEvents.filter((event) => event.kind !== 6)), ...activeEvents.filter((event) => event.kind === 6 && parseRepostContent(event))]));
@@ -812,7 +833,7 @@ export async function hasPublishedTextNote(pubkey: string, relays = defaultRelay
   if (!/^[0-9a-f]{64}$/i.test(pubkey)) return true;
   const relayUrls = activeRelayUrls(relays, 'read');
   if (!relayUrls.length) return true;
-  const events = verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [1], authors: [pubkey], limit: 1 }, 3500));
+  const events = verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [1], authors: [pubkey], limit: 1 }, 3500, { retryEmpty: true }));
   return events.length > 0;
 }
 
@@ -829,7 +850,7 @@ export function parseRepostContent(event: NostrEvent) {
 export async function fetchLikeAuthors(eventId: string, relays = defaultRelays, limit = 32) {
   if (!/^[0-9a-f]{64}$/i.test(eventId)) return [];
   const relayUrls = activeRelayUrls(relays, 'read');
-  const reactions = dedupeEvents(verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [7], '#e': [eventId], limit }, 4000)));
+  const reactions = dedupeEvents(verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [7], '#e': [eventId], limit }, 4000, { retryEmpty: true })));
   return [
     ...new Set(
       reactions
@@ -845,7 +866,7 @@ export async function fetchLikeAuthors(eventId: string, relays = defaultRelays, 
 export async function fetchProfiles(pubkeys: string[], relays = defaultRelays) {
   if (!pubkeys.length) return [];
   const relayUrls = activeRelayUrls(relays, 'read');
-  const events = verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [0], authors: pubkeys, limit: pubkeys.length }, 4000));
+  const events = verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [0], authors: pubkeys, limit: pubkeys.length }, 4000, { retryEmpty: true }));
   const profiles = parseProfileEvents(events);
   await Promise.all(profiles.map(cacheProfile));
   return profiles;
@@ -898,9 +919,9 @@ export async function fetchDirectMessages(session: Session, relays = defaultRela
   const nip17Filter: Filter = { kinds: [1059], '#p': [session.pubkey], limit: 80 };
   const events = verifiedRelayEvents(
     (await Promise.all([
-      queryShortLived(relayUrls, incomingFilter, 5000),
-      queryShortLived(relayUrls, outgoingFilter, 5000),
-      queryShortLived(relayUrls, nip17Filter, 5000)
+      queryShortLived(relayUrls, incomingFilter, 5000, { retryEmpty: true }),
+      queryShortLived(relayUrls, outgoingFilter, 5000, { retryEmpty: true }),
+      queryShortLived(relayUrls, nip17Filter, 5000, { retryEmpty: true })
     ])).flat()
   );
   const messages = await mapWithConcurrency(dedupeEvents(events), 3, (event) =>
@@ -947,7 +968,7 @@ export async function fetchEventStats(ids: string[], relays = defaultRelays) {
   ];
   const [countStats, events]: [Record<string, Partial<EventStats>>, NostrEvent[]] = await Promise.all([
     fetchCountStats(uniqueIds, relayUrls).catch(() => ({})),
-    Promise.all(filters.map((filter) => queryShortLived(relayUrls, filter, 4500))).then((results) => dedupeEvents(verifiedRelayEvents(results.flat())))
+    Promise.all(filters.map((filter) => queryShortLived(relayUrls, filter, 4500, { retryEmpty: true }))).then((results) => dedupeEvents(verifiedRelayEvents(results.flat())))
   ]);
   const deleted = await fetchDeletedEventIds(events, relayUrls).catch(() => new Set<string>());
   const activeEvents = events.filter((event) => !deleted.has(event.id));
@@ -979,7 +1000,7 @@ export async function fetchUserEventActions(ids: string[], pubkey: string, relay
   const relayUrls = activeRelayUrls(relays, 'read');
   const actionEvents = dedupeEvents(
     verifiedRelayEvents(
-      await queryShortLived(relayUrls, { kinds: [6, 7, 16], authors: [pubkey], '#e': uniqueIds, limit: Math.min(500, uniqueIds.length * 8) }, 4500)
+      await queryShortLived(relayUrls, { kinds: [6, 7, 16], authors: [pubkey], '#e': uniqueIds, limit: Math.min(500, uniqueIds.length * 8) }, 4500, { retryEmpty: true })
     )
   );
   const deleted = await fetchDeletedEventIds(actionEvents, relayUrls).catch(() => new Set<string>());
@@ -1048,7 +1069,7 @@ export function eventStatsFromEvents(ids: string[], events: NostrEvent[]) {
 export async function fetchNotifications(pubkey: string, relays = defaultRelays, limit = 80) {
   if (!/^[0-9a-f]{64}$/i.test(pubkey)) return [];
   const relayUrls = activeRelayUrls(relays, 'read');
-  const ownPosts = filterSpam(verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [1], authors: [pubkey], limit: Math.min(240, limit * 3) }, 4500)));
+  const ownPosts = filterSpam(verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [1], authors: [pubkey], limit: Math.min(240, limit * 3) }, 4500, { retryEmpty: true })));
   const ownPostIds = ownPosts.map((event) => event.id);
   const ownPostById = new Map(ownPosts.map((event) => [event.id, event]));
 
@@ -1062,7 +1083,7 @@ export async function fetchNotifications(pubkey: string, relays = defaultRelays,
     filters.push({ kinds: [6, 16], '#e': ownPostIds, limit: Math.min(180, ownPostIds.length * 8) });
   }
 
-  const events = dedupeEvents(verifiedRelayEvents((await Promise.all(filters.map((filter) => queryShortLived(relayUrls, filter, 5000)))).flat()));
+  const events = dedupeEvents(verifiedRelayEvents((await Promise.all(filters.map((filter) => queryShortLived(relayUrls, filter, 5000, { retryEmpty: true })))).flat()));
   const notifications = events.flatMap((event) => notificationForEvent(event, pubkey, ownPostById));
   await cacheEvents([...ownPosts, ...events.filter((event) => event.kind !== 3)]);
   return dedupeNotifications(notifications).slice(0, limit);
@@ -1074,7 +1095,7 @@ export async function subscribeNotifications(pubkey: string, relays = defaultRel
   if (!relayUrls.length) return undefined;
 
   const since = Math.floor(Date.now() / 1000) - 10;
-  const ownPosts = filterSpam(verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [1], authors: [pubkey], limit: Math.min(240, limit * 3) }, 4500)));
+  const ownPosts = filterSpam(verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [1], authors: [pubkey], limit: Math.min(240, limit * 3) }, 4500, { retryEmpty: true })));
   const ownPostById = new Map(ownPosts.map((event) => [event.id, event]));
   const filters: Filter[] = [
     { kinds: [1], '#p': [pubkey], since },
@@ -1156,7 +1177,7 @@ export async function fetchContactList(pubkey: string, relays = defaultRelays) {
 
 export async function fetchContactListDetails(pubkey: string, relays = defaultRelays): Promise<ContactListDetails> {
   const relayUrls = activeRelayUrls(relays, 'read');
-  const events = verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [3], authors: [pubkey], limit: 1 }, 4000)).sort(
+  const events = verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [3], authors: [pubkey], limit: 1 }, 4000, { retryEmpty: true })).sort(
     (a, b) => b.created_at - a.created_at
   );
   return extractContactListDetails(events[0]);
@@ -1165,7 +1186,7 @@ export async function fetchContactListDetails(pubkey: string, relays = defaultRe
 export async function fetchMuteList(pubkey: string, relays = defaultRelays) {
   if (!/^[0-9a-f]{64}$/i.test(pubkey)) return [];
   const relayUrls = activeRelayUrls(relays, 'read');
-  const [event] = verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [10000], authors: [pubkey], limit: 1 }, 4000)).sort(
+  const [event] = verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [10000], authors: [pubkey], limit: 1 }, 4000, { retryEmpty: true })).sort(
     (a, b) => b.created_at - a.created_at
   );
   return extractMutePubkeys(event);
@@ -1173,7 +1194,7 @@ export async function fetchMuteList(pubkey: string, relays = defaultRelays) {
 
 export async function fetchRelayListMetadata(pubkey: string, relays = defaultRelays) {
   const relayUrls = activeRelayUrls(relays, 'read');
-  const [event] = verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [10002], authors: [pubkey], limit: 1 }, 4000)).sort(
+  const [event] = verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [10002], authors: [pubkey], limit: 1 }, 4000, { retryEmpty: true })).sort(
     (a, b) => b.created_at - a.created_at
   );
   if (!event) return [];
@@ -1669,7 +1690,7 @@ function splitLimit(total: number, parts: number) {
 
 export async function fetchFriendsOfFriends(follows: string[], relayUrls: string[]) {
   if (!follows.length || !relayUrls.length) return [];
-  const contactEvents = verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [3], authors: follows, limit: Math.min(120, follows.length) }, 4500));
+  const contactEvents = verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [3], authors: follows, limit: Math.min(120, follows.length) }, 4500, { retryEmpty: true }));
   const directFollows = new Set(follows);
   const pubkeys = new Set<string>();
   for (const event of contactEvents) {
@@ -1680,7 +1701,7 @@ export async function fetchFriendsOfFriends(follows: string[], relayUrls: string
 
 async function fetchNip17InboxRelays(pubkey: string, relays = defaultRelays) {
   const relayUrls = activeRelayUrls(relays, 'read');
-  const [event] = verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [10050], authors: [pubkey], limit: 1 }, 4000)).sort(
+  const [event] = verifiedRelayEvents(await queryShortLived(relayUrls, { kinds: [10050], authors: [pubkey], limit: 1 }, 4000, { retryEmpty: true })).sort(
     (a, b) => b.created_at - a.created_at
   );
   const inboxes = event?.tags.filter((tag) => tag[0] === 'relay' && tag[1]).flatMap((tag) => sanitizeRelayHints([tag[1]])) ?? [];

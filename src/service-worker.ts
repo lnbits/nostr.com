@@ -5,6 +5,7 @@ import { build, files, version } from '$service-worker';
 const cacheName = `nostr-social-${version}`;
 const appShell = [...build, ...files];
 const appShellPaths = new Set(appShell);
+const maxRuntimeCacheEntries = 160;
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(cacheName).then((cache) => cache.addAll(appShell)));
@@ -32,7 +33,10 @@ self.addEventListener('fetch', (event) => {
         .then((response) => {
           if (response.ok) {
             const copy = response.clone();
-            void caches.open(cacheName).then((cache) => cache.put('/', copy));
+            void caches.open(cacheName).then(async (cache) => {
+              await cache.put('/', copy);
+              await pruneRuntimeCache(cache);
+            });
           }
           return response;
         })
@@ -51,10 +55,22 @@ self.addEventListener('fetch', (event) => {
       .then((response) => {
         if (response.ok && !response.headers.get('content-type')?.includes('text/html')) {
           const copy = response.clone();
-          void caches.open(cacheName).then((cache) => cache.put(request, copy));
+          void caches.open(cacheName).then(async (cache) => {
+            await cache.put(request, copy);
+            await pruneRuntimeCache(cache);
+          });
         }
         return response;
       })
       .catch(() => caches.match(request).then((cached) => cached ?? Response.error()))
   );
 });
+
+async function pruneRuntimeCache(cache: Cache) {
+  const runtimeRequests = (await cache.keys()).filter((request) => {
+    const url = new URL(request.url);
+    return url.origin === location.origin && url.pathname !== '/' && !appShellPaths.has(url.pathname);
+  });
+  if (runtimeRequests.length <= maxRuntimeCacheEntries) return;
+  await Promise.all(runtimeRequests.slice(0, runtimeRequests.length - maxRuntimeCacheEntries).map((request) => cache.delete(request)));
+}

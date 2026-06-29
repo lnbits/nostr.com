@@ -19,6 +19,7 @@ import {
   limitConsecutiveAuthors,
   loginWithBunker,
   loginWithPrivateKey,
+  nextRelayBackoffState,
   notificationForEvent,
   normalizeNip05Identifier,
   normalizePomegranateCentralUrl,
@@ -58,6 +59,17 @@ describe('nostr client helpers', () => {
 
     expect(activeRelayUrls(relays, 'read')).toEqual(['wss://read.example', 'wss://low.example']);
     expect(activeRelayUrls(relays, 'write')).toEqual(['wss://write.example', 'wss://low.example']);
+  });
+
+  it('waits for repeated relay failures before backing off reads', () => {
+    const first = nextRelayBackoffState(undefined, 1000);
+    const second = nextRelayBackoffState(first, 2000);
+    const third = nextRelayBackoffState(second, 3000);
+
+    expect(first).toEqual({ failures: 1, retryAt: 1000 });
+    expect(second).toEqual({ failures: 2, retryAt: 2000 });
+    expect(third.failures).toBe(3);
+    expect(third.retryAt).toBeGreaterThan(3000);
   });
 
   it('preserves relays when relay info lookups fail', async () => {
