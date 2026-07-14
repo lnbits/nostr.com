@@ -635,6 +635,37 @@ label span, label strong { color: var(--text); }
   display: grid;
   gap: 7px;
 }
+.login-create-head {
+  display: grid;
+  gap: 8px;
+}
+.login-back-button {
+  width: max-content;
+  min-height: 32px;
+  padding: 0 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.generate-nsec-button {
+  width: 100%;
+}
+.generated-key-preview {
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 88%, var(--text) 3%);
+  padding: 10px 12px;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.generated-key-preview span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .login-input-action {
   display: grid;
   grid-template-columns: minmax(0, 7fr) minmax(120px, 3fr);
@@ -675,6 +706,42 @@ label span, label strong { color: var(--text); }
 }
 .interest-picker .field-label {
   margin-bottom: 0;
+}
+.interest-trigger {
+  justify-content: space-between;
+  min-width: 0;
+  width: 100%;
+  background: var(--surface);
+  color: var(--text);
+}
+.interest-trigger span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.interest-menu {
+  display: grid;
+  gap: 2px;
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 6px;
+}
+.interest-option {
+  display: flex;
+  grid-template-columns: none;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  border-radius: 6px;
+  padding: 4px 6px;
+  color: var(--text);
+}
+.interest-option:hover {
+  background: color-mix(in srgb, var(--text) 7%, transparent);
 }
 .interest-badges {
   display: flex;
