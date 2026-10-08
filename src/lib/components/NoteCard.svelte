@@ -344,10 +344,6 @@
     return provider === 'instagram' || provider === 'tiktok';
   }
 
-  function shouldGateSocialEmbed(url: string) {
-    return leanMedia && !loadedSocialEmbeds.has(url);
-  }
-
   function loadSocialEmbed(url: string) {
     loadedSocialEmbeds = new Set([...loadedSocialEmbeds, url]);
   }
@@ -621,7 +617,7 @@
       <div class="social-embed-list">
         {#each socialEmbeds as embed (embed.url)}
           <div class="social-embed" class:portrait={embed.aspect === 'portrait'} class:square={embed.aspect === 'square'}>
-            {#if shouldGateSocialEmbed(embed.url)}
+            {#if leanMedia && !loadedSocialEmbeds.has(embed.url)}
               <button class="social-embed-load" type="button" on:click={() => loadSocialEmbed(embed.url)}>
                 <span>{embed.title}</span>
               </button>

@@ -85,7 +85,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { pauseWhenHidden } from '$lib/actions/pauseWhenHidden';
-  import { prefersLeanMedia } from '$lib/clientCapabilities';
+  import { prefersLeanMedia, prefersReducedData } from '$lib/clientCapabilities';
 
   export let src: string;
   export let poster: string | undefined = undefined;
@@ -95,11 +95,12 @@
   let generatedPoster = '';
   let active = false;
   let leanMedia = false;
+  let reducedData = false;
   let destroyed = false;
   let posterRequestKey = '';
   let observer: IntersectionObserver | undefined;
   $: displayPoster = poster || generatedPoster || undefined;
-  $: if (active && !leanMedia && !poster && src !== posterRequestKey) {
+  $: if (active && !reducedData && !poster && src !== posterRequestKey) {
     posterRequestKey = src;
     void generatedPosterFor(src).then((nextPoster) => {
       if (!destroyed && nextPoster && posterRequestKey === src) generatedPoster = nextPoster;
@@ -108,6 +109,7 @@
 
   onMount(() => {
     leanMedia = prefersLeanMedia();
+    reducedData = prefersReducedData();
     if (!('IntersectionObserver' in window)) {
       active = true;
     } else {
